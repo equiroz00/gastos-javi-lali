@@ -14,9 +14,10 @@ const fmt = (n,c='ARS') => `${CUR_SYM[c]||c+' '}${Math.abs(n).toLocaleString('es
 const fmtS = (n,c='ARS') => { const a=Math.abs(n),s=CUR_SYM[c]||c; return a>=1e6?`${s}${(a/1e6).toFixed(1)}M`:a>=1e3?`${s}${(a/1e3).toFixed(0)}K`:`${s}${Math.round(a)}`; };
 const todayStr = () => new Date().toISOString().split('T')[0];
 const safeN = v => { const n=parseFloat(v); return isFinite(n)&&!isNaN(n)?n:0; };
+
 const normCat = (cat,cats) => {
   if(!cat||typeof cat!=='string') return '📦 Otro';
-  const exact=cats.find(c=>c===cat.trim()); if(exact) return exact;
+  if(cats.find(c=>c===cat.trim())) return cat.trim();
   const s=cat.replace(/^\p{Emoji}\s*/u,'').trim().toLowerCase();
   const m=cats.find(c=>c.replace(/^\p{Emoji}\s*/u,'').trim().toLowerCase()===s);
   return m||cat.trim();
@@ -26,6 +27,14 @@ const catLb = cat => cat?cat.replace(/^\p{Emoji}\s*/u,'').trim()||cat:'Otro';
 const calcAmts = (amt,resp) => { const n=safeN(amt); if(resp==='Javi')return{javiAmount:n,laliAmount:0}; if(resp==='Lali')return{javiAmount:0,laliAmount:n}; return{javiAmount:n/2,laliAmount:n/2}; };
 const calcBal = exps => exps.reduce((b,e)=>e.paidBy==='Javi'?b+safeN(e.laliAmount):b-safeN(e.javiAmount),0);
 const getPeriod = (d,ps) => { if(!ps?.length) return 'Sin período'; const dt=new Date(d+'T12:00:00'); for(const p of ps) if(dt>=new Date(p.start+'T00:00:00')&&dt<=new Date(p.end+'T23:59:59')) return p.name; return 'Sin período'; };
+
+// Get Monday of current week
+const getWeekStart = () => {
+  const d=new Date(); const day=d.getDay(); const diff=day===0?-6:1-day;
+  d.setDate(d.getDate()+diff); d.setHours(0,0,0,0); return d;
+};
+
+const sortByDate = exps => [...exps].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 const store = {
@@ -45,16 +54,15 @@ const sanitize = (e,cats) => ({
   responsible:['Javi','Lali','Ambos'].includes(e.responsible)?e.responsible:'Ambos',
 });
 
-// ── Font injection ────────────────────────────────────────────────────────────
+const F = "'Nunito',sans-serif";
+
 const useFont = () => useEffect(()=>{
   const l=document.createElement('link');
   l.href='https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap';
   l.rel='stylesheet'; document.head.appendChild(l);
-  document.body.style.fontFamily="'Nunito',sans-serif";
+  document.body.style.fontFamily=F;
   return()=>{document.body.style.fontFamily='';};
 },[]);
-
-const F = "'Nunito',sans-serif";
 
 // ── UserSelect ────────────────────────────────────────────────────────────────
 function UserSelect({onSelect}) {
@@ -81,19 +89,19 @@ function BalanceSection({periodExps}) {
   periodExps.forEach(e=>{const c=e.currency||'ARS';if(!byCur[c])byCur[c]=[];byCur[c].push(e);});
   const curs=Object.keys(byCur);
   if(!curs.length) return (
-    <div style={{margin:'1rem',borderRadius:'1.25rem',padding:'1.25rem 1.5rem',background:'linear-gradient(135deg,#10B981,#059669)',color:'white',boxShadow:'0 4px 14px rgba(0,0,0,0.15)'}}>
-      <p style={{fontSize:'0.75rem',opacity:0.8,margin:'0 0 0.25rem'}}>Balance del período actual</p>
-      <div style={{fontSize:'1.5rem',fontWeight:800}}>¡Sin gastos aún!</div>
+    <div style={{margin:'0 1rem',borderRadius:'1.25rem',padding:'1rem 1.5rem',background:'linear-gradient(135deg,#10B981,#059669)',color:'white',boxShadow:'0 4px 14px rgba(0,0,0,0.12)'}}>
+      <p style={{fontSize:'0.72rem',opacity:0.8,margin:'0 0 0.15rem'}}>Balance período</p>
+      <div style={{fontSize:'1.3rem',fontWeight:800}}>¡Sin gastos aún!</div>
     </div>
   );
   return (
-    <div style={{margin:'1rem',display:'flex',flexDirection:'column',gap:'0.6rem'}}>
+    <div style={{margin:'0 1rem',display:'flex',flexDirection:'column',gap:'0.5rem'}}>
       {curs.map(c=>{
         const bal=calcBal(byCur[c]),noDebt=Math.abs(bal)<1,laliOwes=bal>0;
         const bg=noDebt?'linear-gradient(135deg,#10B981,#059669)':laliOwes?'linear-gradient(135deg,#3B82F6,#6366F1)':'linear-gradient(135deg,#EC4899,#F43F5E)';
         return (
           <div key={c} style={{borderRadius:'1.25rem',padding:'1rem 1.5rem',background:bg,color:'white',boxShadow:'0 4px 14px rgba(0,0,0,0.1)'}}>
-            <p style={{fontSize:'0.7rem',opacity:0.8,margin:'0 0 0.15rem'}}>Balance {c} — período actual</p>
+            <p style={{fontSize:'0.7rem',opacity:0.8,margin:'0 0 0.1rem'}}>Balance {c} — período seleccionado</p>
             {noDebt?<div style={{fontSize:'1.3rem',fontWeight:800}}>¡Al día! 🎉</div>
               :<><div style={{fontSize:'1.7rem',fontWeight:800}}>{fmt(bal,c)}</div><div style={{fontSize:'0.82rem',opacity:0.9}}>{laliOwes?'👩 Lali':'👨 Javi'} le debe a {laliOwes?'👨 Javi':'👩 Lali'}</div></>}
           </div>
@@ -109,25 +117,24 @@ function ExpenseRow({expense:e,onDelete,onEdit}) {
   const cur=e.currency||'ARS';
   return (
     <div style={{borderBottom:'1px solid #F3F4F6'}}>
-      <div onClick={()=>setOpen(!open)} style={{display:'flex',alignItems:'center',gap:'0.75rem',padding:'0.75rem 1rem',cursor:'pointer',background:open?'#FAFAFA':'white'}}>
-        <div style={{fontSize:'1.4rem',flexShrink:0,width:'2rem',textAlign:'center'}}>{catEm(e.category)}</div>
+      <div onClick={()=>setOpen(!open)} style={{display:'flex',alignItems:'center',gap:'0.75rem',padding:'0.65rem 1rem',cursor:'pointer',background:open?'#FAFAFA':'white'}}>
+        <div style={{fontSize:'1.3rem',flexShrink:0,width:'1.8rem',textAlign:'center'}}>{catEm(e.category)}</div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{display:'flex',alignItems:'center',gap:'0.35rem'}}>
-            <span style={{fontWeight:700,color:'#111827',fontSize:'0.9rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.description||'Sin descripción'}</span>
-            {cur!=='ARS'&&<span style={{fontSize:'0.6rem',background:'#EEF2FF',color:'#6366F1',borderRadius:'999px',padding:'0.1rem 0.35rem',fontWeight:800,flexShrink:0}}>{cur}</span>}
+          <div style={{display:'flex',alignItems:'center',gap:'0.3rem'}}>
+            <span style={{fontWeight:700,color:'#111827',fontSize:'0.88rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.description||'Sin descripción'}</span>
+            {cur!=='ARS'&&<span style={{fontSize:'0.58rem',background:'#EEF2FF',color:'#6366F1',borderRadius:'999px',padding:'0.1rem 0.3rem',fontWeight:800,flexShrink:0}}>{cur}</span>}
           </div>
-          <div style={{fontSize:'0.7rem',color:'#9CA3AF',marginTop:'0.1rem'}}>{e.date} · {catLb(e.category)}</div>
-          <div style={{fontSize:'0.7rem',color:'#9CA3AF'}}>Pagó: <span style={{fontWeight:700,color:e.paidBy==='Javi'?'#3B82F6':'#EC4899'}}>{e.paidBy}</span> · {e.paymentMethod}</div>
+          <div style={{fontSize:'0.68rem',color:'#9CA3AF',marginTop:'0.05rem'}}>{e.date} · {catLb(e.category)} · <span style={{color:e.paidBy==='Javi'?'#3B82F6':'#EC4899',fontWeight:700}}>{e.paidBy}</span></div>
         </div>
         <div style={{textAlign:'right',flexShrink:0}}>
-          <div style={{fontWeight:800,color:'#111827',fontSize:'0.95rem'}}>{fmt(safeN(e.amount),cur)}</div>
-          <div style={{fontSize:'0.65rem',color:'#9CA3AF'}}>J:{fmt(safeN(e.javiAmount),cur)} / L:{fmt(safeN(e.laliAmount),cur)}</div>
+          <div style={{fontWeight:800,color:'#111827',fontSize:'0.9rem'}}>{fmt(safeN(e.amount),cur)}</div>
+          <div style={{fontSize:'0.62rem',color:'#9CA3AF'}}>J:{fmt(safeN(e.javiAmount),cur)} / L:{fmt(safeN(e.laliAmount),cur)}</div>
         </div>
       </div>
       {open&&(
-        <div style={{display:'flex',gap:'0.5rem',padding:'0.5rem 1rem',background:'#F9FAFB',borderTop:'1px solid #F3F4F6'}}>
-          <button onClick={()=>onEdit(e)} style={{flex:1,padding:'0.4rem',background:'#EEF2FF',border:'none',borderRadius:'0.6rem',color:'#6366F1',fontWeight:700,fontSize:'0.78rem',cursor:'pointer',fontFamily:F}}>✏️ Editar</button>
-          <button onClick={()=>onDelete(e.id,e)} style={{flex:1,padding:'0.4rem',background:'#FEF2F2',border:'none',borderRadius:'0.6rem',color:'#EF4444',fontWeight:700,fontSize:'0.78rem',cursor:'pointer',fontFamily:F}}>🗑️ {e.fromSheet?'Del Sheet':'Eliminar'}</button>
+        <div style={{display:'flex',gap:'0.5rem',padding:'0.45rem 1rem',background:'#F9FAFB',borderTop:'1px solid #F3F4F6'}}>
+          <button onClick={()=>onEdit(e)} style={{flex:1,padding:'0.35rem',background:'#EEF2FF',border:'none',borderRadius:'0.6rem',color:'#6366F1',fontWeight:700,fontSize:'0.75rem',cursor:'pointer',fontFamily:F}}>✏️ Editar</button>
+          <button onClick={()=>onDelete(e.id,e)} style={{flex:1,padding:'0.35rem',background:'#FEF2F2',border:'none',borderRadius:'0.6rem',color:'#EF4444',fontWeight:700,fontSize:'0.75rem',cursor:'pointer',fontFamily:F}}>🗑️ Eliminar</button>
         </div>
       )}
     </div>
@@ -135,40 +142,95 @@ function ExpenseRow({expense:e,onDelete,onEdit}) {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-function Dashboard({expenses,periodExps,settings,onDelete,onEdit,onSync,syncing}) {
-  const total=periodExps.filter(e=>(e.currency||'ARS')==='ARS').reduce((s,e)=>s+safeN(e.amount),0);
-  const periodName=settings.periods?.length?settings.periods[settings.periods.length-1].name:'Sin configurar';
+function Dashboard({expenses,settings,allCats,onDelete,onEdit,onSync,syncing}) {
+  const periods = settings.periods||[];
+  const latestPeriod = periods.length?periods[periods.length-1].name:'';
+  const [selPeriod,setSelPeriod] = useState(latestPeriod);
+
+  useEffect(()=>{if(latestPeriod&&!selPeriod)setSelPeriod(latestPeriod);},[latestPeriod]);
+
+  const periodExps = selPeriod ? expenses.filter(e=>e.period===selPeriod) : expenses;
+
+  // Totals by currency
+  const totByCur={};
+  periodExps.forEach(e=>{const c=e.currency||'ARS';totByCur[c]=(totByCur[c]||0)+safeN(e.amount);});
+  const curEntries=Object.entries(totByCur);
+
+  // This week expenses (Mon–Sun), sorted newest first
+  const weekStart=getWeekStart();
+  const weekExps = sortByDate(expenses.filter(e=>{
+    if(!e.date) return false;
+    const d=new Date(e.date+'T12:00:00');
+    return d>=weekStart;
+  }));
+
   return (
     <div>
-      <BalanceSection periodExps={periodExps}/>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem',margin:'0 1rem 1rem'}}>
-        <div style={{background:'white',borderRadius:'1rem',padding:'0.85rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
-          <div style={{fontSize:'0.7rem',color:'#9CA3AF'}}>Total ARS del período</div>
-          <div style={{fontWeight:800,color:'#111827',marginTop:'0.2rem'}}>{fmt(total)}</div>
-          <div style={{fontSize:'0.7rem',color:'#9CA3AF'}}>{periodExps.length} gastos</div>
-        </div>
-        <div style={{background:'white',borderRadius:'1rem',padding:'0.85rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
-          <div style={{fontSize:'0.7rem',color:'#9CA3AF'}}>Período actual</div>
-          <div style={{fontWeight:700,color:'#111827',marginTop:'0.2rem',fontSize:'0.82rem'}}>{periodName}</div>
-        </div>
+      {/* Balance */}
+      <div style={{margin:'1rem 0 0.75rem'}}>
+        <BalanceSection periodExps={periodExps}/>
       </div>
+
+      {/* Summary cards */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.6rem',margin:'0 1rem 0.75rem'}}>
+        {/* Period selector card */}
+        <div style={{background:'white',borderRadius:'1rem',padding:'0.75rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
+          <div style={{fontSize:'0.65rem',color:'#9CA3AF',marginBottom:'0.3rem'}}>Período</div>
+          {periods.length>0?(
+            <select value={selPeriod} onChange={e=>setSelPeriod(e.target.value)} style={{width:'100%',border:'none',fontSize:'0.78rem',fontWeight:800,color:'#111827',background:'transparent',outline:'none',cursor:'pointer',fontFamily:F,padding:0}}>
+              {[...periods].reverse().map(p=><option key={p.name} value={p.name}>{p.name}</option>)}
+            </select>
+          ):<div style={{fontWeight:700,color:'#9CA3AF',fontSize:'0.78rem'}}>Sin períodos</div>}
+          <div style={{fontSize:'0.65rem',color:'#9CA3AF',marginTop:'0.2rem'}}>{periodExps.length} gastos</div>
+        </div>
+
+        {/* Totals by currency */}
+        {curEntries.length===0?(
+          <div style={{background:'white',borderRadius:'1rem',padding:'0.75rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
+            <div style={{fontSize:'0.65rem',color:'#9CA3AF'}}>Total del período</div>
+            <div style={{fontWeight:800,color:'#9CA3AF',marginTop:'0.2rem'}}>—</div>
+          </div>
+        ):curEntries.length===1?(
+          <div style={{background:'white',borderRadius:'1rem',padding:'0.75rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
+            <div style={{fontSize:'0.65rem',color:'#9CA3AF'}}>Total {curEntries[0][0]}</div>
+            <div style={{fontWeight:800,color:'#111827',marginTop:'0.2rem',fontSize:'0.95rem'}}>{fmtS(curEntries[0][1],curEntries[0][0])}</div>
+          </div>
+        ):(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.4rem'}}>
+            {curEntries.map(([c,v])=>(
+              <div key={c} style={{background:'white',borderRadius:'0.75rem',padding:'0.5rem 0.6rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>
+                <div style={{fontSize:'0.6rem',color:'#9CA3AF'}}>{c}</div>
+                <div style={{fontWeight:800,color:'#111827',fontSize:'0.82rem'}}>{fmtS(v,c)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Sync button */}
       {settings.scriptUrl&&(
-        <div style={{margin:'0 1rem 1rem'}}>
-          <button onClick={onSync} disabled={syncing} style={{width:'100%',padding:'0.6rem',background:syncing?'#E5E7EB':'#EEF2FF',border:'1px solid #C7D2FE',borderRadius:'0.75rem',color:syncing?'#9CA3AF':'#4F46E5',fontWeight:700,fontSize:'0.85rem',cursor:syncing?'not-allowed':'pointer',fontFamily:F}}>
+        <div style={{margin:'0 1rem 0.75rem'}}>
+          <button onClick={onSync} disabled={syncing} style={{width:'100%',padding:'0.55rem',background:syncing?'#E5E7EB':'#EEF2FF',border:'1px solid #C7D2FE',borderRadius:'0.75rem',color:syncing?'#9CA3AF':'#4F46E5',fontWeight:700,fontSize:'0.82rem',cursor:syncing?'not-allowed':'pointer',fontFamily:F}}>
             {syncing?'⟳ Sincronizando...':'☁️ Sincronizar con Google Sheet'}
           </button>
         </div>
       )}
-      <div style={{margin:'0 1rem',display:'flex',justifyContent:'space-between',marginBottom:'0.5rem'}}>
-        <h2 style={{fontWeight:800,color:'#374151',fontSize:'0.9rem',margin:0}}>Últimos gastos</h2>
-        <span style={{fontSize:'0.7rem',color:'#9CA3AF'}}>tocá para opciones</span>
+
+      {/* This week */}
+      <div style={{margin:'0 1rem',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.4rem'}}>
+        <h2 style={{fontWeight:800,color:'#374151',fontSize:'0.88rem',margin:0}}>📅 Esta semana</h2>
+        <span style={{fontSize:'0.68rem',color:'#9CA3AF'}}>{weekExps.length} gastos · tocá para opciones</span>
       </div>
-      {expenses.length===0
-        ?<div style={{textAlign:'center',padding:'3rem',color:'#9CA3AF'}}><div style={{fontSize:'2.5rem',marginBottom:'0.5rem'}}>🧾</div>No hay gastos aún</div>
-        :<div style={{background:'white',borderRadius:'1rem',margin:'0 1rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)',overflow:'hidden'}}>
-           {expenses.slice(0,10).map(e=><ExpenseRow key={e.id} expense={e} onDelete={onDelete} onEdit={onEdit}/>)}
-         </div>
+      {weekExps.length===0
+        ?<div style={{margin:'0 1rem',background:'white',borderRadius:'1rem',padding:'1.5rem',textAlign:'center',color:'#9CA3AF',fontSize:'0.85rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)'}}>No hay gastos esta semana</div>
+        :<div style={{margin:'0 1rem',background:'white',borderRadius:'1rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)',overflow:'hidden'}}>
+          <div style={{maxHeight:'calc(4 * 68px)',overflowY:'auto'}}>
+            {weekExps.map(e=><ExpenseRow key={e.id} expense={e} onDelete={onDelete} onEdit={onEdit}/>)}
+          </div>
+          {weekExps.length>4&&<div style={{textAlign:'center',padding:'0.4rem',fontSize:'0.7rem',color:'#9CA3AF',borderTop:'1px solid #F3F4F6'}}>↕ Deslizá para ver más</div>}
+        </div>
       }
+      <div style={{height:'1rem'}}/>
     </div>
   );
 }
@@ -192,7 +254,6 @@ function Stats({expenses,settings,allCats}) {
   const allCurrencies=[...new Set(expenses.map(e=>e.currency||'ARS'))];
   const [period,setPeriod]=useState('Todos');
   const [cur,setCur]=useState('ARS');
-
   const byPer=period==='Todos'?expenses:expenses.filter(e=>e.period===period);
   const filtered=byPer.filter(e=>(e.currency||'ARS')===cur);
 
@@ -225,13 +286,11 @@ function Stats({expenses,settings,allCats}) {
   const perData=Object.values(byP);
 
   const card={background:'white',borderRadius:'1rem',padding:'1rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)',marginBottom:'1rem'};
-
   return (
     <div style={{padding:'1rem',paddingBottom:'2rem'}}>
       <h2 style={{fontWeight:900,fontSize:'1.2rem',color:'#111827',marginBottom:'0.75rem'}}>📊 Estadísticas</h2>
       <PeriodFilter periods={['Todos',...allPeriods]} selected={period} onSelect={setPeriod}/>
       {allCurrencies.length>1&&<PeriodFilter periods={allCurrencies} selected={cur} onSelect={setCur}/>}
-
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.6rem',marginBottom:'1rem'}}>
         <div style={{...card,margin:0,background:'linear-gradient(135deg,#EEF2FF,#E0E7FF)'}}>
           <div style={{fontSize:'0.7rem',color:'#6366F1',fontWeight:800}}>TOTAL {cur}</div>
@@ -244,7 +303,6 @@ function Stats({expenses,settings,allCats}) {
             :<><div style={{fontWeight:900,color:'#111827',fontSize:'1.1rem',marginTop:'0.2rem'}}>{fmtS(bal,cur)}</div><div style={{fontSize:'0.7rem',color:'#6B7280'}}>{bal>0?'Lali debe':'Javi debe'}</div></>}
         </div>
       </div>
-
       <div style={card}>
         <h3 style={{fontWeight:800,color:'#374151',margin:'0 0 0.75rem',fontSize:'0.9rem'}}>💳 ¿Quién pagó más?</h3>
         <div style={{display:'flex',gap:'0.75rem',marginBottom:'0.6rem'}}>
@@ -265,7 +323,6 @@ function Stats({expenses,settings,allCats}) {
           ))}
         </div>
       </div>
-
       <div style={card}>
         <h3 style={{fontWeight:800,color:'#374151',margin:'0 0 0.75rem',fontSize:'0.9rem'}}>🗂 Gasto por categoría</h3>
         {catData.map((c,i)=>(
@@ -280,7 +337,6 @@ function Stats({expenses,settings,allCats}) {
           </div>
         ))}
       </div>
-
       <div style={card}>
         <h3 style={{fontWeight:800,color:'#374151',margin:'0 0 0.75rem',fontSize:'0.9rem'}}>💳 Métodos de pago</h3>
         {pmData.map((p,i)=>(
@@ -292,7 +348,6 @@ function Stats({expenses,settings,allCats}) {
           </div>
         ))}
       </div>
-
       {period==='Todos'&&perData.length>1&&(
         <div style={card}>
           <h3 style={{fontWeight:800,color:'#374151',margin:'0 0 0.75rem',fontSize:'0.9rem'}}>📈 Evolución por período</h3>
@@ -316,14 +371,26 @@ function Stats({expenses,settings,allCats}) {
 }
 
 // ── AddEditExpense ────────────────────────────────────────────────────────────
-function AddEditExpense({currentUser,settings,allCats,onSubmit,onCancel,initialData=null}) {
+function AddEditExpense({currentUser,settings,allCats,customCats,onSubmit,onCancel,onSaveCats,initialData=null}) {
   const isEdit=!!initialData;
   const [form,setForm]=useState(initialData||{date:todayStr(),description:'',amount:'',category:allCats[0]||DEFAULT_CATS[0],paymentMethod:PAY_METHODS[0],bank:BANKS[0],paidBy:currentUser,responsible:'Ambos',currency:'ARS',customCurrency:''});
   const [errors,setErrors]=useState({});
+  const [showNewCat,setShowNewCat]=useState(false);
+  const [newCatEmoji,setNewCatEmoji]=useState('');
+  const [newCatName,setNewCatName]=useState('');
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const cur=BASE_CURS.includes(form.currency)?form.currency:(form.customCurrency||'ARS');
   const {javiAmount,laliAmount}=calcAmts(form.amount,form.responsible);
   const showSplit=form.amount&&parseFloat(form.amount)>0;
+
+  const addNewCat=()=>{
+    if(!newCatName.trim()) return;
+    const cat=`${newCatEmoji||'📌'} ${newCatName.trim()}`;
+    const updated=[...customCats,cat];
+    onSaveCats(updated);
+    set('category',cat);
+    setNewCatEmoji('');setNewCatName('');setShowNewCat(false);
+  };
 
   const submit=()=>{
     const e={};
@@ -342,15 +409,12 @@ function AddEditExpense({currentUser,settings,allCats,onSubmit,onCancel,initialD
   return (
     <div style={{padding:'1rem',paddingBottom:'2rem'}}>
       <h2 style={{fontWeight:900,fontSize:'1.2rem',color:'#111827',marginBottom:'0.5rem'}}>{isEdit?'✏️ Editar gasto':'Nuevo gasto'}</h2>
-
       <Label c="Descripción"/>
       <input {...inp({borderColor:errors.description?'#EF4444':'#E5E7EB'})} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Ej: Almuerzo en Lo de Juan"/>
       {errors.description&&<p style={{color:'#EF4444',fontSize:'0.7rem',margin:'0.15rem 0 0'}}>⚠ {errors.description}</p>}
-
       <Label c="Monto"/>
       <input {...inp({borderColor:errors.amount?'#EF4444':'#E5E7EB'})} type="number" value={form.amount} onChange={e=>set('amount',e.target.value)} placeholder="0"/>
       {errors.amount&&<p style={{color:'#EF4444',fontSize:'0.7rem',margin:'0.15rem 0 0'}}>⚠ {errors.amount}</p>}
-
       <Label c="Moneda"/>
       <div style={{display:'flex',gap:'0.4rem',flexWrap:'wrap'}}>
         {[...BASE_CURS,'Otra'].map(c=>(
@@ -358,10 +422,10 @@ function AddEditExpense({currentUser,settings,allCats,onSubmit,onCancel,initialD
         ))}
       </div>
       {form.currency==='Otra'&&<input {...inp({marginTop:'0.4rem'})} value={form.customCurrency||''} onChange={e=>set('customCurrency',e.target.value.toUpperCase())} placeholder="Ej: BRL, GBP..." maxLength={5}/>}
-
       <Label c="Fecha"/>
       <input {...inp()} type="date" value={form.date} onChange={e=>set('date',e.target.value)}/>
 
+      {/* Category */}
       <Label c="Categoría"/>
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'0.4rem'}}>
         {allCats.map(c=>(
@@ -369,26 +433,36 @@ function AddEditExpense({currentUser,settings,allCats,onSubmit,onCancel,initialD
         ))}
       </div>
 
+      {/* Add new category inline */}
+      {!showNewCat?(
+        <button onClick={()=>setShowNewCat(true)} style={{marginTop:'0.5rem',background:'none',border:'1px dashed #C7D2FE',borderRadius:'0.65rem',color:'#6366F1',fontSize:'0.72rem',fontWeight:700,cursor:'pointer',padding:'0.35rem 0.75rem',fontFamily:F,display:'block'}}>
+          ➕ Nueva categoría
+        </button>
+      ):(
+        <div style={{marginTop:'0.5rem',background:'#F5F3FF',borderRadius:'0.75rem',padding:'0.6rem',display:'flex',gap:'0.4rem',alignItems:'center'}}>
+          <input value={newCatEmoji} onChange={e=>setNewCatEmoji(e.target.value)} placeholder="🏷️" style={{width:'2.5rem',border:'1px solid #E5E7EB',borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.85rem',textAlign:'center',outline:'none',fontFamily:F}}/>
+          <input value={newCatName} onChange={e=>setNewCatName(e.target.value)} placeholder="Nombre..." style={{flex:1,border:'1px solid #E5E7EB',borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.82rem',outline:'none',fontFamily:F}}/>
+          <button onClick={addNewCat} style={{background:'#6366F1',color:'white',border:'none',borderRadius:'0.5rem',padding:'0.4rem 0.6rem',fontSize:'0.78rem',fontWeight:700,cursor:'pointer',fontFamily:F}}>OK</button>
+          <button onClick={()=>setShowNewCat(false)} style={{background:'none',border:'none',color:'#9CA3AF',cursor:'pointer',fontSize:'0.9rem'}}>✕</button>
+        </div>
+      )}
+
       <Label c="Medio de pago"/>
       <select value={form.paymentMethod} onChange={e=>set('paymentMethod',e.target.value)} style={selStyle}>
         {PAY_METHODS.map(m=><option key={m}>{m}</option>)}
       </select>
-
       <Label c="Banco / Billetera"/>
       <select value={form.bank} onChange={e=>set('bank',e.target.value)} style={selStyle}>
         {BANKS.map(b=><option key={b}>{b}</option>)}
       </select>
-
       <Label c="¿Quién pagó?"/>
       <div style={{display:'flex',gap:'0.5rem'}}>
         {['Javi','Lali'].map(u=>(<button key={u} {...segBtn(form.paidBy===u,u==='Javi'?'#3B82F6':'#EC4899')} onClick={()=>set('paidBy',u)}>{u==='Javi'?'👨':'👩'} {u}</button>))}
       </div>
-
       <Label c="¿Quién es responsable?"/>
       <div style={{display:'flex',gap:'0.5rem'}}>
         {['Javi','Ambos','Lali'].map(r=>(<button key={r} {...segBtn(form.responsible===r,'#10B981')} onClick={()=>set('responsible',r)}>{r==='Javi'?'👨 Javi':r==='Lali'?'👩 Lali':'👫 Ambos'}</button>))}
       </div>
-
       {showSplit&&(
         <div style={{background:'#EEF2FF',borderRadius:'1rem',padding:'0.85rem 1rem',display:'flex',justifyContent:'space-between',marginTop:'0.75rem'}}>
           <div style={{textAlign:'center',flex:1}}><div style={{fontSize:'0.7rem',color:'#6B7280'}}>👨 Javi</div><div style={{fontWeight:800,color:'#4F46E5'}}>{fmt(javiAmount,cur)}</div></div>
@@ -397,10 +471,7 @@ function AddEditExpense({currentUser,settings,allCats,onSubmit,onCancel,initialD
         </div>
       )}
       {settings.periods?.length>0&&<div style={{textAlign:'center',fontSize:'0.75rem',color:'#9CA3AF',marginTop:'0.5rem'}}>Período: <strong>{getPeriod(form.date,settings.periods)}</strong></div>}
-
-      <button onClick={submit} style={{width:'100%',padding:'1rem',background:'linear-gradient(135deg,#6366F1,#4F46E5)',color:'white',border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:F,boxShadow:'0 4px 12px rgba(99,102,241,0.4)',marginTop:'1rem'}}>
-        {isEdit?'Guardar cambios ✓':'Guardar gasto ✓'}
-      </button>
+      <button onClick={submit} style={{width:'100%',padding:'1rem',background:'linear-gradient(135deg,#6366F1,#4F46E5)',color:'white',border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:F,boxShadow:'0 4px 12px rgba(99,102,241,0.4)',marginTop:'1rem'}}>{isEdit?'Guardar cambios ✓':'Guardar gasto ✓'}</button>
       <button onClick={onCancel} style={{width:'100%',padding:'0.75rem',background:'none',border:'none',color:'#9CA3AF',fontSize:'0.9rem',cursor:'pointer',fontFamily:F,marginTop:'0.25rem'}}>Cancelar</button>
     </div>
   );
@@ -410,14 +481,10 @@ function AddEditExpense({currentUser,settings,allCats,onSubmit,onCancel,initialD
 function History({expenses,settings,onDelete,onEdit}) {
   const [openPeriods,setOpenPeriods]=useState(new Set());
   const toggle=p=>setOpenPeriods(prev=>{const n=new Set(prev);n.has(p)?n.delete(p):n.add(p);return n;});
-
   const grouped={};
-  try { expenses.forEach(e=>{const p=e.period||'Sin período';if(!grouped[p])grouped[p]=[];grouped[p].push(e);}); } catch{}
-
-  // Newest first: reverse configured periods, then others
+  try{expenses.forEach(e=>{const p=e.period||'Sin período';if(!grouped[p])grouped[p]=[];grouped[p].push(e);});}catch{}
   const configOrder=(settings.periods?.map(p=>p.name)||[]).slice().reverse();
   const sortedPeriods=[...configOrder.filter(p=>grouped[p]),...Object.keys(grouped).filter(p=>!configOrder.includes(p))];
-
   return (
     <div style={{padding:'1rem',paddingBottom:'2rem'}}>
       <h2 style={{fontWeight:900,fontSize:'1.2rem',color:'#111827',marginBottom:'1rem'}}>Historial</h2>
@@ -425,7 +492,7 @@ function History({expenses,settings,onDelete,onEdit}) {
         ?<div style={{textAlign:'center',padding:'3rem',color:'#9CA3AF'}}><div style={{fontSize:'2.5rem',marginBottom:'0.5rem'}}>📋</div>No hay gastos registrados</div>
         :sortedPeriods.map(period=>{
           try {
-            const exps=grouped[period]||[];
+            const exps=sortByDate(grouped[period]||[]);
             const total=exps.reduce((s,e)=>s+safeN(e.amount),0);
             const arsExps=exps.filter(e=>(e.currency||'ARS')==='ARS');
             const bal=calcBal(arsExps);
@@ -435,15 +502,10 @@ function History({expenses,settings,onDelete,onEdit}) {
                 <div onClick={()=>toggle(period)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'white',borderRadius:isOpen?'1rem 1rem 0 0':'1rem',padding:'0.85rem 1rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)',cursor:'pointer',borderBottom:isOpen?'1px solid #F3F4F6':'none'}}>
                   <div>
                     <div style={{fontWeight:800,color:'#111827',fontSize:'0.9rem'}}>{period}</div>
-                    <div style={{fontSize:'0.72rem',color:'#9CA3AF',marginTop:'0.1rem'}}>{exps.length} gastos · {fmt(total)}</div>
+                    <div style={{fontSize:'0.7rem',color:'#9CA3AF',marginTop:'0.1rem'}}>{exps.length} gastos · {fmt(total)}</div>
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>
-                    {Math.abs(bal)>=1?(
-                      <div style={{textAlign:'right'}}>
-                        <div style={{fontSize:'0.72rem',fontWeight:800,color:bal>0?'#3B82F6':'#EC4899'}}>{bal>0?'Lali debe':'Javi debe'}</div>
-                        <div style={{fontSize:'0.72rem',fontWeight:800,color:bal>0?'#3B82F6':'#EC4899'}}>{fmt(Math.abs(bal))}</div>
-                      </div>
-                    ):<div style={{fontSize:'0.72rem',color:'#10B981',fontWeight:700}}>✓ Al día</div>}
+                    {Math.abs(bal)>=1?<div style={{textAlign:'right'}}><div style={{fontSize:'0.7rem',fontWeight:800,color:bal>0?'#3B82F6':'#EC4899'}}>{bal>0?'Lali debe':'Javi debe'}</div><div style={{fontSize:'0.7rem',fontWeight:800,color:bal>0?'#3B82F6':'#EC4899'}}>{fmt(Math.abs(bal))}</div></div>:<div style={{fontSize:'0.7rem',color:'#10B981',fontWeight:700}}>✓ Al día</div>}
                     <span style={{color:'#9CA3AF',fontSize:'0.85rem'}}>{isOpen?'▲':'▼'}</span>
                   </div>
                 </div>
@@ -454,7 +516,7 @@ function History({expenses,settings,onDelete,onEdit}) {
                 )}
               </div>
             );
-          } catch{return null;}
+          }catch{return null;}
         })
       }
     </div>
@@ -462,17 +524,33 @@ function History({expenses,settings,onDelete,onEdit}) {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
-function Settings({settings,customCats,onSave,onSaveCats}) {
+function Settings({settings,onSave}) {
   const [scriptUrl,setScriptUrl]=useState(settings.scriptUrl||'');
   const [periods,setPeriods]=useState(settings.periods||[]);
   const [np,setNp]=useState({name:'',start:'',end:''});
-  const [localCats,setLocalCats]=useState(customCats);
-  const [newCat,setNewCat]=useState({emoji:'',name:''});
+  const [periodError,setPeriodError]=useState('');
   const [saved,setSaved]=useState(false);
 
-  const save=()=>{onSave({...settings,scriptUrl,periods});onSaveCats(localCats);setSaved(true);setTimeout(()=>setSaved(false),2000);};
-  const addPeriod=()=>{if(!np.name||!np.start||!np.end)return;setPeriods(p=>[...p,np]);setNp({name:'',start:'',end:''}); };
-  const addCat=()=>{if(!newCat.name.trim())return;setLocalCats(c=>[...c,`${newCat.emoji||'📌'} ${newCat.name.trim()}`]);setNewCat({emoji:'',name:''});};
+  const dateOverlaps=(start,end,existing)=>{
+    const s=new Date(start+'T00:00:00'), e=new Date(end+'T23:59:59');
+    for(const p of existing){
+      const ps=new Date(p.start+'T00:00:00'), pe=new Date(p.end+'T23:59:59');
+      if(s<=pe&&e>=ps) return p.name;
+    }
+    return null;
+  };
+
+  const addPeriod=()=>{
+    if(!np.name||!np.start||!np.end){setPeriodError('Completá todos los campos.');return;}
+    if(np.start>np.end){setPeriodError('La fecha de inicio debe ser anterior a la de fin.');return;}
+    const conflict=dateOverlaps(np.start,np.end,periods);
+    if(conflict){setPeriodError(`Las fechas se superponen con el período "${conflict}".`);return;}
+    setPeriodError('');
+    setPeriods(p=>[...p,np]);
+    setNp({name:'',start:'',end:''});
+  };
+
+  const save=()=>{onSave({...settings,scriptUrl,periods});setSaved(true);setTimeout(()=>setSaved(false),2000);};
 
   const card={background:'white',borderRadius:'1rem',padding:'1rem',boxShadow:'0 1px 4px rgba(0,0,0,0.07)',marginBottom:'1rem'};
   const inp={width:'100%',border:'1px solid #E5E7EB',borderRadius:'0.6rem',padding:'0.5rem 0.75rem',fontSize:'0.85rem',outline:'none',boxSizing:'border-box',fontFamily:F};
@@ -480,13 +558,11 @@ function Settings({settings,customCats,onSave,onSaveCats}) {
   return (
     <div style={{padding:'1rem',paddingBottom:'2rem'}}>
       <h2 style={{fontWeight:900,fontSize:'1.2rem',color:'#111827',marginBottom:'1rem'}}>Configuración</h2>
-
       <div style={card}>
         <h3 style={{fontWeight:800,color:'#374151',margin:'0 0 0.5rem',fontSize:'0.95rem'}}>🔗 Google Sheets</h3>
         <p style={{fontSize:'0.75rem',color:'#9CA3AF',margin:'0 0 0.6rem'}}>URL del Apps Script para leer y escribir.</p>
         <input style={inp} value={scriptUrl} onChange={e=>setScriptUrl(e.target.value)} placeholder="https://script.google.com/macros/s/..."/>
       </div>
-
       <div style={card}>
         <h3 style={{fontWeight:800,color:'#374151',margin:'0 0 0.75rem',fontSize:'0.95rem'}}>📅 Períodos de cierre</h3>
         {periods.length===0&&<p style={{fontSize:'0.8rem',color:'#9CA3AF',marginBottom:'0.75rem'}}>No hay períodos configurados.</p>}
@@ -498,33 +574,15 @@ function Settings({settings,customCats,onSave,onSaveCats}) {
         ))}
         <div style={{borderTop:'1px solid #F3F4F6',paddingTop:'0.75rem',marginTop:'0.5rem'}}>
           <p style={{fontSize:'0.75rem',color:'#9CA3AF',marginBottom:'0.4rem'}}>Agregar período:</p>
-          <input style={{...inp,marginBottom:'0.4rem'}} value={np.name} onChange={e=>setNp(p=>({...p,name:e.target.value}))} placeholder="Ej: Mar-Abr 2026"/>
+          <input style={{...inp,marginBottom:'0.4rem'}} value={np.name} onChange={e=>{setNp(p=>({...p,name:e.target.value}));setPeriodError('');}} placeholder="Ej: Mar-Abr 2026"/>
           <div style={{display:'flex',gap:'0.4rem',marginBottom:'0.4rem'}}>
-            <input type="date" style={{...inp,flex:1}} value={np.start} onChange={e=>setNp(p=>({...p,start:e.target.value}))}/>
-            <input type="date" style={{...inp,flex:1}} value={np.end} onChange={e=>setNp(p=>({...p,end:e.target.value}))}/>
+            <input type="date" style={{...inp,flex:1}} value={np.start} onChange={e=>{setNp(p=>({...p,start:e.target.value}));setPeriodError('');}}/>
+            <input type="date" style={{...inp,flex:1}} value={np.end} onChange={e=>{setNp(p=>({...p,end:e.target.value}));setPeriodError('');}}/>
           </div>
+          {periodError&&<p style={{color:'#EF4444',fontSize:'0.75rem',margin:'0 0 0.4rem',fontWeight:600}}>⚠ {periodError}</p>}
           <button onClick={addPeriod} style={{width:'100%',padding:'0.5rem',background:'#6366F1',color:'white',border:'none',borderRadius:'0.6rem',fontWeight:700,fontSize:'0.85rem',cursor:'pointer',fontFamily:F}}>+ Agregar período</button>
         </div>
       </div>
-
-      <div style={card}>
-        <h3 style={{fontWeight:800,color:'#374151',margin:'0 0 0.75rem',fontSize:'0.95rem'}}>🏷️ Categorías personalizadas</h3>
-        {localCats.length===0&&<p style={{fontSize:'0.8rem',color:'#9CA3AF',marginBottom:'0.6rem'}}>Ninguna aún.</p>}
-        <div style={{display:'flex',flexWrap:'wrap',gap:'0.4rem',marginBottom:'0.6rem'}}>
-          {localCats.map((c,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:'0.3rem',background:'#F3F4F6',borderRadius:'999px',padding:'0.25rem 0.6rem',fontSize:'0.78rem'}}>
-              <span>{c}</span>
-              <button onClick={()=>setLocalCats(cs=>cs.filter((_,idx)=>idx!==i))} style={{background:'none',border:'none',color:'#9CA3AF',cursor:'pointer',fontSize:'0.75rem',padding:0}}>✕</button>
-            </div>
-          ))}
-        </div>
-        <div style={{display:'flex',gap:'0.4rem'}}>
-          <input style={{...inp,width:'3rem',textAlign:'center',padding:'0.5rem'}} value={newCat.emoji} onChange={e=>setNewCat(c=>({...c,emoji:e.target.value}))} placeholder="🏷️"/>
-          <input style={{...inp,flex:1}} value={newCat.name} onChange={e=>setNewCat(c=>({...c,name:e.target.value}))} placeholder="Nombre de categoría"/>
-          <button onClick={addCat} style={{padding:'0.5rem 0.75rem',background:'#6366F1',color:'white',border:'none',borderRadius:'0.6rem',fontWeight:700,cursor:'pointer',fontFamily:F,flexShrink:0}}>+</button>
-        </div>
-      </div>
-
       <button onClick={save} style={{width:'100%',padding:'0.9rem',border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'0.95rem',cursor:'pointer',fontFamily:F,background:saved?'#10B981':'#6366F1',color:'white',transition:'background 0.2s'}}>
         {saved?'✓ Guardado':'Guardar configuración'}
       </button>
@@ -560,7 +618,6 @@ export default function App() {
   const selectUser=u=>{setCurrentUser(u);store.set('usr',u);};
   const showMsg=(msg,ms=5000)=>{setSyncMsg(msg);setTimeout(()=>setSyncMsg(''),ms);};
 
-  // Re-assign periods whenever settings change
   const saveSettings=s=>{
     if(s.periods?.length){
       const updated=expenses.map(e=>({...e,period:e.date?getPeriod(e.date,s.periods):(e.period||'Sin período')}));
@@ -596,23 +653,13 @@ export default function App() {
   const handleEdit=async expense=>{
     const s=sanitize(expense,allCats);
     saveExpenses(expenses.map(e=>e.id===s.id?s:e));
-    if(settings.scriptUrl&&expense.fromSheet){
-      setSyncing(true);
-      try{await fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'edit',...s})});}catch{}
-      setSyncing(false);
-      setTimeout(()=>syncFromSheet(true),1500);
-    }
+    if(settings.scriptUrl&&expense.fromSheet){setSyncing(true);try{await fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'edit',...s})});}catch{}setSyncing(false);setTimeout(()=>syncFromSheet(true),1500);}
     setEditingExpense(null);setView('dashboard');
   };
 
   const handleDelete=async(id,expense)=>{
     saveExpenses(expenses.filter(e=>e.id!==id));
-    if(settings.scriptUrl&&expense?.fromSheet){
-      setSyncing(true);
-      try{await fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'delete',id,period:expense.period})});}catch{}
-      setSyncing(false);
-      setTimeout(()=>syncFromSheet(true),1500);
-    }
+    if(settings.scriptUrl&&expense?.fromSheet){setSyncing(true);try{await fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'delete',id,period:expense.period})});}catch{}setSyncing(false);setTimeout(()=>syncFromSheet(true),1500);}
   };
 
   if(loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'#9CA3AF',fontFamily:F}}>Cargando...</div>;
@@ -620,19 +667,18 @@ export default function App() {
 
   if(editingExpense) return (
     <div style={{minHeight:'100vh',background:'#F9FAFB',maxWidth:'480px',margin:'0 auto',fontFamily:F,overflowY:'auto'}}>
-      <AddEditExpense currentUser={currentUser} settings={settings} allCats={allCats} onSubmit={handleEdit} onCancel={()=>setEditingExpense(null)} initialData={{...editingExpense,amount:String(editingExpense.amount)}}/>
+      <AddEditExpense currentUser={currentUser} settings={settings} allCats={allCats} customCats={customCats} onSubmit={handleEdit} onCancel={()=>setEditingExpense(null)} onSaveCats={saveCustomCats} initialData={{...editingExpense,amount:String(editingExpense.amount)}}/>
     </div>
   );
 
-  const periodName=settings.periods?.length?settings.periods[settings.periods.length-1].name:null;
-  const periodExps=periodName?expenses.filter(e=>e.period===periodName):expenses;
   const tabs=[{id:'dashboard',icon:'🏠',label:'Inicio'},{id:'add',icon:'➕',label:'Agregar'},{id:'stats',icon:'📊',label:'Stats'},{id:'history',icon:'📋',label:'Historial'},{id:'settings',icon:'⚙️',label:'Config'}];
 
   return (
     <div style={{minHeight:'100vh',background:'#F9FAFB',display:'flex',flexDirection:'column',maxWidth:'480px',margin:'0 auto',fontFamily:F}}>
+      {/* Header — title 20% bigger: was 1.05rem → 1.26rem */}
       <div style={{background:'white',borderBottom:'1px solid #F3F4F6',padding:'0.75rem 1rem',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:10,boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
         <div>
-          <div style={{fontWeight:900,fontSize:'1.05rem',color:'#111827'}}>💑 Javi & Lali</div>
+          <div style={{fontWeight:900,fontSize:'1.26rem',color:'#111827'}}>💑 Javi & Lali</div>
           <div style={{fontSize:'0.75rem',color:'#9CA3AF'}}>Hola, <span style={{fontWeight:900,color:currentUser==='Javi'?'#3B82F6':'#EC4899'}}>{currentUser}</span>{syncing&&<span style={{marginLeft:'0.5rem',color:'#F59E0B'}}>⟳</span>}</div>
         </div>
         <button onClick={()=>{setCurrentUser(null);store.del('usr');}} style={{background:'#F3F4F6',border:'none',borderRadius:'0.5rem',padding:'0.3rem 0.6rem',fontSize:'0.75rem',color:'#6B7280',cursor:'pointer',fontFamily:F}}>Cambiar</button>
@@ -640,12 +686,12 @@ export default function App() {
 
       {syncMsg&&<div style={{margin:'0.75rem 1rem 0',padding:'0.6rem 0.85rem',background:syncMsg.startsWith('✓')?'#D1FAE5':'#FEF3C7',borderRadius:'0.75rem',fontSize:'0.8rem',color:syncMsg.startsWith('✓')?'#065F46':'#92400E',fontWeight:700}}>{syncMsg}</div>}
 
-      <div style={{flex:1,overflowY:'auto',paddingBottom:'5rem'}}>
-        {view==='dashboard'&&<Dashboard expenses={expenses} periodExps={periodExps} settings={settings} onDelete={handleDelete} onEdit={e=>setEditingExpense(e)} onSync={()=>syncFromSheet(false)} syncing={syncing}/>}
-        {view==='add'&&<AddEditExpense currentUser={currentUser} settings={settings} allCats={allCats} onSubmit={handleAdd} onCancel={()=>setView('dashboard')}/>}
+      <div style={{flex:1,overflowY:'auto',paddingBottom:'5rem',paddingTop:'0.75rem'}}>
+        {view==='dashboard'&&<Dashboard expenses={expenses} settings={settings} allCats={allCats} onDelete={handleDelete} onEdit={e=>setEditingExpense(e)} onSync={()=>syncFromSheet(false)} syncing={syncing}/>}
+        {view==='add'&&<AddEditExpense currentUser={currentUser} settings={settings} allCats={allCats} customCats={customCats} onSubmit={handleAdd} onCancel={()=>setView('dashboard')} onSaveCats={saveCustomCats}/>}
         {view==='stats'&&<Stats expenses={expenses} settings={settings} allCats={allCats}/>}
         {view==='history'&&<History expenses={expenses} settings={settings} onDelete={handleDelete} onEdit={e=>setEditingExpense(e)}/>}
-        {view==='settings'&&<Settings settings={settings} customCats={customCats} onSave={saveSettings} onSaveCats={saveCustomCats}/>}
+        {view==='settings'&&<Settings settings={settings} onSave={saveSettings}/>}
       </div>
 
       <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:'480px',background:'white',borderTop:'1px solid #F3F4F6',display:'flex',boxShadow:'0 -2px 8px rgba(0,0,0,0.06)',zIndex:10}}>
