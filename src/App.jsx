@@ -614,7 +614,13 @@ export default function App() {
   },[]);
 
   const saveExpenses=exps=>{setExpenses(exps);store.set('exp',exps);};
-  const saveCustomCats=cats=>{setCustomCats(cats);store.set('ccats',cats);};
+  const saveCustomCats=cats=>{
+    setCustomCats(cats);store.set('ccats',cats);
+    // Push to Sheet too
+    if(settings.scriptUrl){
+      try{fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'saveConfig',periods:settings.periods,customCats:cats})});}catch{}
+    }
+  };
   const selectUser=u=>{setCurrentUser(u);store.set('usr',u);};
   const showMsg=(msg,ms=5000)=>{setSyncMsg(msg);setTimeout(()=>setSyncMsg(''),ms);};
 
@@ -624,6 +630,10 @@ export default function App() {
       saveExpenses(updated);
     }
     setSettings(s);store.set('cfg',s);
+    // Push config to Sheet so other devices pick it up on sync
+    if(s.scriptUrl){
+      try{fetch(s.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'saveConfig',periods:s.periods,customCats:customCats})});}catch{}
+    }
   };
 
   const syncFromSheet=async(silent=false)=>{
@@ -633,12 +643,28 @@ export default function App() {
       const res=await fetch(settings.scriptUrl,{redirect:'follow'});
       if(!res.ok) throw new Error();
       const data=await res.json();
-      if(Array.isArray(data)){
-        const localOnly=expenses.filter(e=>!e.fromSheet);
-        const sanitized=data.map(e=>sanitize(e,allCats));
-        saveExpenses([...localOnly,...sanitized]);
-        if(!silent) showMsg(`✓ ${data.length} gastos sincronizados.`);
-      } else if(!silent) showMsg('⚠ Respuesta inválida del Sheet.');
+
+      // Support both old format (array) and new format ({expenses, config})
+      const rawExps  = Array.isArray(data) ? data : (data.expenses||[]);
+      const remoteConfig = Array.isArray(data) ? null : (data.config||null);
+
+      const localOnly=expenses.filter(e=>!e.fromSheet);
+      const cats = remoteConfig?.customCats?.length ? [...DEFAULT_CATS,...remoteConfig.customCats] : allCats;
+      const sanitized=rawExps.map(e=>sanitize(e,cats));
+      saveExpenses([...localOnly,...sanitized]);
+
+      // Apply remote config if available
+      if(remoteConfig){
+        if(remoteConfig.periods?.length){
+          const newSettings={...settings,periods:remoteConfig.periods};
+          setSettings(newSettings);store.set('cfg',newSettings);
+        }
+        if(remoteConfig.customCats?.length){
+          saveCustomCats(remoteConfig.customCats);
+        }
+      }
+
+      if(!silent) showMsg(`✓ ${sanitized.length} gastos sincronizados.`);
     }catch{if(!silent) showMsg('⚠ No se pudo conectar. Verificá la URL.');}
     setSyncing(false);
   };
