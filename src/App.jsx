@@ -377,7 +377,7 @@ function Dashboard(props) {
             })
           )
     ),
-    settings.scriptUrl ? React.createElement('button', {onClick:props.onSync,disabled:props.syncing,style:{width:'100%',padding:'0.6rem',background:props.syncing?C.beige:C.gradMain,border:'none',borderRadius:'0.85rem',color:props.syncing?C.textMuted:C.white,fontWeight:700,fontSize:'0.82rem',cursor:props.syncing?'not-allowed':'pointer',fontFamily:F}},props.syncing?'⟳ Sincronizando...':'⚙️ Sincronizar configuración') : null,
+    settings.scriptUrl ? React.createElement('button', {onClick:props.onSync,disabled:props.syncing,style:{width:'100%',padding:'0.6rem',background:props.syncing?C.beige:C.gradMain,border:'none',borderRadius:'0.85rem',color:props.syncing?C.textMuted:C.white,fontWeight:700,fontSize:'0.82rem',cursor:props.syncing?'not-allowed':'pointer',fontFamily:F}},props.syncing?'⟳ Sincronizando...':'☁️ Sincronizar todo') : null,
     React.createElement(ActivePlans, {plans:plans,expenses:expenses,onCancelPlan:props.onCancelPlan}),
     React.createElement('div', null,
       React.createElement('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.5rem'}},
@@ -973,11 +973,32 @@ export default function App() {
       return res.json();
     }).then(function(data){
       var remoteConfig=Array.isArray(data)?null:(data.config||null);
+      var rawExps=Array.isArray(data)?data:(data.expenses||[]);
+      var updatedSettings=settings;
+
+      // Apply remote config if available
       if(remoteConfig){
-        if(remoteConfig.periods&&remoteConfig.periods.length){var ns=Object.assign({},settings,{periods:remoteConfig.periods});setSettings(ns);store.set('cfg',ns);}
-        if(remoteConfig.customCats&&remoteConfig.customCats.length){setCustomCats(remoteConfig.customCats);store.set('ccats',remoteConfig.customCats);}
+        if(remoteConfig.periods&&remoteConfig.periods.length){
+          updatedSettings=Object.assign({},settings,{periods:remoteConfig.periods});
+          setSettings(updatedSettings);store.set('cfg',updatedSettings);
+        }
+        if(remoteConfig.customCats&&remoteConfig.customCats.length){
+          setCustomCats(remoteConfig.customCats);store.set('ccats',remoteConfig.customCats);
+        }
+      }
+
+      // Always sync expenses from Sheet — keeps all devices in sync
+      if(rawExps.length){
+        var cats=DEFAULT_CATS.concat(remoteConfig&&remoteConfig.customCats?remoteConfig.customCats:customCats);
+        var localOnly=expenses.filter(function(e){return !e.fromSheet;});
+        var sanitized=rawExps.map(function(e){return sanitize(e,cats);});
+        saveExpenses(localOnly.concat(sanitized));
+        showMsg('✓ '+sanitized.length+' gastos y configuración sincronizados.');
+      } else if(remoteConfig){
         showMsg('✓ Configuración sincronizada.');
-      }else{showMsg('⚠ No se encontró configuración en el Sheet.');}
+      } else {
+        showMsg('⚠ No se encontró información en el Sheet.');
+      }
     }).catch(function(){showMsg('⚠ No se pudo conectar. Verificá la URL.');}).then(function(){setSyncing(false);});
   }
 
