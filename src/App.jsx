@@ -1005,7 +1005,6 @@ export default function App() {
   function handleAdd(expense){
     var s=sanitize(Object.assign({},expense,{id:Date.now().toString()}),allCats);
     saveExpenses([s].concat(expenses));
-    if(settings.scriptUrl){setSyncing(true);fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify(Object.assign({action:'add'},s))}).catch(function(){}).then(function(){setSyncing(false);});}
     setView('dashboard');
   }
   function handleAddPlan(formData,numInstallments){
@@ -1017,20 +1016,89 @@ export default function App() {
     var installments=generatePlanExpenses(plan,settings.periods);
     savePlans(plans.concat([plan]));
     saveExpenses(installments.concat(expenses));
-    if(settings.scriptUrl){installments.forEach(function(inst){fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify(Object.assign({action:'add'},inst))}).catch(function(){});});}
     setView('dashboard');
   }
   function handleEdit(expense){
     var s=sanitize(expense,allCats);
     saveExpenses(expenses.map(function(e){return e.id===s.id?s:e;}));
-    if(settings.scriptUrl&&expense.fromSheet){setSyncing(true);fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify(Object.assign({action:'edit'},s))}).catch(function(){}).then(function(){setSyncing(false);});}
     setEditingExpense(null);setView('dashboard');
   }
-  function handleDelete(id,expense){
+  function handleDelete(id){
     saveExpenses(expenses.filter(function(e){return e.id!==id;}));
-    if(settings.scriptUrl&&expense&&expense.fromSheet){setSyncing(true);fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'delete',id:id,period:expense.period})}).catch(function(){}).then(function(){setSyncing(false);});}
   }
-  function handleCancelPlan(planId){savePlans(plans.filter(function(p){return p.id!==planId;}));saveExpenses(expenses.filter(function(e){return e.planId!==planId;}));}
+  function handleCancelPlan(planId){
+    savePlans(plans.filter(function(p){return p.id!==planId;}));
+    saveExpenses(expenses.filter(function(e){return e.planId!==planId;}));
+  }
+
+  // ── Sheet import (new device first-time setup) ──
+  function importFromSheet(){
+    if(!settings.scriptUrl){showMsg('Configurá la URL del Apps Script primero.');return;}
+    setSyncing(true);
+    fetch(settings.scriptUrl,{redirect:'follow'}).then(function(res){
+      if(!res.ok)throw new Error();
+      return res.json();
+    }).then(function(data){
+      var remoteConfig=Array.isArray(data)?null:(data.config||null);
+      var rawExps=Array.isArray(data)?data:(data.expenses||[]);
+      if(remoteConfig){
+        if(remoteConfig.periods&&remoteConfig.periods.length){var ns=Object.assign({},settings,{periods:remoteConfig.periods});setSettings(ns);store.set('cfg',ns);}
+        if(remoteConfig.customCats&&remoteConfig.customCats.length){setCustomCats(remoteConfig.customCats);store.set('ccats',remoteConfig.customCats);}
+      }
+      if(rawExps.length){
+        var cats=DEFAULT_CATS.concat(remoteConfig&&remoteConfig.customCats?remoteConfig.customCats:customCats);
+        // Deduplicate: merge Sheet data with local, local version wins on conflict
+        var sheetSanitized=rawExps.map(function(e){return sanitize(e,cats);});
+        var localById={};
+        expenses.forEach(function(e){localById[e.id]=e;});
+        var sheetIds=sheetSanitized.map(function(e){return e.id;});
+        var merged=sheetSanitized.map(function(e){return localById[e.id]||e;});
+        var localOnly=expenses.filter(function(e){return sheetIds.indexOf(e.id)<0;});
+        saveExpenses(localOnly.concat(merged));
+        showMsg('✓ '+sheetSanitized.length+' gastos importados del Sheet.');
+      } else {
+        showMsg(remoteConfig?'✓ Configuración sincronizada.':'⚠ No se encontraron datos en el Sheet.');
+      }
+    }).catch(function(){showMsg('⚠ No se pudo conectar. Verificá la URL.');}).then(function(){setSyncing(false);});
+  }
+
+  // ── Sheet export (backup manual) ──
+  function exportToSheet(){
+    if(!settings.scriptUrl){showMsg('Configurá la URL del Apps Script primero.');return;}
+    setSyncing(true);
+    var toSend=expenses.filter(function(e){return !e.fromPlan;});
+    var sent=0;
+    if(!toSend.length){showMsg('No hay gastos para subir.');setSyncing(false);return;}
+    // Send config first
+    fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'saveConfig',periods:settings.periods,customCats:customCats})}).catch(function(){});
+    // Send expenses one by one
+    toSend.forEach(function(e){
+      fetch(settings.scriptUrl,{method:'POST',mode:'no-cors',body:JSON.stringify(Object.assign({action:'add'},e))}).catch(function(){});
+    });
+    setTimeout(function(){showMsg('✓ '+toSend.length+' gastos subidos al Sheet.');setSyncing(false);},1500);
+  }
+
+  // ── CSV Export ──
+  function exportCSV(from, to){
+    var filtered=expenses.filter(function(e){
+      if(!e.date)return false;
+      if(from&&e.date<from)return false;
+      if(to&&e.date>to)return false;
+      return true;
+    });
+    if(!filtered.length){showMsg('No hay gastos en ese rango de fechas.');return;}
+    var header=['Fecha','Descripción','Monto','Moneda','Categoría','Medio de Pago','Banco','Pagó','Responsable','Monto Javi','Monto Lali','Período'];
+    var rows=[header].concat(filtered.map(function(e){
+      return [e.date,e.description,safeN(e.amount),e.currency||'ARS',e.category,e.paymentMethod,e.bank||'',e.paidBy,e.responsible,safeN(e.javiAmount),safeN(e.laliAmount),e.period||''];
+    }));
+    var csv=rows.map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+    var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download='gastos_'+(from||'inicio')+'_'+(to||'hoy')+'.csv';
+    a.click(); URL.revokeObjectURL(url);
+    showMsg('✓ CSV descargado ('+filtered.length+' gastos).');
+  }
 
   if(loading)return React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:C.textMuted,fontFamily:F,background:C.bg}},'Cargando...');
   if(!currentUser)return React.createElement(UserSelect,{onSelect:selectUser});
