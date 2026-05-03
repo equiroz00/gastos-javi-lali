@@ -377,7 +377,6 @@ function Dashboard(props) {
             })
           )
     ),
-    settings.scriptUrl ? React.createElement('button', {onClick:props.onSync,disabled:props.syncing,style:{width:'100%',padding:'0.6rem',background:props.syncing?C.beige:C.gradMain,border:'none',borderRadius:'0.85rem',color:props.syncing?C.textMuted:C.white,fontWeight:700,fontSize:'0.82rem',cursor:props.syncing?'not-allowed':'pointer',fontFamily:F}},props.syncing?'⟳ Sincronizando...':'☁️ Sincronizar todo') : null,
     React.createElement(ActivePlans, {plans:plans,expenses:expenses,onCancelPlan:props.onCancelPlan}),
     React.createElement('div', null,
       React.createElement('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.5rem'}},
@@ -861,15 +860,19 @@ function AddEditExpense(props) {
 // ── Settings ──────────────────────────────────────────────────────────────────
 function Settings(props) {
   var settings=props.settings||{};
-  var urlState=useState(settings.scriptUrl||''); var scriptUrl=urlState[0]; var setScriptUrl=urlState[1];
   var perState=useState(settings.periods||[]); var periods=perState[0]; var setPeriods=perState[1];
   var npState=useState({name:'',start:'',end:''}); var np=npState[0]; var setNp=npState[1];
   var errState=useState(''); var periodError=errState[0]; var setPeriodError=errState[1];
   var savedState=useState(false); var saved=savedState[0]; var setSaved=savedState[1];
+  var csvFromState=useState(''); var csvFrom=csvFromState[0]; var setCsvFrom=csvFromState[1];
+  var csvToState=useState(''); var csvTo=csvToState[0]; var setCsvTo=csvToState[1];
 
   function dateOverlaps(start,end,existing){
     var s=new Date(start+'T00:00:00'),e=new Date(end+'T23:59:59');
-    for(var i=0;i<existing.length;i++){var ps=new Date(existing[i].start+'T00:00:00'),pe=new Date(existing[i].end+'T23:59:59');if(s<=pe&&e>=ps)return existing[i].name;}
+    for(var i=0;i<existing.length;i++){
+      var ps=new Date(existing[i].start+'T00:00:00'),pe=new Date(existing[i].end+'T23:59:59');
+      if(s<=pe&&e>=ps)return existing[i].name;
+    }
     return null;
   }
   function addPeriod(){
@@ -879,19 +882,55 @@ function Settings(props) {
     if(conflict){setPeriodError('Se superpone con "'+conflict+'".');return;}
     setPeriodError('');setPeriods(function(p){return p.concat([np]);});setNp({name:'',start:'',end:''});
   }
-  function save(){props.onSave(Object.assign({},settings,{scriptUrl:scriptUrl,periods:periods}));setSaved(true);setTimeout(function(){setSaved(false);},2000);}
+  function save(){props.onSave(Object.assign({},settings,{periods:periods}));setSaved(true);setTimeout(function(){setSaved(false);},2000);}
+
   var inp={width:'100%',border:'1px solid '+C.border,borderRadius:'0.6rem',padding:'0.5rem 0.75rem',fontSize:'0.85rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.white};
+  var btnBase={border:'none',borderRadius:'0.85rem',fontWeight:700,fontSize:'0.85rem',cursor:'pointer',fontFamily:F,padding:'0.65rem',width:'100%'};
 
   return React.createElement('div',{style:{padding:'1rem',paddingBottom:'2rem',display:'flex',flexDirection:'column',gap:'0.75rem'}},
     React.createElement('h2',{style:{fontWeight:900,fontSize:'1.2rem',color:C.navy,margin:0}},'Configuración'),
+
+    // ── Sync entre dispositivos ──
     React.createElement(Card,null,
-      React.createElement('h3',{style:{fontWeight:800,color:C.navy,margin:'0 0 0.5rem',fontSize:'0.95rem'}},'🔗 Google Sheets'),
-      React.createElement('p',{style:{fontSize:'0.75rem',color:C.textMuted,margin:'0 0 0.6rem'}},'URL del Apps Script. Los gastos se envían automáticamente. La sincronización solo trae configuración entre dispositivos.'),
-      React.createElement('input',{style:inp,value:scriptUrl,onChange:function(e){setScriptUrl(e.target.value);},placeholder:'https://script.google.com/macros/s/...'})
+      React.createElement('h3',{style:{fontWeight:800,color:C.navy,margin:'0 0 0.4rem',fontSize:'0.95rem'}},'📱 Sincronizar entre dispositivos'),
+      React.createElement('p',{style:{fontSize:'0.75rem',color:C.textMuted,margin:'0 0 0.75rem',lineHeight:1.6}},
+        'Para pasar los datos de un dispositivo a otro: en el dispositivo que tiene los datos tocá ',
+        React.createElement('strong',null,'"Exportar backup"'),
+        ', compartí el archivo .json por WhatsApp o mail, y en el otro dispositivo tocá ',
+        React.createElement('strong',null,'"Importar backup"'),
+        '.'
+      ),
+      React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},
+        React.createElement('button',{onClick:props.onExportJSON,style:Object.assign({},btnBase,{background:C.gradMain,color:C.white})},'📤 Exportar backup'),
+        React.createElement('button',{onClick:function(){document.getElementById('json-import-input').click();},style:Object.assign({},btnBase,{background:C.beige,color:C.navy})},'📥 Importar backup')
+      ),
+      React.createElement('input',{id:'json-import-input',type:'file',accept:'.json',style:{display:'none'},onChange:function(e){props.onImportJSON(e.target.files[0]);e.target.value='';}}),
+      React.createElement('p',{style:{fontSize:'0.68rem',color:C.textMuted,margin:'0.5rem 0 0',textAlign:'center'}},
+        '⚠ Importar fusiona los datos — no borra lo que ya tenés en el dispositivo.'
+      )
     ),
+
+    // ── Exportar CSV ──
+    React.createElement(Card,null,
+      React.createElement('h3',{style:{fontWeight:800,color:C.navy,margin:'0 0 0.4rem',fontSize:'0.95rem'}},'📊 Exportar gastos a CSV'),
+      React.createElement('p',{style:{fontSize:'0.75rem',color:C.textMuted,margin:'0 0 0.6rem'}},'Elegí un rango de fechas y descargá los gastos. Podés abrirlo en Excel, Google Sheets o cualquier planilla.'),
+      React.createElement('div',{style:{display:'flex',gap:'0.4rem',marginBottom:'0.5rem'}},
+        React.createElement('div',{style:{flex:1}},
+          React.createElement('div',{style:{fontSize:'0.72rem',color:C.textMuted,marginBottom:'0.2rem',fontWeight:700}},'Desde'),
+          React.createElement('input',{type:'date',style:inp,value:csvFrom,onChange:function(e){setCsvFrom(e.target.value);}})
+        ),
+        React.createElement('div',{style:{flex:1}},
+          React.createElement('div',{style:{fontSize:'0.72rem',color:C.textMuted,marginBottom:'0.2rem',fontWeight:700}},'Hasta'),
+          React.createElement('input',{type:'date',style:inp,value:csvTo,onChange:function(e){setCsvTo(e.target.value);}})
+        )
+      ),
+      React.createElement('button',{onClick:function(){props.onExportCSV(csvFrom,csvTo);},style:Object.assign({},btnBase,{background:C.gradMain,color:C.white})},'⬇️ Descargar CSV'),
+      React.createElement('p',{style:{fontSize:'0.68rem',color:C.textMuted,margin:'0.4rem 0 0',textAlign:'center'}},'Si dejás las fechas vacías descarga todos los gastos.')
+    ),
+
+    // ── Períodos de cierre ──
     React.createElement(Card,null,
       React.createElement('h3',{style:{fontWeight:800,color:C.navy,margin:'0 0 0.75rem',fontSize:'0.95rem'}},'📅 Períodos de cierre'),
-      // Add form FIRST
       React.createElement('div',{style:{background:C.bg,borderRadius:'0.85rem',padding:'0.75rem',marginBottom:'0.75rem',border:'1px solid '+C.border}},
         React.createElement('p',{style:{fontSize:'0.75rem',color:C.textMuted,marginBottom:'0.4rem',fontWeight:700}},'Agregar período:'),
         React.createElement('input',{style:Object.assign({},inp,{marginBottom:'0.4rem'}),value:np.name,onChange:function(e){setNp(function(p){return Object.assign({},p,{name:e.target.value});});setPeriodError('');},placeholder:'Ej: Mar-Abr 2026'}),
@@ -902,7 +941,6 @@ function Settings(props) {
         periodError?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.75rem',margin:'0 0 0.4rem',fontWeight:600}},'⚠ '+periodError):null,
         React.createElement('button',{onClick:addPeriod,style:{width:'100%',padding:'0.5rem',background:C.navy,color:C.white,border:'none',borderRadius:'0.6rem',fontWeight:700,fontSize:'0.85rem',cursor:'pointer',fontFamily:F}},'+ Agregar período')
       ),
-      // Period list BELOW with scroll
       periods.length===0
         ? React.createElement('p',{style:{fontSize:'0.8rem',color:C.textMuted,margin:0}},'No hay períodos configurados aún.')
         : React.createElement(React.Fragment,null,
@@ -920,6 +958,7 @@ function Settings(props) {
             )
           )
     ),
+
     React.createElement('button',{onClick:save,style:{width:'100%',padding:'0.9rem',border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'0.95rem',cursor:'pointer',fontFamily:F,background:saved?'linear-gradient(135deg,#2d9e7f,#1db88c)':C.gradMain,color:C.white}},saved?'✓ Guardado':'Guardar configuración')
   );
 }
