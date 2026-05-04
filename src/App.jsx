@@ -606,7 +606,7 @@ function AddEditExpense(props){
   var showSplit=form.amount&&parseFloat(form.amount)>0;
   var installmentAmt=showSplit&&useCuotas?Math.round(parseFloat(form.amount)/finalCuotas):0;
   function addNewCat(){if(!newCatName.trim())return;var cat=(newCatEmoji||'📌')+' '+newCatName.trim();onSaveCats(customCats.concat([cat]));set('category',cat);setNewCatEmoji('');setNewCatName('');setShowNewCat(false);}
-  function submit(){var e={};if(!form.description.trim())e.description='Requerido';if(!form.amount||parseFloat(form.amount)<=0)e.amount='Monto inválido';if(Object.keys(e).length){setErrors(e);return;}var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;var base=Object.assign({},form,{id:isEdit?form.id:Date.now().toString(),amount:parseFloat(form.amount),javiAmount:javiAmount,laliAmount:laliAmount,currency:finalCur,period:getPeriod(form.date,settings.periods)});if(!isEdit){base.createdBy=currentUser;base.createdAt=new Date().toISOString();}if(!isEdit&&useCuotas&&finalCuotas>1){props.onSubmitPlan(base,finalCuotas);}else{props.onSubmit(base);}}
+  function submit(){var e={};if(!form.description.trim())e.description='Requerido';if(!form.amount||parseFloat(form.amount)<=0)e.amount='Monto inválido';if(Object.keys(e).length){setErrors(e);return;}var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;var base=Object.assign({},form,{id:isEdit?form.id:Date.now().toString(),amount:parseFloat(form.amount),javiAmount:javiAmount,laliAmount:laliAmount,currency:finalCur,period:getPeriod(form.date,settings.periods)});if(!isEdit){base.createdBy=currentUser;base.createdAt=new Date().toISOString();}if(!isEdit&&useCuotas&&finalCuotas>1){props.onSubmitPlan(base,finalCuotas,alreadyPaidNum);}else{props.onSubmit(base);}}
   var inpStyle=function(extra){return Object.assign({width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface},extra||{});};
   var selStyle={width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',background:C.surface,boxSizing:'border-box',fontFamily:F,color:C.navy};
   function Lbl(text){return React.createElement('label',{style:{fontSize:'0.8rem',color:C.textMuted,fontWeight:700,display:'block',marginBottom:'0.35rem',marginTop:'0.75rem'}},text);}
@@ -749,7 +749,7 @@ export default function App(){
   var userState=useState(null);var currentUser=userState[0];var setCurrentUser=userState[1];
   var viewState=useState('dashboard');var view=viewState[0];var setView=viewState[1];
   var expState=useState([]);var expenses=expState[0];var setExpenses=expState[1];
-  var cfgState=useState({periods:[],theme:'default',font:'Nunito'});var settings=cfgState[0];var setSettings=cfgState[1];
+  var cfgState=useState({periods:[]});var settings=cfgState[0];var setSettings=cfgState[1];
   var catState=useState([]);var customCats=catState[0];var setCustomCats=catState[1];
   var planState=useState([]);var plans=planState[0];var setPlans=planState[1];
   var payState=useState([]);var payments=payState[0];var setPayments=payState[1];
@@ -757,7 +757,13 @@ export default function App(){
   var msgState=useState('');var syncMsg=msgState[0];var setSyncMsg=msgState[1];
   var editState=useState(null);var editingExpense=editState[0];var setEditingExpense=editState[1];
   var delState=useState(null);var pendingDelete=delState[0];var setPendingDelete=delState[1];
-  var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1]; // {currency, netBal}
+  var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1];
+
+  // Tema y fuente son POR DISPOSITIVO/USUARIO — localStorage solamente
+  var themeState=useState(store.get('theme_'+(currentUser||'default'),'default'));
+  var activeTheme=themeState[0];var setActiveTheme=themeState[1];
+  var fontState=useState(store.get('font_'+(currentUser||'default'),'Nunito'));
+  var activeFont=fontState[0];var setActiveFont=fontState[1]; // {currency, netBal}
 
   // Apply theme before render
   applyTheme(settings.theme||'default', settings.font||'Nunito');
@@ -766,9 +772,14 @@ export default function App(){
   var allCats=DEFAULT_CATS.concat(customCats);
 
   useEffect(function(){
-    setCurrentUser(store.get('usr',null));
+    var u=store.get('usr',null);
+    setCurrentUser(u);
+    if(u){
+      setActiveTheme(store.get('theme_'+u,'default'));
+      setActiveFont(store.get('font_'+u,'Nunito'));
+    }
     var unsub=onSnapshot(dataDoc,function(snapshot){
-      if(snapshot.exists()){var data=snapshot.data();setExpenses(data.expenses||[]);setPlans(data.plans||[]);setSettings(data.settings||{periods:[],theme:'default',font:'Nunito'});setCustomCats(data.customCats||[]);setPayments(data.payments||[]);}
+      if(snapshot.exists()){var data=snapshot.data();setExpenses(data.expenses||[]);setPlans(data.plans||[]);setSettings(data.settings||{periods:[]});setCustomCats(data.customCats||[]);setPayments(data.payments||[]);}
       setLoading(false);
     },function(error){console.error('Firebase error:',error);setLoading(false);});
     return unsub;
@@ -782,11 +793,15 @@ export default function App(){
   function saveCustomCats(cats){setCustomCats(cats);saveAll(undefined,undefined,undefined,cats,undefined);}
   function savePayments(pays){setPayments(pays);saveAll(undefined,undefined,undefined,undefined,pays);}
   function saveSettings(s){
-    var updated=expenses.map(function(e){return Object.assign({},e,{period:(!e.fromPlan&&e.date)?getPeriod(e.date,s.periods):(e.period||'Sin período')});});
-    if(s.periods&&s.periods.length)updated=reassignPlanExpenses(updated,s.periods,plans);
-    setExpenses(updated);setSettings(s);saveAll(updated,undefined,s,undefined,undefined);
+    // Strip theme/font — those are local only
+    var toSave=Object.assign({},s);delete toSave.theme;delete toSave.font;
+    var updated=expenses.map(function(e){return Object.assign({},e,{period:(!e.fromPlan&&e.date)?getPeriod(e.date,toSave.periods):(e.period||'Sin período')});});
+    if(toSave.periods&&toSave.periods.length)updated=reassignPlanExpenses(updated,toSave.periods,plans);
+    setExpenses(updated);setSettings(toSave);saveAll(updated,undefined,toSave,undefined,undefined);
   }
-  function selectUser(u){setCurrentUser(u);store.set('usr',u);}
+  function selectUser(u){setCurrentUser(u);store.set('usr',u);setActiveTheme(store.get('theme_'+u,'default'));setActiveFont(store.get('font_'+u,'Nunito'));}
+  function changeTheme(t){setActiveTheme(t);if(currentUser)store.set('theme_'+currentUser,t);}
+  function changeFont(f){setActiveFont(f);if(currentUser)store.set('font_'+currentUser,f);}
   function showMsg(msg,ms){setSyncMsg(msg);setTimeout(function(){setSyncMsg('');},ms||5000);}
 
   function exportCSV(from,to){
@@ -801,11 +816,12 @@ export default function App(){
   }
 
   function handleAdd(expense){var s=sanitize(Object.assign({},expense,{id:Date.now().toString()}),allCats);saveExpenses([s].concat(expenses));setView('dashboard');}
-  function handleAddPlan(formData,numInstallments){
+  function handleAddPlan(formData,numInstallments,alreadyPaid){
+    var alreadyPaidSafe=Math.max(0,Math.min(parseInt(alreadyPaid)||0,numInstallments-1));
     var amt=safeN(formData.amount),installmentAmount=Math.round(amt/numInstallments);
     var amts=calcAmts(installmentAmount,formData.responsible);
     var startPeriod=getPeriod(formData.date,settings.periods);
-    var plan={id:'plan_'+Date.now(),description:formData.description,totalAmount:amt,installmentAmount:installmentAmount,numInstallments:numInstallments,startPeriod:startPeriod,startDate:formData.date,currency:formData.currency||'ARS',paidBy:formData.paidBy,responsible:formData.responsible,paymentMethod:formData.paymentMethod,bank:formData.bank,category:formData.category,javiAmount:amts.javiAmount,laliAmount:amts.laliAmount,createdAt:new Date().toISOString()};
+    var plan={id:'plan_'+Date.now(),description:formData.description,totalAmount:amt,installmentAmount:installmentAmount,numInstallments:numInstallments,alreadyPaid:alreadyPaidSafe,startPeriod:startPeriod,startDate:formData.date,currency:formData.currency||'ARS',paidBy:formData.paidBy,responsible:formData.responsible,paymentMethod:formData.paymentMethod,bank:formData.bank,category:formData.category,javiAmount:amts.javiAmount,laliAmount:amts.laliAmount,createdAt:new Date().toISOString()};
     var installments=generatePlanExpenses(plan,settings.periods);
     var newPlans=plans.concat([plan]),newExps=installments.concat(expenses);
     setPlans(newPlans);setExpenses(newExps);saveAll(newExps,newPlans,undefined,undefined,undefined);setView('dashboard');
