@@ -89,11 +89,14 @@ function lastPayment(payments, currency){
 
 // ── Plan helpers ──────────────────────────────────────────────────────────────
 function generatePlanExpenses(plan,periods){
+  var alreadyPaid=plan.alreadyPaid||0;
+  var remaining=plan.numInstallments-alreadyPaid;
   var startIdx=periods.findIndex(function(p){return p.name===plan.startPeriod;});
-  return Array.from({length:plan.numInstallments},function(_,i){
+  return Array.from({length:remaining},function(_,i){
     var targetIdx=startIdx+i;
     var period=(startIdx>=0&&targetIdx<periods.length)?periods[targetIdx].name:PENDING_PER;
-    return{id:plan.id+'-'+(i+1),description:plan.description+' (cuota '+(i+1)+'/'+plan.numInstallments+')',amount:plan.installmentAmount,javiAmount:plan.javiAmount,laliAmount:plan.laliAmount,currency:plan.currency,paidBy:plan.paidBy,responsible:plan.responsible,paymentMethod:plan.paymentMethod,bank:plan.bank,category:plan.category,date:plan.startDate,period:period,planId:plan.id,installmentNum:i+1,numInstallments:plan.numInstallments,fromPlan:true};
+    var installmentNum=alreadyPaid+i+1;
+    return{id:plan.id+'-'+installmentNum,description:plan.description+' (cuota '+installmentNum+'/'+plan.numInstallments+')',amount:plan.installmentAmount,javiAmount:plan.javiAmount,laliAmount:plan.laliAmount,currency:plan.currency,paidBy:plan.paidBy,responsible:plan.responsible,paymentMethod:plan.paymentMethod,bank:plan.bank,category:plan.category,date:plan.startDate,period:period,planId:plan.id,installmentNum:installmentNum,numInstallments:plan.numInstallments,fromPlan:true};
   });
 }
 function reassignPlanExpenses(exps,periods,plans){
@@ -327,9 +330,11 @@ function ActivePlans(props){
     React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.5rem',maxHeight:plans.length>=3?'280px':undefined,overflowY:plans.length>=3?'auto':undefined}},
       filtered.map(function(plan){
         var planExps=expenses.filter(function(e){return e.planId===plan.id;});
+        var alreadyPaid=plan.alreadyPaid||0;
         var pending=planExps.filter(function(e){return e.period===PENDING_PER;}).length;
-        var assigned=plan.numInstallments-pending;
-        var pct=Math.round(assigned/plan.numInstallments*100);
+        var assignedNew=(plan.numInstallments-alreadyPaid)-pending;
+        var totalAssigned=alreadyPaid+assignedNew;
+        var pct=Math.round(totalAssigned/plan.numInstallments*100);
         return React.createElement(Card,{key:plan.id,style:{padding:'0.85rem',flexShrink:0}},
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'0.4rem'}},
             React.createElement('div',{style:{flex:1,minWidth:0}},
@@ -337,7 +342,7 @@ function ActivePlans(props){
               React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,marginTop:'0.1rem'}},fmt(plan.installmentAmount,plan.currency)+'/mes · Total: '+fmt(plan.totalAmount,plan.currency))
             ),
             React.createElement('div',{style:{textAlign:'right',flexShrink:0,marginLeft:'0.5rem'}},
-              React.createElement('div',{style:{fontWeight:800,color:C.accent,fontSize:'0.82rem'}},assigned+'/'+plan.numInstallments),
+              React.createElement('div',{style:{fontWeight:800,color:C.accent,fontSize:'0.82rem'}},totalAssigned+'/'+plan.numInstallments),
               React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'cuotas')
             )
           ),
@@ -345,7 +350,7 @@ function ActivePlans(props){
             React.createElement('div',{style:{width:pct+'%',height:'100%',background:C.gradMain,borderRadius:'999px',transition:'width 0.4s'}})
           ),
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
-            pending>0?React.createElement('div',{style:{fontSize:'0.68rem',color:'#b45309',fontWeight:600}},'⚠ '+pending+' cuota'+(pending>1?'s':'')+' sin período'):React.createElement('div',{style:{fontSize:'0.68rem',color:'#2d9e7f',fontWeight:600}},'✓ Todas asignadas'),
+            pending>0?React.createElement('div',{style:{fontSize:'0.68rem',color:'#b45309',fontWeight:600}},'⚠ '+pending+' cuota'+(pending>1?'s':'')+' sin período'):React.createElement('div',{style:{fontSize:'0.68rem',color:'#2d9e7f',fontWeight:600}},alreadyPaid>0?'✓ '+alreadyPaid+' ya pagadas + '+assignedNew+' asignadas':'✓ Todas asignadas'),
             React.createElement('button',{onClick:function(){onCancelPlan(plan.id);},style:{background:'transparent',border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.2rem 0.5rem',fontSize:'0.65rem',color:C.textMuted,cursor:'pointer',fontFamily:F}},'Cancelar')
           )
         );
@@ -590,8 +595,11 @@ function AddEditExpense(props){
   var cuotaState=useState(false);var useCuotas=cuotaState[0];var setUseCuotas=cuotaState[1];
   var numState=useState(12);var numCuotas=numState[0];var setNumCuotas=numState[1];
   var custNumState=useState('');var customCuotas=custNumState[0];var setCustomCuotas=custNumState[1];
+  var paidState=useState('0');var alreadyPaidStr=paidState[0];var setAlreadyPaidStr=paidState[1];
   function set(k,v){setForm(function(f){var next=Object.assign({},f);next[k]=v;return next;});}
   var finalCuotas=customCuotas?parseInt(customCuotas)||numCuotas:numCuotas;
+  var alreadyPaidNum=Math.min(Math.max(parseInt(alreadyPaidStr)||0,0),finalCuotas-1);
+  var remainingCuotas=finalCuotas-alreadyPaidNum;
   var cur=BASE_CURS.indexOf(form.currency)>=0?form.currency:(form.customCurrency||'ARS');
   var amts=calcAmts(form.amount,form.responsible);
   var javiAmount=amts.javiAmount,laliAmount=amts.laliAmount;
@@ -621,7 +629,20 @@ function AddEditExpense(props){
       useCuotas?React.createElement('div',{style:{background:C.bg,borderRadius:'1rem',padding:'0.85rem',marginTop:'0.5rem',border:'1px solid '+C.border}},
         React.createElement('div',{style:{fontSize:'0.78rem',color:C.navy,fontWeight:700,marginBottom:'0.5rem'}},'Cantidad de cuotas'),
         React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap',marginBottom:'0.5rem'}},CUOTA_OPTS.map(function(n){var active=numCuotas===n&&!customCuotas;return React.createElement('button',{key:n,onClick:function(){setNumCuotas(n);setCustomCuotas('');},style:{padding:'0.35rem 0.65rem',fontSize:'0.78rem',borderRadius:'0.65rem',border:'1px solid',cursor:'pointer',fontFamily:F,fontWeight:active?800:500,background:active?C.navy:'transparent',borderColor:active?C.navy:C.border,color:active?C.white:C.navy}},n);}),React.createElement('input',{type:'number',value:customCuotas,onChange:function(e){setCustomCuotas(e.target.value);},placeholder:'Otra',min:2,max:60,style:{width:'4rem',border:'1px solid '+(customCuotas?C.navy:C.border),borderRadius:'0.65rem',padding:'0.35rem 0.5rem',fontSize:'0.78rem',outline:'none',fontFamily:F,color:C.navy,background:customCuotas?C.beige:'transparent',textAlign:'center'}})),
-        showSplit?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',justifyContent:'space-between',alignItems:'center'}},React.createElement('div',null,React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'Por cuota'),React.createElement('div',{style:{fontWeight:900,color:C.navy,fontSize:'1.1rem'}},fmt(installmentAmt,cur))),React.createElement('div',{style:{fontSize:'0.75rem',color:C.textMuted,textAlign:'right'}},React.createElement('div',null,finalCuotas+' cuotas'),React.createElement('div',{style:{fontWeight:700,color:C.navy}},'Total: '+fmt(parseFloat(form.amount)||0,cur)))):null
+        showSplit?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',justifyContent:'space-between',alignItems:'center'}},React.createElement('div',null,React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'Por cuota'),React.createElement('div',{style:{fontWeight:900,color:C.navy,fontSize:'1.1rem'}},fmt(installmentAmt,cur))),React.createElement('div',{style:{fontSize:'0.75rem',color:C.textMuted,textAlign:'right'}},React.createElement('div',null,remainingCuotas+' cuotas pendientes'),React.createElement('div',{style:{fontWeight:700,color:C.navy}},'Total: '+fmt(parseFloat(form.amount)||0,cur)))):null,
+        React.createElement('div',{style:{marginTop:'0.6rem'}},
+          React.createElement('div',{style:{fontSize:'0.78rem',color:C.navy,fontWeight:700,marginBottom:'0.4rem'}},'¿Cuántas cuotas ya pagaste? ',React.createElement('span',{style:{color:C.textMuted,fontWeight:400}},'(opcional)')),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'0.5rem'}},
+            React.createElement('input',{type:'number',value:alreadyPaidStr,onChange:function(e){setAlreadyPaidStr(e.target.value);},min:0,max:finalCuotas-1,style:{width:'5rem',border:'1px solid '+C.border,borderRadius:'0.65rem',padding:'0.4rem 0.6rem',fontSize:'0.85rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,textAlign:'center'}}),
+            React.createElement('span',{style:{fontSize:'0.78rem',color:C.textMuted}},'de '+finalCuotas+' · quedan '+remainingCuotas+' por registrar')
+          ),
+          alreadyPaidNum>0?React.createElement('div',{style:{marginTop:'0.4rem',background:C.bg,borderRadius:'0.6rem',padding:'0.4rem 0.6rem',border:'1px solid '+C.border}},
+            React.createElement('div',{style:{background:C.beige,borderRadius:'999px',height:'5px',overflow:'hidden',marginBottom:'0.25rem'}},
+              React.createElement('div',{style:{width:Math.round(alreadyPaidNum/finalCuotas*100)+'%',height:'100%',background:C.gradMain,borderRadius:'999px'}})
+            ),
+            React.createElement('div',{style:{fontSize:'0.68rem',color:C.textMuted,textAlign:'center'}},alreadyPaidNum+'/'+finalCuotas+' ya pagadas — se registrarán las cuotas '+( alreadyPaidNum+1)+' a '+finalCuotas)
+          ):null
+        )
       ):null
     ):null,
     Lbl('¿Quién pagó?'),React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:form.paidBy==='Javi',color:C.navy,onClick:function(){set('paidBy','Javi');}},'👨 Javi'),React.createElement(SegBtn,{active:form.paidBy==='Lali',color:C.accent,onClick:function(){set('paidBy','Lali');}},'👩 Lali')),
