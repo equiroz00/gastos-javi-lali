@@ -89,14 +89,11 @@ function lastPayment(payments, currency){
 
 // ── Plan helpers ──────────────────────────────────────────────────────────────
 function generatePlanExpenses(plan,periods){
-  var alreadyPaid=plan.alreadyPaid||0;
-  var remaining=plan.numInstallments-alreadyPaid;
   var startIdx=periods.findIndex(function(p){return p.name===plan.startPeriod;});
-  return Array.from({length:remaining},function(_,i){
+  return Array.from({length:plan.numInstallments},function(_,i){
     var targetIdx=startIdx+i;
     var period=(startIdx>=0&&targetIdx<periods.length)?periods[targetIdx].name:PENDING_PER;
-    var installmentNum=alreadyPaid+i+1;
-    return{id:plan.id+'-'+installmentNum,description:plan.description+' (cuota '+installmentNum+'/'+plan.numInstallments+')',amount:plan.installmentAmount,javiAmount:plan.javiAmount,laliAmount:plan.laliAmount,currency:plan.currency,paidBy:plan.paidBy,responsible:plan.responsible,paymentMethod:plan.paymentMethod,bank:plan.bank,category:plan.category,date:plan.startDate,period:period,planId:plan.id,installmentNum:installmentNum,numInstallments:plan.numInstallments,fromPlan:true};
+    return{id:plan.id+'-'+(i+1),description:plan.description+' (cuota '+(i+1)+'/'+plan.numInstallments+')',amount:plan.installmentAmount,javiAmount:plan.javiAmount,laliAmount:plan.laliAmount,currency:plan.currency,paidBy:plan.paidBy,responsible:plan.responsible,paymentMethod:plan.paymentMethod,bank:plan.bank,category:plan.category,date:plan.startDate,period:period,planId:plan.id,installmentNum:i+1,numInstallments:plan.numInstallments,fromPlan:true};
   });
 }
 function reassignPlanExpenses(exps,periods,plans){
@@ -330,11 +327,9 @@ function ActivePlans(props){
     React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.5rem',maxHeight:plans.length>=3?'280px':undefined,overflowY:plans.length>=3?'auto':undefined}},
       filtered.map(function(plan){
         var planExps=expenses.filter(function(e){return e.planId===plan.id;});
-        var alreadyPaid=plan.alreadyPaid||0;
         var pending=planExps.filter(function(e){return e.period===PENDING_PER;}).length;
-        var assignedNew=(plan.numInstallments-alreadyPaid)-pending;
-        var totalAssigned=alreadyPaid+assignedNew;
-        var pct=Math.round(totalAssigned/plan.numInstallments*100);
+        var assigned=plan.numInstallments-pending;
+        var pct=Math.round(assigned/plan.numInstallments*100);
         return React.createElement(Card,{key:plan.id,style:{padding:'0.85rem',flexShrink:0}},
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'0.4rem'}},
             React.createElement('div',{style:{flex:1,minWidth:0}},
@@ -342,7 +337,7 @@ function ActivePlans(props){
               React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,marginTop:'0.1rem'}},fmt(plan.installmentAmount,plan.currency)+'/mes · Total: '+fmt(plan.totalAmount,plan.currency))
             ),
             React.createElement('div',{style:{textAlign:'right',flexShrink:0,marginLeft:'0.5rem'}},
-              React.createElement('div',{style:{fontWeight:800,color:C.accent,fontSize:'0.82rem'}},totalAssigned+'/'+plan.numInstallments),
+              React.createElement('div',{style:{fontWeight:800,color:C.accent,fontSize:'0.82rem'}},assigned+'/'+plan.numInstallments),
               React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'cuotas')
             )
           ),
@@ -350,7 +345,7 @@ function ActivePlans(props){
             React.createElement('div',{style:{width:pct+'%',height:'100%',background:C.gradMain,borderRadius:'999px',transition:'width 0.4s'}})
           ),
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
-            pending>0?React.createElement('div',{style:{fontSize:'0.68rem',color:'#b45309',fontWeight:600}},'⚠ '+pending+' cuota'+(pending>1?'s':'')+' sin período'):React.createElement('div',{style:{fontSize:'0.68rem',color:'#2d9e7f',fontWeight:600}},alreadyPaid>0?'✓ '+alreadyPaid+' ya pagadas + '+assignedNew+' asignadas':'✓ Todas asignadas'),
+            pending>0?React.createElement('div',{style:{fontSize:'0.68rem',color:'#b45309',fontWeight:600}},'⚠ '+pending+' cuota'+(pending>1?'s':'')+' sin período'):React.createElement('div',{style:{fontSize:'0.68rem',color:'#2d9e7f',fontWeight:600}},'✓ Todas asignadas'),
             React.createElement('button',{onClick:function(){onCancelPlan(plan.id);},style:{background:'transparent',border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.2rem 0.5rem',fontSize:'0.65rem',color:C.textMuted,cursor:'pointer',fontFamily:F}},'Cancelar')
           )
         );
@@ -525,30 +520,7 @@ function Stats(props){
   );
 }
 
-// ── PendingInstallmentRow ─────────────────────────────────────────────────────
-function PendingInstallmentRow(props){
-  var e=props.expense, periods=props.periods||[], onAssign=props.onAssign;
-  var selState=useState(periods.length?periods[0].name:'');
-  var sel=selState[0]; var setSel=selState[1];
-  var cur=e.currency||'ARS';
-  return React.createElement('div',{style:{borderBottom:'1px solid '+C.beige,padding:'0.65rem 1rem',display:'flex',alignItems:'center',gap:'0.5rem',background:C.surface,flexWrap:'wrap'}},
-    React.createElement('div',{style:{fontSize:'1.2rem',flexShrink:0}},catEm(e.category)),
-    React.createElement('div',{style:{flex:1,minWidth:0}},
-      React.createElement('div',{style:{fontWeight:700,color:C.navy,fontSize:'0.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},e.description),
-      React.createElement('div',{style:{fontSize:'0.68rem',color:C.textMuted}},fmt(safeN(e.amount),cur)+'  ·  Pagó: '+e.paidBy)
-    ),
-    periods.length>0
-      ? React.createElement(React.Fragment,null,
-          React.createElement('select',{value:sel,onChange:function(ev){setSel(ev.target.value);},style:{border:'1px solid '+C.border,borderRadius:'0.6rem',padding:'0.3rem 0.5rem',fontSize:'0.72rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,maxWidth:'120px'}},
-            periods.map(function(p){return React.createElement('option',{key:p.name,value:p.name},p.name);})
-          ),
-          React.createElement('button',{onClick:function(){onAssign(e.id,sel);},style:{padding:'0.3rem 0.65rem',background:C.gradMain,border:'none',borderRadius:'0.6rem',color:C.white,fontWeight:700,fontSize:'0.72rem',cursor:'pointer',fontFamily:F,flexShrink:0}},'Asignar')
-        )
-      : React.createElement('span',{style:{fontSize:'0.7rem',color:'#b45309'}},'Sin períodos')
-  );
-}
-
-
+// ── History ───────────────────────────────────────────────────────────────────
 function PeriodBlock(props){
   var period=props.period,exps=props.exps,isOpen=props.isOpen,isPending=props.isPending,isSelected=props.isSelected,hasSelection=props.hasSelection;
   var total=exps.reduce(function(s,e){return s+safeN(e.amount);},0);
@@ -618,18 +590,15 @@ function AddEditExpense(props){
   var cuotaState=useState(false);var useCuotas=cuotaState[0];var setUseCuotas=cuotaState[1];
   var numState=useState(12);var numCuotas=numState[0];var setNumCuotas=numState[1];
   var custNumState=useState('');var customCuotas=custNumState[0];var setCustomCuotas=custNumState[1];
-  var paidState=useState('0');var alreadyPaidStr=paidState[0];var setAlreadyPaidStr=paidState[1];
   function set(k,v){setForm(function(f){var next=Object.assign({},f);next[k]=v;return next;});}
   var finalCuotas=customCuotas?parseInt(customCuotas)||numCuotas:numCuotas;
-  var alreadyPaidNum=Math.min(Math.max(parseInt(alreadyPaidStr)||0,0),finalCuotas-1);
-  var remainingCuotas=finalCuotas-alreadyPaidNum;
   var cur=BASE_CURS.indexOf(form.currency)>=0?form.currency:(form.customCurrency||'ARS');
   var amts=calcAmts(form.amount,form.responsible);
   var javiAmount=amts.javiAmount,laliAmount=amts.laliAmount;
   var showSplit=form.amount&&parseFloat(form.amount)>0;
   var installmentAmt=showSplit&&useCuotas?Math.round(parseFloat(form.amount)/finalCuotas):0;
   function addNewCat(){if(!newCatName.trim())return;var cat=(newCatEmoji||'📌')+' '+newCatName.trim();onSaveCats(customCats.concat([cat]));set('category',cat);setNewCatEmoji('');setNewCatName('');setShowNewCat(false);}
-  function submit(){var e={};if(!form.description.trim())e.description='Requerido';if(!form.amount||parseFloat(form.amount)<=0)e.amount='Monto inválido';if(Object.keys(e).length){setErrors(e);return;}var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;var base=Object.assign({},form,{id:isEdit?form.id:Date.now().toString(),amount:parseFloat(form.amount),javiAmount:javiAmount,laliAmount:laliAmount,currency:finalCur,period:getPeriod(form.date,settings.periods)});if(!isEdit){base.createdBy=currentUser;base.createdAt=new Date().toISOString();}if(!isEdit&&useCuotas&&finalCuotas>1){props.onSubmitPlan(base,finalCuotas,alreadyPaidNum);}else{props.onSubmit(base);}}
+  function submit(){var e={};if(!form.description.trim())e.description='Requerido';if(!form.amount||parseFloat(form.amount)<=0)e.amount='Monto inválido';if(Object.keys(e).length){setErrors(e);return;}var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;var base=Object.assign({},form,{id:isEdit?form.id:Date.now().toString(),amount:parseFloat(form.amount),javiAmount:javiAmount,laliAmount:laliAmount,currency:finalCur,period:getPeriod(form.date,settings.periods)});if(!isEdit){base.createdBy=currentUser;base.createdAt=new Date().toISOString();}if(!isEdit&&useCuotas&&finalCuotas>1){props.onSubmitPlan(base,finalCuotas);}else{props.onSubmit(base);}}
   var inpStyle=function(extra){return Object.assign({width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface},extra||{});};
   var selStyle={width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',background:C.surface,boxSizing:'border-box',fontFamily:F,color:C.navy};
   function Lbl(text){return React.createElement('label',{style:{fontSize:'0.8rem',color:C.textMuted,fontWeight:700,display:'block',marginBottom:'0.35rem',marginTop:'0.75rem'}},text);}
@@ -652,20 +621,7 @@ function AddEditExpense(props){
       useCuotas?React.createElement('div',{style:{background:C.bg,borderRadius:'1rem',padding:'0.85rem',marginTop:'0.5rem',border:'1px solid '+C.border}},
         React.createElement('div',{style:{fontSize:'0.78rem',color:C.navy,fontWeight:700,marginBottom:'0.5rem'}},'Cantidad de cuotas'),
         React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap',marginBottom:'0.5rem'}},CUOTA_OPTS.map(function(n){var active=numCuotas===n&&!customCuotas;return React.createElement('button',{key:n,onClick:function(){setNumCuotas(n);setCustomCuotas('');},style:{padding:'0.35rem 0.65rem',fontSize:'0.78rem',borderRadius:'0.65rem',border:'1px solid',cursor:'pointer',fontFamily:F,fontWeight:active?800:500,background:active?C.navy:'transparent',borderColor:active?C.navy:C.border,color:active?C.white:C.navy}},n);}),React.createElement('input',{type:'number',value:customCuotas,onChange:function(e){setCustomCuotas(e.target.value);},placeholder:'Otra',min:2,max:60,style:{width:'4rem',border:'1px solid '+(customCuotas?C.navy:C.border),borderRadius:'0.65rem',padding:'0.35rem 0.5rem',fontSize:'0.78rem',outline:'none',fontFamily:F,color:C.navy,background:customCuotas?C.beige:'transparent',textAlign:'center'}})),
-        showSplit?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',justifyContent:'space-between',alignItems:'center'}},React.createElement('div',null,React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'Por cuota'),React.createElement('div',{style:{fontWeight:900,color:C.navy,fontSize:'1.1rem'}},fmt(installmentAmt,cur))),React.createElement('div',{style:{fontSize:'0.75rem',color:C.textMuted,textAlign:'right'}},React.createElement('div',null,remainingCuotas+' cuotas pendientes'),React.createElement('div',{style:{fontWeight:700,color:C.navy}},'Total: '+fmt(parseFloat(form.amount)||0,cur)))):null,
-        React.createElement('div',{style:{marginTop:'0.6rem'}},
-          React.createElement('div',{style:{fontSize:'0.78rem',color:C.navy,fontWeight:700,marginBottom:'0.4rem'}},'¿Cuántas cuotas ya pagaste? ',React.createElement('span',{style:{color:C.textMuted,fontWeight:400}},'(opcional)')),
-          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'0.5rem'}},
-            React.createElement('input',{type:'number',value:alreadyPaidStr,onChange:function(e){setAlreadyPaidStr(e.target.value);},min:0,max:finalCuotas-1,style:{width:'5rem',border:'1px solid '+C.border,borderRadius:'0.65rem',padding:'0.4rem 0.6rem',fontSize:'0.85rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,textAlign:'center'}}),
-            React.createElement('span',{style:{fontSize:'0.78rem',color:C.textMuted}},'de '+finalCuotas+' · quedan '+remainingCuotas+' por registrar')
-          ),
-          alreadyPaidNum>0?React.createElement('div',{style:{marginTop:'0.4rem',background:C.bg,borderRadius:'0.6rem',padding:'0.4rem 0.6rem',border:'1px solid '+C.border}},
-            React.createElement('div',{style:{background:C.beige,borderRadius:'999px',height:'5px',overflow:'hidden',marginBottom:'0.25rem'}},
-              React.createElement('div',{style:{width:Math.round(alreadyPaidNum/finalCuotas*100)+'%',height:'100%',background:C.gradMain,borderRadius:'999px'}})
-            ),
-            React.createElement('div',{style:{fontSize:'0.68rem',color:C.textMuted,textAlign:'center'}},alreadyPaidNum+'/'+finalCuotas+' ya pagadas — se registrarán las cuotas '+( alreadyPaidNum+1)+' a '+finalCuotas)
-          ):null
-        )
+        showSplit?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',justifyContent:'space-between',alignItems:'center'}},React.createElement('div',null,React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'Por cuota'),React.createElement('div',{style:{fontWeight:900,color:C.navy,fontSize:'1.1rem'}},fmt(installmentAmt,cur))),React.createElement('div',{style:{fontSize:'0.75rem',color:C.textMuted,textAlign:'right'}},React.createElement('div',null,finalCuotas+' cuotas'),React.createElement('div',{style:{fontWeight:700,color:C.navy}},'Total: '+fmt(parseFloat(form.amount)||0,cur)))):null
       ):null
     ):null,
     Lbl('¿Quién pagó?'),React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:form.paidBy==='Javi',color:C.navy,onClick:function(){set('paidBy','Javi');}},'👨 Javi'),React.createElement(SegBtn,{active:form.paidBy==='Lali',color:C.accent,onClick:function(){set('paidBy','Lali');}},'👩 Lali')),
@@ -686,13 +642,13 @@ function Settings(props){
   var savedState=useState(false);var saved=savedState[0];var setSaved=savedState[1];
   var csvFromState=useState('');var csvFrom=csvFromState[0];var setCsvFrom=csvFromState[1];
   var csvToState=useState('');var csvTo=csvToState[0];var setCsvTo=csvToState[1];
-  var selectedTheme=props.activeTheme||'default';
-  var selectedFont=props.activeFont||'Nunito';
+  var selectedTheme=settings.theme||'default';
+  var selectedFont=settings.font||'Nunito';
   function dateOverlaps(start,end,existing){var s=new Date(start+'T00:00:00'),e=new Date(end+'T23:59:59');for(var i=0;i<existing.length;i++){var ps=new Date(existing[i].start+'T00:00:00'),pe=new Date(existing[i].end+'T23:59:59');if(s<=pe&&e>=ps)return existing[i].name;}return null;}
   function addPeriod(){if(!np.name||!np.start||!np.end){setPeriodError('Completá todos los campos.');return;}if(np.start>np.end){setPeriodError('La fecha de inicio debe ser anterior a la de fin.');return;}var conflict=dateOverlaps(np.start,np.end,periods);if(conflict){setPeriodError('Se superpone con "'+conflict+'".');return;}setPeriodError('');setPeriods(function(p){return p.concat([np]);});setNp({name:'',start:'',end:''});}
   function save(){props.onSave(Object.assign({},settings,{periods:periods}));setSaved(true);setTimeout(function(){setSaved(false);},2000);}
-  function setTheme(t){props.onChangeTheme(t);}
-  function setFont(f){props.onChangeFont(f);}
+  function setTheme(t){props.onSave(Object.assign({},settings,{theme:t,periods:periods}));}
+  function setFont(f){props.onSave(Object.assign({},settings,{font:f,periods:periods}));}
   var inp={width:'100%',border:'1px solid '+C.border,borderRadius:'0.6rem',padding:'0.5rem 0.75rem',fontSize:'0.85rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface};
   var btnBase={border:'none',borderRadius:'0.85rem',fontWeight:700,fontSize:'0.85rem',cursor:'pointer',fontFamily:F,padding:'0.65rem',width:'100%'};
   return React.createElement('div',{style:{padding:'1rem',paddingBottom:'2rem',display:'flex',flexDirection:'column',gap:'0.75rem'}},
@@ -769,12 +725,10 @@ function Settings(props){
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App(){
-  // Leer usuario almacenado al inicio para inicializar tema/fuente correctamente
-  var _storedUser = store.get('usr', null);
-  var userState=useState(_storedUser);var currentUser=userState[0];var setCurrentUser=userState[1];
+  var userState=useState(null);var currentUser=userState[0];var setCurrentUser=userState[1];
   var viewState=useState('dashboard');var view=viewState[0];var setView=viewState[1];
   var expState=useState([]);var expenses=expState[0];var setExpenses=expState[1];
-  var cfgState=useState({periods:[]});var settings=cfgState[0];var setSettings=cfgState[1];
+  var cfgState=useState({periods:[],theme:'default',font:'Nunito'});var settings=cfgState[0];var setSettings=cfgState[1];
   var catState=useState([]);var customCats=catState[0];var setCustomCats=catState[1];
   var planState=useState([]);var plans=planState[0];var setPlans=planState[1];
   var payState=useState([]);var payments=payState[0];var setPayments=payState[1];
@@ -782,29 +736,18 @@ export default function App(){
   var msgState=useState('');var syncMsg=msgState[0];var setSyncMsg=msgState[1];
   var editState=useState(null);var editingExpense=editState[0];var setEditingExpense=editState[1];
   var delState=useState(null);var pendingDelete=delState[0];var setPendingDelete=delState[1];
-  var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1];
-
-  // Tema y fuente por usuario — inicializados con el usuario ya almacenado
-  var themeState=useState(store.get('theme_'+(_storedUser||''),'default'));
-  var activeTheme=themeState[0];var setActiveTheme=themeState[1];
-  var fontState=useState(store.get('font_'+(_storedUser||''),'Nunito'));
-  var activeFont=fontState[0];var setActiveFont=fontState[1]; // {currency, netBal}
+  var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1]; // {currency, netBal}
 
   // Apply theme before render
-  applyTheme(activeTheme, activeFont);
-  useFont(activeFont);
+  applyTheme(settings.theme||'default', settings.font||'Nunito');
+  useFont(settings.font||'Nunito');
 
   var allCats=DEFAULT_CATS.concat(customCats);
 
   useEffect(function(){
-    var u=store.get('usr',null);
-    setCurrentUser(u);
-    if(u){
-      setActiveTheme(store.get('theme_'+u,'default'));
-      setActiveFont(store.get('font_'+u,'Nunito'));
-    }
+    setCurrentUser(store.get('usr',null));
     var unsub=onSnapshot(dataDoc,function(snapshot){
-      if(snapshot.exists()){var data=snapshot.data();setExpenses(data.expenses||[]);setPlans(data.plans||[]);setSettings(data.settings||{periods:[]});setCustomCats(data.customCats||[]);setPayments(data.payments||[]);}
+      if(snapshot.exists()){var data=snapshot.data();setExpenses(data.expenses||[]);setPlans(data.plans||[]);setSettings(data.settings||{periods:[],theme:'default',font:'Nunito'});setCustomCats(data.customCats||[]);setPayments(data.payments||[]);}
       setLoading(false);
     },function(error){console.error('Firebase error:',error);setLoading(false);});
     return unsub;
@@ -818,15 +761,11 @@ export default function App(){
   function saveCustomCats(cats){setCustomCats(cats);saveAll(undefined,undefined,undefined,cats,undefined);}
   function savePayments(pays){setPayments(pays);saveAll(undefined,undefined,undefined,undefined,pays);}
   function saveSettings(s){
-    // Strip theme/font — those are local only
-    var toSave=Object.assign({},s);delete toSave.theme;delete toSave.font;
-    var updated=expenses.map(function(e){return Object.assign({},e,{period:(!e.fromPlan&&e.date)?getPeriod(e.date,toSave.periods):(e.period||'Sin período')});});
-    if(toSave.periods&&toSave.periods.length)updated=reassignPlanExpenses(updated,toSave.periods,plans);
-    setExpenses(updated);setSettings(toSave);saveAll(updated,undefined,toSave,undefined,undefined);
+    var updated=expenses.map(function(e){return Object.assign({},e,{period:(!e.fromPlan&&e.date)?getPeriod(e.date,s.periods):(e.period||'Sin período')});});
+    if(s.periods&&s.periods.length)updated=reassignPlanExpenses(updated,s.periods,plans);
+    setExpenses(updated);setSettings(s);saveAll(updated,undefined,s,undefined,undefined);
   }
-  function selectUser(u){setCurrentUser(u);store.set('usr',u);setActiveTheme(store.get('theme_'+u,'default'));setActiveFont(store.get('font_'+u,'Nunito'));}
-  function changeTheme(t){setActiveTheme(t);if(currentUser)store.set('theme_'+currentUser,t);}
-  function changeFont(f){setActiveFont(f);if(currentUser)store.set('font_'+currentUser,f);}
+  function selectUser(u){setCurrentUser(u);store.set('usr',u);}
   function showMsg(msg,ms){setSyncMsg(msg);setTimeout(function(){setSyncMsg('');},ms||5000);}
 
   function exportCSV(from,to){
@@ -841,12 +780,11 @@ export default function App(){
   }
 
   function handleAdd(expense){var s=sanitize(Object.assign({},expense,{id:Date.now().toString()}),allCats);saveExpenses([s].concat(expenses));setView('dashboard');}
-  function handleAddPlan(formData,numInstallments,alreadyPaid){
-    var alreadyPaidSafe=Math.max(0,Math.min(parseInt(alreadyPaid)||0,numInstallments-1));
+  function handleAddPlan(formData,numInstallments){
     var amt=safeN(formData.amount),installmentAmount=Math.round(amt/numInstallments);
     var amts=calcAmts(installmentAmount,formData.responsible);
     var startPeriod=getPeriod(formData.date,settings.periods);
-    var plan={id:'plan_'+Date.now(),description:formData.description,totalAmount:amt,installmentAmount:installmentAmount,numInstallments:numInstallments,alreadyPaid:alreadyPaidSafe,startPeriod:startPeriod,startDate:formData.date,currency:formData.currency||'ARS',paidBy:formData.paidBy,responsible:formData.responsible,paymentMethod:formData.paymentMethod,bank:formData.bank,category:formData.category,javiAmount:amts.javiAmount,laliAmount:amts.laliAmount,createdAt:new Date().toISOString()};
+    var plan={id:'plan_'+Date.now(),description:formData.description,totalAmount:amt,installmentAmount:installmentAmount,numInstallments:numInstallments,startPeriod:startPeriod,startDate:formData.date,currency:formData.currency||'ARS',paidBy:formData.paidBy,responsible:formData.responsible,paymentMethod:formData.paymentMethod,bank:formData.bank,category:formData.category,javiAmount:amts.javiAmount,laliAmount:amts.laliAmount,createdAt:new Date().toISOString()};
     var installments=generatePlanExpenses(plan,settings.periods);
     var newPlans=plans.concat([plan]),newExps=installments.concat(expenses);
     setPlans(newPlans);setExpenses(newExps);saveAll(newExps,newPlans,undefined,undefined,undefined);setView('dashboard');
