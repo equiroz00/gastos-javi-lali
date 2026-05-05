@@ -525,7 +525,30 @@ function Stats(props){
   );
 }
 
-// ── History ───────────────────────────────────────────────────────────────────
+// ── PendingInstallmentRow ─────────────────────────────────────────────────────
+function PendingInstallmentRow(props){
+  var e=props.expense, periods=props.periods||[], onAssign=props.onAssign;
+  var selState=useState(periods.length?periods[0].name:'');
+  var sel=selState[0]; var setSel=selState[1];
+  var cur=e.currency||'ARS';
+  return React.createElement('div',{style:{borderBottom:'1px solid '+C.beige,padding:'0.65rem 1rem',display:'flex',alignItems:'center',gap:'0.5rem',background:C.surface,flexWrap:'wrap'}},
+    React.createElement('div',{style:{fontSize:'1.2rem',flexShrink:0}},catEm(e.category)),
+    React.createElement('div',{style:{flex:1,minWidth:0}},
+      React.createElement('div',{style:{fontWeight:700,color:C.navy,fontSize:'0.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},e.description),
+      React.createElement('div',{style:{fontSize:'0.68rem',color:C.textMuted}},fmt(safeN(e.amount),cur)+'  ·  Pagó: '+e.paidBy)
+    ),
+    periods.length>0
+      ? React.createElement(React.Fragment,null,
+          React.createElement('select',{value:sel,onChange:function(ev){setSel(ev.target.value);},style:{border:'1px solid '+C.border,borderRadius:'0.6rem',padding:'0.3rem 0.5rem',fontSize:'0.72rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,maxWidth:'120px'}},
+            periods.map(function(p){return React.createElement('option',{key:p.name,value:p.name},p.name);})
+          ),
+          React.createElement('button',{onClick:function(){onAssign(e.id,sel);},style:{padding:'0.3rem 0.65rem',background:C.gradMain,border:'none',borderRadius:'0.6rem',color:C.white,fontWeight:700,fontSize:'0.72rem',cursor:'pointer',fontFamily:F,flexShrink:0}},'Asignar')
+        )
+      : React.createElement('span',{style:{fontSize:'0.7rem',color:'#b45309'}},'Sin períodos')
+  );
+}
+
+
 function PeriodBlock(props){
   var period=props.period,exps=props.exps,isOpen=props.isOpen,isPending=props.isPending,isSelected=props.isSelected,hasSelection=props.hasSelection;
   var total=exps.reduce(function(s,e){return s+safeN(e.amount);},0);
@@ -663,13 +686,13 @@ function Settings(props){
   var savedState=useState(false);var saved=savedState[0];var setSaved=savedState[1];
   var csvFromState=useState('');var csvFrom=csvFromState[0];var setCsvFrom=csvFromState[1];
   var csvToState=useState('');var csvTo=csvToState[0];var setCsvTo=csvToState[1];
-  var selectedTheme=settings.theme||'default';
-  var selectedFont=settings.font||'Nunito';
+  var selectedTheme=props.activeTheme||'default';
+  var selectedFont=props.activeFont||'Nunito';
   function dateOverlaps(start,end,existing){var s=new Date(start+'T00:00:00'),e=new Date(end+'T23:59:59');for(var i=0;i<existing.length;i++){var ps=new Date(existing[i].start+'T00:00:00'),pe=new Date(existing[i].end+'T23:59:59');if(s<=pe&&e>=ps)return existing[i].name;}return null;}
   function addPeriod(){if(!np.name||!np.start||!np.end){setPeriodError('Completá todos los campos.');return;}if(np.start>np.end){setPeriodError('La fecha de inicio debe ser anterior a la de fin.');return;}var conflict=dateOverlaps(np.start,np.end,periods);if(conflict){setPeriodError('Se superpone con "'+conflict+'".');return;}setPeriodError('');setPeriods(function(p){return p.concat([np]);});setNp({name:'',start:'',end:''});}
   function save(){props.onSave(Object.assign({},settings,{periods:periods}));setSaved(true);setTimeout(function(){setSaved(false);},2000);}
-  function setTheme(t){props.onSave(Object.assign({},settings,{theme:t,periods:periods}));}
-  function setFont(f){props.onSave(Object.assign({},settings,{font:f,periods:periods}));}
+  function setTheme(t){props.onChangeTheme(t);}
+  function setFont(f){props.onChangeFont(f);}
   var inp={width:'100%',border:'1px solid '+C.border,borderRadius:'0.6rem',padding:'0.5rem 0.75rem',fontSize:'0.85rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface};
   var btnBase={border:'none',borderRadius:'0.85rem',fontWeight:700,fontSize:'0.85rem',cursor:'pointer',fontFamily:F,padding:'0.65rem',width:'100%'};
   return React.createElement('div',{style:{padding:'1rem',paddingBottom:'2rem',display:'flex',flexDirection:'column',gap:'0.75rem'}},
@@ -746,7 +769,9 @@ function Settings(props){
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App(){
-  var userState=useState(null);var currentUser=userState[0];var setCurrentUser=userState[1];
+  // Leer usuario almacenado al inicio para inicializar tema/fuente correctamente
+  var _storedUser = store.get('usr', null);
+  var userState=useState(_storedUser);var currentUser=userState[0];var setCurrentUser=userState[1];
   var viewState=useState('dashboard');var view=viewState[0];var setView=viewState[1];
   var expState=useState([]);var expenses=expState[0];var setExpenses=expState[1];
   var cfgState=useState({periods:[]});var settings=cfgState[0];var setSettings=cfgState[1];
@@ -759,15 +784,15 @@ export default function App(){
   var delState=useState(null);var pendingDelete=delState[0];var setPendingDelete=delState[1];
   var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1];
 
-  // Tema y fuente son POR DISPOSITIVO/USUARIO — localStorage solamente
-  var themeState=useState(store.get('theme_'+(currentUser||'default'),'default'));
+  // Tema y fuente por usuario — inicializados con el usuario ya almacenado
+  var themeState=useState(store.get('theme_'+(_storedUser||''),'default'));
   var activeTheme=themeState[0];var setActiveTheme=themeState[1];
-  var fontState=useState(store.get('font_'+(currentUser||'default'),'Nunito'));
+  var fontState=useState(store.get('font_'+(_storedUser||''),'Nunito'));
   var activeFont=fontState[0];var setActiveFont=fontState[1]; // {currency, netBal}
 
   // Apply theme before render
-  applyTheme(settings.theme||'default', settings.font||'Nunito');
-  useFont(settings.font||'Nunito');
+  applyTheme(activeTheme, activeFont);
+  useFont(activeFont);
 
   var allCats=DEFAULT_CATS.concat(customCats);
 
