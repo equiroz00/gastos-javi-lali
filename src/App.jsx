@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { db, auth, provider, dataDoc } from './firebase';
 import { setDoc, onSnapshot } from 'firebase/firestore';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult } from 'firebase/auth';
 
 // ── Themes ────────────────────────────────────────────────────────────────────
 var THEMES = {
@@ -59,8 +59,8 @@ var PENDING_PER = '⏳ Pendiente';
 // ── Auth: mapa de UIDs de Google → nombre en la app ──────────────────────────
 // Reemplazá los valores con los UIDs reales (ver firestore.rules para instrucciones)
 var USER_MAP = {
-  'h0FlnAU3wabBCTztmPXdLyFW6R42': 'Javi',
-  'JjDJiAjLmVSc0WODsfvULRLT59s2': 'Lali',
+  'UID_DE_JAVI': 'Javi',
+  'UID_DE_LALI': 'Lali',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -248,11 +248,9 @@ function LoginScreen(props){
   useFont('Nunito');
   function handleGoogle(){
     setLoading(true);setErr('');
-    signInWithPopup(auth,provider).catch(function(e){
-      setLoading(false);
-      setErr('No se pudo iniciar sesión. Intentá de nuevo.');
-      console.error(e);
-    });
+    // signInWithRedirect es más confiable que popup en mobile y cuando hay
+    // bloqueadores de popups activos. La página redirige a Google y vuelve.
+    signInWithRedirect(auth,provider);
   }
   return React.createElement('div',{style:{minHeight:'100vh',background:C.gradMain,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem',gap:'1.5rem',fontFamily:F}},
     React.createElement('div',{style:{textAlign:'center',marginBottom:'1rem'}},
@@ -260,22 +258,25 @@ function LoginScreen(props){
       React.createElement('h1',{style:{fontSize:'1.9rem',fontWeight:900,color:C.white,margin:0,fontFamily:F}},'Gastos Compartidos'),
       React.createElement('p',{style:{color:'rgba(255,255,255,0.8)',marginTop:'0.5rem',fontSize:'0.9rem'}},'Javi & Lali')
     ),
-    props.denied
-      ?React.createElement('div',{style:{background:'rgba(255,255,255,0.15)',borderRadius:'1rem',padding:'1rem 1.5rem',textAlign:'center',maxWidth:'280px'}},
-          React.createElement('div',{style:{fontSize:'1.5rem',marginBottom:'0.5rem'}},'🚫'),
-          React.createElement('p',{style:{color:C.white,fontWeight:700,margin:0,fontSize:'0.9rem'}},'Esta cuenta no tiene acceso a la app.'),
-          React.createElement('button',{onClick:function(){signOut(auth);},style:{marginTop:'0.75rem',background:'rgba(255,255,255,0.2)',border:'1px solid rgba(255,255,255,0.4)',borderRadius:'0.65rem',padding:'0.5rem 1rem',color:C.white,fontWeight:700,fontSize:'0.82rem',cursor:'pointer',fontFamily:F}},'Intentar con otra cuenta')
-        )
-      :React.createElement('button',{onClick:handleGoogle,disabled:loading,style:{width:'100%',maxWidth:'280px',padding:'1rem 1.5rem',borderRadius:'1.25rem',background:'rgba(255,255,255,0.95)',border:'none',cursor:loading?'wait':'pointer',fontFamily:F,fontWeight:700,fontSize:'1rem',color:'#333',display:'flex',alignItems:'center',justifyContent:'center',gap:'0.75rem',boxShadow:'0 8px 24px rgba(0,0,0,0.2)',opacity:loading?0.7:1}},
-          React.createElement('svg',{width:'20',height:'20',viewBox:'0 0 48 48'},
-            React.createElement('path',{fill:'#EA4335',d:'M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'}),
-            React.createElement('path',{fill:'#4285F4',d:'M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'}),
-            React.createElement('path',{fill:'#FBBC05',d:'M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'}),
-            React.createElement('path',{fill:'#34A853',d:'M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'}),
-            React.createElement('path',{fill:'none',d:'M0 0h48v48H0z'})
+    props.redirecting
+      ?React.createElement('div',{style:{textAlign:'center',color:C.white}},
+          React.createElement('div',{style:{fontSize:'1.5rem',marginBottom:'0.5rem'}},'⏳'),
+          React.createElement('p',{style:{fontWeight:700,margin:0}},'Verificando sesión...'))
+      :props.denied
+        ?React.createElement('div',{style:{background:'rgba(255,255,255,0.15)',borderRadius:'1rem',padding:'1rem 1.5rem',textAlign:'center',maxWidth:'280px'}},
+            React.createElement('div',{style:{fontSize:'1.5rem',marginBottom:'0.5rem'}},'🚫'),
+            React.createElement('p',{style:{color:C.white,fontWeight:700,margin:0,fontSize:'0.9rem'}},'Esta cuenta de Google no tiene acceso a la app.'),
+            React.createElement('button',{onClick:function(){signOut(auth);},style:{marginTop:'0.75rem',background:'rgba(255,255,255,0.2)',border:'1px solid rgba(255,255,255,0.4)',borderRadius:'0.65rem',padding:'0.5rem 1rem',color:C.white,fontWeight:700,fontSize:'0.82rem',cursor:'pointer',fontFamily:F}},'Intentar con otra cuenta'))
+        :React.createElement('button',{onClick:handleGoogle,disabled:loading,style:{width:'100%',maxWidth:'280px',padding:'1rem 1.5rem',borderRadius:'1.25rem',background:'rgba(255,255,255,0.95)',border:'none',cursor:loading?'wait':'pointer',fontFamily:F,fontWeight:700,fontSize:'1rem',color:'#333',display:'flex',alignItems:'center',justifyContent:'center',gap:'0.75rem',boxShadow:'0 8px 24px rgba(0,0,0,0.2)',opacity:loading?0.7:1}},
+            React.createElement('svg',{width:'20',height:'20',viewBox:'0 0 48 48'},
+              React.createElement('path',{fill:'#EA4335',d:'M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'}),
+              React.createElement('path',{fill:'#4285F4',d:'M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'}),
+              React.createElement('path',{fill:'#FBBC05',d:'M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'}),
+              React.createElement('path',{fill:'#34A853',d:'M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'}),
+              React.createElement('path',{fill:'none',d:'M0 0h48v48H0z'})
+            ),
+            loading?'Redirigiendo a Google...':'Iniciar sesión con Google'
           ),
-          loading?'Iniciando sesión...':'Iniciar sesión con Google'
-        ),
     err?React.createElement('p',{style:{color:'rgba(255,255,255,0.9)',fontSize:'0.8rem',fontWeight:700,margin:0,textAlign:'center'}},'⚠ '+err):null
   );
 }
