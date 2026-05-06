@@ -1,7 +1,11 @@
+// ── firebase.js ───────────────────────────────────────────────────────────────
+// Actualizá los valores de firebaseConfig con los de tu proyecto en Firebase Console
+// (Project Settings → Your apps → SDK setup and configuration)
+ 
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
-// Reemplazá estos valores con los de tu proyecto Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCxom9WBpcNkB8LKzVVGboI1Ed7DwGTUsw",
   authDomain: "gastos-javi-lali.firebaseapp.com",
@@ -11,8 +15,8 @@ const firebaseConfig = {
   appId: "1:931161524695:web:85d550be1abdd597796392"
 };
 
-const app = initializeApp(firebaseConfig);
-export const db  = getFirestore(app);
-
-// Documento único donde viven todos los datos compartidos
-export const dataDoc = doc(db, 'gastos', 'compartidos');
+const app      = initializeApp(firebaseConfig);
+export const db       = getFirestore(app);
+export const auth     = getAuth(app);
+export const provider = new GoogleAuthProvider();
+export const dataDoc  = doc(db, 'appdata', 'main');
