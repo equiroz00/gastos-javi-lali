@@ -89,20 +89,30 @@ function lastPayment(payments, currency){
 
 // ── Plan helpers ──────────────────────────────────────────────────────────────
 function generatePlanExpenses(plan,periods){
+  // For retroactive plans, paidInstallments > 0 means we only generate the remaining ones.
+  // startPeriod is the period of the FIRST REMAINING installment (not necessarily cuota 1).
+  var paid=plan.paidInstallments||0;
+  var remaining=plan.numInstallments-paid;
   var startIdx=periods.findIndex(function(p){return p.name===plan.startPeriod;});
-  return Array.from({length:plan.numInstallments},function(_,i){
+  var result=[];
+  for(var i=0;i<remaining;i++){
+    var cuotaNum=paid+i+1;
     var targetIdx=startIdx+i;
     var period=(startIdx>=0&&targetIdx<periods.length)?periods[targetIdx].name:PENDING_PER;
-    return{id:plan.id+'-'+(i+1),description:plan.description+' (cuota '+(i+1)+'/'+plan.numInstallments+')',amount:plan.installmentAmount,javiAmount:plan.javiAmount,laliAmount:plan.laliAmount,currency:plan.currency,paidBy:plan.paidBy,responsible:plan.responsible,paymentMethod:plan.paymentMethod,bank:plan.bank,category:plan.category,date:plan.startDate,period:period,planId:plan.id,installmentNum:i+1,numInstallments:plan.numInstallments,fromPlan:true};
-  });
+    result.push({id:plan.id+'-'+cuotaNum,description:plan.description+' (cuota '+cuotaNum+'/'+plan.numInstallments+')',amount:plan.installmentAmount,javiAmount:plan.javiAmount,laliAmount:plan.laliAmount,currency:plan.currency,paidBy:plan.paidBy,responsible:plan.responsible,paymentMethod:plan.paymentMethod,bank:plan.bank,category:plan.category,date:plan.startDate,period:period,planId:plan.id,installmentNum:cuotaNum,numInstallments:plan.numInstallments,fromPlan:true});
+  }
+  return result;
 }
 function reassignPlanExpenses(exps,periods,plans){
   return exps.map(function(e){
     if(!e.fromPlan)return e;
     var plan=plans.find(function(p){return p.id===e.planId;}); if(!plan)return e;
+    var paid=plan.paidInstallments||0;
     var startIdx=periods.findIndex(function(p){return p.name===plan.startPeriod;});
-    var targetIdx=startIdx+(e.installmentNum-1);
-    var period=(startIdx>=0&&targetIdx<periods.length)?periods[targetIdx].name:PENDING_PER;
+    // Position within the remaining installments (0-based)
+    var posInRemaining=e.installmentNum-paid-1;
+    var targetIdx=startIdx+posInRemaining;
+    var period=(startIdx>=0&&posInRemaining>=0&&targetIdx<periods.length)?periods[targetIdx].name:PENDING_PER;
     return Object.assign({},e,{period:period});
   });
 }
@@ -554,26 +564,49 @@ function History(props){
   var others=Object.keys(grouped).filter(function(p){return configOrder.indexOf(p)<0&&p!==PENDING_PER;});
   var allSorted=configOrder.filter(function(p){return grouped[p];}).concat(others).concat(grouped[PENDING_PER]?[PENDING_PER]:[]);
   var searchLower=search.toLowerCase().trim();
+
+  // Full-text expense search across all periods
+  var expenseMatches=[];
+  if(searchLower){
+    expenses.forEach(function(e){
+      var descMatch=(e.description||'').toLowerCase().indexOf(searchLower)>=0;
+      var dateMatch=(e.date||'').indexOf(searchLower)>=0;
+      var amtMatch=String(Math.round(safeN(e.amount))).indexOf(searchLower)>=0;
+      if(descMatch||dateMatch||amtMatch)expenseMatches.push(e);
+    });
+  }
+
   var filteredPeriods=searchLower?allSorted.filter(function(p){return p.toLowerCase().indexOf(searchLower)>=0;}):allSorted;
   var hasSelection=selectedPeriods.length>0;
   var displayPeriods=hasSelection?filteredPeriods.filter(function(p){return selectedPeriods.indexOf(p)>=0;}):filteredPeriods;
   function toggleSelect(p){setSelectedPeriods(function(prev){return prev.indexOf(p)>=0?prev.filter(function(x){return x!==p;}):[].concat(prev,[p]);});}
   function toggleOpen(p){setOpenMap(function(prev){var next=Object.assign({},prev);next[p]=!next[p];return next;});}
+
+  var showExpMatches=searchLower&&expenseMatches.length>0;
+
   return React.createElement('div',{style:{padding:'1rem',paddingBottom:'2rem'}},
     React.createElement('h2',{style:{fontWeight:900,fontSize:'1.2rem',color:C.navy,marginBottom:'0.75rem'}},'Historial'),
-    React.createElement(SearchBox,{value:search,onChange:setSearch,placeholder:'🔍 Buscar período...'}),
+    React.createElement(SearchBox,{value:search,onChange:function(v){setSearch(v);setSelectedPeriods([]);},placeholder:'🔍 Buscar período, gasto, fecha o monto...'}),
+    showExpMatches?React.createElement('div',{style:{marginBottom:'0.75rem'}},
+      React.createElement('div',{style:{fontWeight:700,fontSize:'0.75rem',color:C.textMuted,marginBottom:'0.35rem'}},expenseMatches.length+' gasto'+(expenseMatches.length!==1?'s':'')+' encontrado'+(expenseMatches.length!==1?'s':'')),
+      React.createElement(Card,{style:{padding:0,overflow:'hidden'}},
+        React.createElement('div',{style:{maxHeight:'320px',overflowY:'auto'}},
+          React.createElement(ExpenseList,{expenses:sortByDate(expenseMatches),onDelete:props.onDelete,onEdit:props.onEdit})
+        )
+      )
+    ):null,
     allSorted.length>3?React.createElement('div',{style:{marginBottom:'0.6rem'}},
-      React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,marginBottom:'0.3rem',fontWeight:700}},hasSelection?(selectedPeriods.length+' período(s) seleccionado(s)'):'Todos los períodos'),
+      React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,marginBottom:'0.3rem',fontWeight:700}},hasSelection?(selectedPeriods.length+' período(s) seleccionado(s)'):'Períodos'+( searchLower?' (filtrados por nombre)':'')),
       React.createElement(ScrollFilter,{items:filteredPeriods,selected:selectedPeriods,onSelect:toggleSelect,multi:true}),
       hasSelection?React.createElement('button',{onClick:function(){setSelectedPeriods([]);},style:{background:'transparent',border:'1px solid '+C.accent,borderRadius:'999px',padding:'0.2rem 0.65rem',fontSize:'0.7rem',color:C.accent,cursor:'pointer',fontFamily:F,fontWeight:700,marginTop:'0.3rem'}},'✕ Limpiar selección'):null
     ):null,
-    filteredPeriods.length===0
-      ?React.createElement(Card,{style:{textAlign:'center',padding:'3rem',color:C.textMuted}},React.createElement('div',{style:{fontSize:'2.5rem',marginBottom:'0.5rem'}},'🔍'),'No se encontraron períodos')
-      :React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.75rem',maxHeight:allSorted.length>3?'65vh':undefined,overflowY:allSorted.length>3?'auto':undefined}},
+    filteredPeriods.length===0&&!showExpMatches
+      ?React.createElement(Card,{style:{textAlign:'center',padding:'3rem',color:C.textMuted}},React.createElement('div',{style:{fontSize:'2.5rem',marginBottom:'0.5rem'}},'🔍'),'No se encontraron resultados')
+      :filteredPeriods.length>0?React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.75rem',maxHeight:allSorted.length>3?'65vh':undefined,overflowY:allSorted.length>3?'auto':undefined}},
           displayPeriods.map(function(period){
             return React.createElement(PeriodBlock,{key:period,period:period,exps:sortByDate(grouped[period]||[]),isOpen:!!openMap[period],isSelected:selectedPeriods.indexOf(period)>=0,isPending:period===PENDING_PER,hasSelection:hasSelection,onToggle:function(){if(hasSelection)toggleSelect(period);else toggleOpen(period);},onDelete:props.onDelete,onEdit:props.onEdit});
           })
-        )
+        ):null
   );
 }
 
@@ -590,18 +623,50 @@ function AddEditExpense(props){
   var cuotaState=useState(false);var useCuotas=cuotaState[0];var setUseCuotas=cuotaState[1];
   var numState=useState(12);var numCuotas=numState[0];var setNumCuotas=numState[1];
   var custNumState=useState('');var customCuotas=custNumState[0];var setCustomCuotas=custNumState[1];
+  // Retroactive installments
+  var retroState=useState(false);var isRetro=retroState[0];var setIsRetro=retroState[1];
+  var paidState=useState('');var retroPaid=paidState[0];var setRetroPaid=paidState[1];
+  var retroPerState=useState('');var retroStartPer=retroPerState[0];var setRetroStartPer=retroPerState[1];
+
   function set(k,v){setForm(function(f){var next=Object.assign({},f);next[k]=v;return next;});}
+
+  var periods=settings.periods||[];
   var finalCuotas=customCuotas?parseInt(customCuotas)||numCuotas:numCuotas;
+  var paidNum=isRetro?(parseInt(retroPaid)||0):0;
+  var remaining=finalCuotas-paidNum;
   var cur=BASE_CURS.indexOf(form.currency)>=0?form.currency:(form.customCurrency||'ARS');
   var amts=calcAmts(form.amount,form.responsible);
   var javiAmount=amts.javiAmount,laliAmount=amts.laliAmount;
   var showSplit=form.amount&&parseFloat(form.amount)>0;
   var installmentAmt=showSplit&&useCuotas?Math.round(parseFloat(form.amount)/finalCuotas):0;
+
   function addNewCat(){if(!newCatName.trim())return;var cat=(newCatEmoji||'📌')+' '+newCatName.trim();onSaveCats(customCats.concat([cat]));set('category',cat);setNewCatEmoji('');setNewCatName('');setShowNewCat(false);}
-  function submit(){var e={};if(!form.description.trim())e.description='Requerido';if(!form.amount||parseFloat(form.amount)<=0)e.amount='Monto inválido';if(Object.keys(e).length){setErrors(e);return;}var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;var base=Object.assign({},form,{id:isEdit?form.id:Date.now().toString(),amount:parseFloat(form.amount),javiAmount:javiAmount,laliAmount:laliAmount,currency:finalCur,period:getPeriod(form.date,settings.periods)});if(!isEdit){base.createdBy=currentUser;base.createdAt=new Date().toISOString();}if(!isEdit&&useCuotas&&finalCuotas>1){props.onSubmitPlan(base,finalCuotas);}else{props.onSubmit(base);}}
+  function submit(){
+    var e={};
+    if(!form.description.trim())e.description='Requerido';
+    if(!form.amount||parseFloat(form.amount)<=0)e.amount='Monto inválido';
+    if(useCuotas&&isRetro&&paidNum>=finalCuotas)e.retroPaid='Las cuotas ya pagadas deben ser menos que el total.';
+    if(useCuotas&&isRetro&&!retroStartPer)e.retroStartPer='Seleccioná el período inicial.';
+    if(Object.keys(e).length){setErrors(e);return;}
+    var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;
+    var base=Object.assign({},form,{id:isEdit?form.id:Date.now().toString(),amount:parseFloat(form.amount),javiAmount:javiAmount,laliAmount:laliAmount,currency:finalCur,period:getPeriod(form.date,settings.periods)});
+    if(!isEdit){base.createdBy=currentUser;base.createdAt=new Date().toISOString();}
+    if(!isEdit&&useCuotas&&finalCuotas>1){
+      props.onSubmitPlan(base,finalCuotas,isRetro?paidNum:0,isRetro?retroStartPer:null);
+    }else{
+      props.onSubmit(base);
+    }
+  }
   var inpStyle=function(extra){return Object.assign({width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface},extra||{});};
   var selStyle={width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',background:C.surface,boxSizing:'border-box',fontFamily:F,color:C.navy};
   function Lbl(text){return React.createElement('label',{style:{fontSize:'0.8rem',color:C.textMuted,fontWeight:700,display:'block',marginBottom:'0.35rem',marginTop:'0.75rem'}},text);}
+
+  // Determine submit button label
+  var btnLabel;
+  if(isEdit){btnLabel='Guardar cambios ✓';}
+  else if(useCuotas){btnLabel='Registrar '+remaining+' cuota'+(remaining!==1?'s':'')+' ✓';}
+  else{btnLabel='Guardar gasto ✓';}
+
   return React.createElement('div',{style:{padding:'1rem',paddingBottom:'2rem'}},
     React.createElement('h2',{style:{fontWeight:900,fontSize:'1.2rem',color:C.navy,marginBottom:'0.5rem'}},isEdit?'✏️ Editar gasto':'Nuevo gasto'),
     Lbl('Descripción'),React.createElement('input',{style:inpStyle({borderColor:errors.description?'#c0314f':C.border}),value:form.description,onChange:function(e){set('description',e.target.value);},placeholder:'Ej: Almuerzo en Lo de Juan'}),
@@ -611,24 +676,70 @@ function AddEditExpense(props){
     Lbl('Moneda'),React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap'}},BASE_CURS.concat(['Otra']).map(function(c){return React.createElement('button',{key:c,onClick:function(){set('currency',c);},style:{padding:'0.4rem 0.85rem',fontSize:'0.78rem',borderRadius:'0.75rem',border:'1px solid',cursor:'pointer',fontWeight:form.currency===c?800:500,fontFamily:F,background:form.currency===c?C.navy:'transparent',borderColor:form.currency===c?C.navy:C.border,color:form.currency===c?C.white:C.navy}},c);})),
     form.currency==='Otra'?React.createElement('input',{style:inpStyle({marginTop:'0.4rem'}),value:form.customCurrency||'',onChange:function(e){set('customCurrency',e.target.value.toUpperCase());},placeholder:'Ej: BRL, GBP...',maxLength:5}):null,
     Lbl('Fecha'),React.createElement('input',{style:inpStyle(),type:'date',value:form.date,onChange:function(e){set('date',e.target.value);}}),
-    Lbl('Categoría'),React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'0.4rem'}},allCats.map(function(c){return React.createElement('button',{key:c,onClick:function(){set('category',c);},style:{padding:'0.4rem 0.2rem',fontSize:'0.7rem',borderRadius:'0.65rem',border:'1px solid',cursor:'pointer',fontFamily:F,background:form.category===c?C.accent:'transparent',borderColor:form.category===c?C.accent:C.border,color:form.category===c?C.white:C.navy,textAlign:'center',lineHeight:1.3,fontWeight:form.category===c?700:400}},c);})),
-    !showNewCat?React.createElement('button',{onClick:function(){setShowNewCat(true);},style:{marginTop:'0.5rem',background:'transparent',border:'1px dashed '+C.accent,borderRadius:'0.65rem',color:C.accent,fontSize:'0.72rem',fontWeight:700,cursor:'pointer',padding:'0.35rem 0.75rem',fontFamily:F,display:'block'}},'➕ Nueva categoría'):React.createElement('div',{style:{marginTop:'0.5rem',background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',display:'flex',gap:'0.4rem',alignItems:'center',border:'1px solid '+C.border}},React.createElement('input',{value:newCatEmoji,onChange:function(e){setNewCatEmoji(e.target.value);},placeholder:'🏷️',style:{width:'2.5rem',border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.85rem',textAlign:'center',outline:'none',fontFamily:F}}),React.createElement('input',{value:newCatName,onChange:function(e){setNewCatName(e.target.value);},placeholder:'Nombre...',style:{flex:1,border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.82rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface}}),React.createElement('button',{onClick:addNewCat,style:{background:C.accent,color:C.white,border:'none',borderRadius:'0.5rem',padding:'0.4rem 0.6rem',fontSize:'0.78rem',fontWeight:700,cursor:'pointer',fontFamily:F}},'OK'),React.createElement('button',{onClick:function(){setShowNewCat(false);},style:{background:'none',border:'none',color:C.textMuted,cursor:'pointer',fontSize:'0.9rem'}},'✕')),
+    Lbl('Categoría'),
+    React.createElement('select',{value:form.category,onChange:function(e){set('category',e.target.value);},style:selStyle},
+      allCats.map(function(c){return React.createElement('option',{key:c,value:c},c);})),
+    !showNewCat
+      ?React.createElement('button',{onClick:function(){setShowNewCat(true);},style:{marginTop:'0.5rem',background:'transparent',border:'1px dashed '+C.accent,borderRadius:'0.65rem',color:C.accent,fontSize:'0.72rem',fontWeight:700,cursor:'pointer',padding:'0.35rem 0.75rem',fontFamily:F,display:'block'}},'➕ Nueva categoría')
+      :React.createElement('div',{style:{marginTop:'0.5rem',background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',display:'flex',gap:'0.4rem',alignItems:'center',border:'1px solid '+C.border}},
+          React.createElement('input',{value:newCatEmoji,onChange:function(e){setNewCatEmoji(e.target.value);},placeholder:'🏷️',style:{width:'2.5rem',border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.85rem',textAlign:'center',outline:'none',fontFamily:F}}),
+          React.createElement('input',{value:newCatName,onChange:function(e){setNewCatName(e.target.value);},placeholder:'Nombre...',style:{flex:1,border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.82rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface}}),
+          React.createElement('button',{onClick:addNewCat,style:{background:C.accent,color:C.white,border:'none',borderRadius:'0.5rem',padding:'0.4rem 0.6rem',fontSize:'0.78rem',fontWeight:700,cursor:'pointer',fontFamily:F}},'OK'),
+          React.createElement('button',{onClick:function(){setShowNewCat(false);},style:{background:'none',border:'none',color:C.textMuted,cursor:'pointer',fontSize:'0.9rem'}},'✕')),
     Lbl('Medio de pago'),React.createElement('select',{value:form.paymentMethod,onChange:function(e){set('paymentMethod',e.target.value);},style:selStyle},PAY_METHODS.map(function(m){return React.createElement('option',{key:m},m);})),
     Lbl('Banco / Billetera'),React.createElement('select',{value:form.bank,onChange:function(e){set('bank',e.target.value);},style:selStyle},BANKS.map(function(b){return React.createElement('option',{key:b},b);})),
     !isEdit?React.createElement(React.Fragment,null,
       Lbl('¿Pago en cuotas?'),
-      React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:!useCuotas,color:C.navy,onClick:function(){setUseCuotas(false);}},'💵 Pago único'),React.createElement(SegBtn,{active:useCuotas,color:C.accent,onClick:function(){setUseCuotas(true);}},'📅 En cuotas')),
+      React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},
+        React.createElement(SegBtn,{active:!useCuotas,color:C.navy,onClick:function(){setUseCuotas(false);setIsRetro(false);}},'💵 Pago único'),
+        React.createElement(SegBtn,{active:useCuotas,color:C.accent,onClick:function(){setUseCuotas(true);}},'📅 En cuotas')),
       useCuotas?React.createElement('div',{style:{background:C.bg,borderRadius:'1rem',padding:'0.85rem',marginTop:'0.5rem',border:'1px solid '+C.border}},
-        React.createElement('div',{style:{fontSize:'0.78rem',color:C.navy,fontWeight:700,marginBottom:'0.5rem'}},'Cantidad de cuotas'),
-        React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap',marginBottom:'0.5rem'}},CUOTA_OPTS.map(function(n){var active=numCuotas===n&&!customCuotas;return React.createElement('button',{key:n,onClick:function(){setNumCuotas(n);setCustomCuotas('');},style:{padding:'0.35rem 0.65rem',fontSize:'0.78rem',borderRadius:'0.65rem',border:'1px solid',cursor:'pointer',fontFamily:F,fontWeight:active?800:500,background:active?C.navy:'transparent',borderColor:active?C.navy:C.border,color:active?C.white:C.navy}},n);}),React.createElement('input',{type:'number',value:customCuotas,onChange:function(e){setCustomCuotas(e.target.value);},placeholder:'Otra',min:2,max:60,style:{width:'4rem',border:'1px solid '+(customCuotas?C.navy:C.border),borderRadius:'0.65rem',padding:'0.35rem 0.5rem',fontSize:'0.78rem',outline:'none',fontFamily:F,color:C.navy,background:customCuotas?C.beige:'transparent',textAlign:'center'}})),
-        showSplit?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',justifyContent:'space-between',alignItems:'center'}},React.createElement('div',null,React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'Por cuota'),React.createElement('div',{style:{fontWeight:900,color:C.navy,fontSize:'1.1rem'}},fmt(installmentAmt,cur))),React.createElement('div',{style:{fontSize:'0.75rem',color:C.textMuted,textAlign:'right'}},React.createElement('div',null,finalCuotas+' cuotas'),React.createElement('div',{style:{fontWeight:700,color:C.navy}},'Total: '+fmt(parseFloat(form.amount)||0,cur)))):null
+        React.createElement('div',{style:{fontSize:'0.78rem',color:C.navy,fontWeight:700,marginBottom:'0.5rem'}},'Cantidad de cuotas totales'),
+        React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap',marginBottom:'0.5rem'}},
+          CUOTA_OPTS.map(function(n){
+            var active=numCuotas===n&&!customCuotas;
+            return React.createElement('button',{key:n,onClick:function(){setNumCuotas(n);setCustomCuotas('');},style:{padding:'0.35rem 0.65rem',fontSize:'0.78rem',borderRadius:'0.65rem',border:'1px solid',cursor:'pointer',fontFamily:F,fontWeight:active?800:500,background:active?C.navy:'transparent',borderColor:active?C.navy:C.border,color:active?C.white:C.navy}},n);
+          }),
+          React.createElement('input',{type:'number',value:customCuotas,onChange:function(e){setCustomCuotas(e.target.value);},placeholder:'Otra',min:2,max:60,style:{width:'4rem',border:'1px solid '+(customCuotas?C.navy:C.border),borderRadius:'0.65rem',padding:'0.35rem 0.5rem',fontSize:'0.78rem',outline:'none',fontFamily:F,color:C.navy,background:customCuotas?C.beige:'transparent',textAlign:'center'}})
+        ),
+        // Retroactive toggle
+        React.createElement('div',{style:{borderTop:'1px solid '+C.border,paddingTop:'0.6rem',marginTop:'0.35rem'}},
+          React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginBottom:isRetro?'0.6rem':0}},
+            React.createElement(SegBtn,{active:!isRetro,color:C.navy,onClick:function(){setIsRetro(false);}},
+              '🆕 Compra nueva'),
+            React.createElement(SegBtn,{active:isRetro,color:'#b45309',onClick:function(){setIsRetro(true);}},
+              '🕐 Cuotas del pasado')
+          ),
+          isRetro?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',flexDirection:'column',gap:'0.45rem'}},
+            React.createElement('div',{style:{fontSize:'0.75rem',color:'#92400e',fontWeight:700}},'Indicá cuántas cuotas ya se pagaron y a partir de qué período continúan.'),
+            React.createElement('label',{style:{fontSize:'0.78rem',color:C.textMuted,fontWeight:700}},'Cuotas ya pagadas'),
+            React.createElement('input',{type:'number',min:0,max:finalCuotas-1,value:retroPaid,onChange:function(e){setRetroPaid(e.target.value);setErrors({});},placeholder:'0',style:{border:'1px solid '+(errors.retroPaid?'#c0314f':C.border),borderRadius:'0.6rem',padding:'0.45rem 0.6rem',fontSize:'0.88rem',outline:'none',fontFamily:F,color:C.navy,background:C.bg,width:'6rem',boxSizing:'border-box'}}),
+            errors.retroPaid?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.7rem',margin:0}},'⚠ '+errors.retroPaid):null,
+            React.createElement('label',{style:{fontSize:'0.78rem',color:C.textMuted,fontWeight:700}},'Período donde va la próxima cuota ('+(paidNum+1)+'/'+finalCuotas+')'),
+            React.createElement('select',{value:retroStartPer,onChange:function(e){setRetroStartPer(e.target.value);setErrors({});},style:Object.assign({},selStyle,{borderColor:errors.retroStartPer?'#c0314f':C.border,padding:'0.45rem 0.6rem',fontSize:'0.85rem'})},
+              React.createElement('option',{value:''},'-- Seleccioná un período --'),
+              periods.slice().reverse().map(function(p){return React.createElement('option',{key:p.name,value:p.name},p.name);})),
+            errors.retroStartPer?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.7rem',margin:0}},'⚠ '+errors.retroStartPer):null,
+            remaining>0?React.createElement('div',{style:{background:C.bg,borderRadius:'0.6rem',padding:'0.45rem 0.6rem',border:'1px dashed '+C.border,fontSize:'0.75rem',color:C.navy,fontWeight:700}},
+              'Se registrarán ',React.createElement('span',{style:{color:'#b45309'}},remaining),' cuota'+(remaining!==1?'s ':' ')+' pendiente'+(remaining!==1?'s ':' ')+'('+( paidNum+1)+' a '+finalCuotas+')'
+            ):null
+          ):null
+        ),
+        showSplit?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'0.5rem'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'Por cuota'),
+            React.createElement('div',{style:{fontWeight:900,color:C.navy,fontSize:'1.1rem'}},fmt(installmentAmt,cur))),
+          React.createElement('div',{style:{fontSize:'0.75rem',color:C.textMuted,textAlign:'right'}},
+            React.createElement('div',null,finalCuotas+' cuotas totales'),
+            React.createElement('div',{style:{fontWeight:700,color:C.navy}},'Total: '+fmt(parseFloat(form.amount)||0,cur)))
+        ):null
       ):null
     ):null,
     Lbl('¿Quién pagó?'),React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:form.paidBy==='Javi',color:C.navy,onClick:function(){set('paidBy','Javi');}},'👨 Javi'),React.createElement(SegBtn,{active:form.paidBy==='Lali',color:C.accent,onClick:function(){set('paidBy','Lali');}},'👩 Lali')),
     Lbl('¿Quién es responsable?'),React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:form.responsible==='Javi',color:C.navy,onClick:function(){set('responsible','Javi');}},'👨 Javi'),React.createElement(SegBtn,{active:form.responsible==='Ambos',color:C.navy,onClick:function(){set('responsible','Ambos');}},'👫 Ambos'),React.createElement(SegBtn,{active:form.responsible==='Lali',color:C.accent,onClick:function(){set('responsible','Lali');}},'👩 Lali')),
     showSplit&&!useCuotas?React.createElement('div',{style:{background:C.bg,borderRadius:'1rem',padding:'0.85rem 1rem',display:'flex',justifyContent:'space-between',marginTop:'0.75rem',border:'1px solid '+C.border}},React.createElement('div',{style:{textAlign:'center',flex:1}},React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'👨 Javi'),React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiAmount,cur))),React.createElement('div',{style:{width:'1px',background:C.border}}),React.createElement('div',{style:{textAlign:'center',flex:1}},React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'👩 Lali'),React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliAmount,cur)))):null,
     settings.periods&&settings.periods.length?React.createElement('div',{style:{textAlign:'center',fontSize:'0.75rem',color:C.textMuted,marginTop:'0.5rem'}},'Período: ',React.createElement('strong',{style:{color:C.navy}},getPeriod(form.date,settings.periods))):null,
-    React.createElement('button',{onClick:submit,style:{width:'100%',padding:'1rem',background:C.gradMain,color:C.white,border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:F,boxShadow:'0 4px 12px rgba(0,0,0,0.15)',marginTop:'1rem'}},isEdit?'Guardar cambios ✓':(useCuotas?'Registrar '+finalCuotas+' cuotas ✓':'Guardar gasto ✓')),
+    React.createElement('button',{onClick:submit,style:{width:'100%',padding:'1rem',background:C.gradMain,color:C.white,border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:F,boxShadow:'0 4px 12px rgba(0,0,0,0.15)',marginTop:'1rem'}},btnLabel),
     React.createElement('button',{onClick:props.onCancel,style:{width:'100%',padding:'0.75rem',background:'none',border:'none',color:C.textMuted,fontSize:'0.9rem',cursor:'pointer',fontFamily:F,marginTop:'0.25rem'}},'Cancelar')
   );
 }
@@ -780,11 +891,14 @@ export default function App(){
   }
 
   function handleAdd(expense){var s=sanitize(Object.assign({},expense,{id:Date.now().toString()}),allCats);saveExpenses([s].concat(expenses));setView('dashboard');}
-  function handleAddPlan(formData,numInstallments){
-    var amt=safeN(formData.amount),installmentAmount=Math.round(amt/numInstallments);
+  function handleAddPlan(formData,numInstallments,paidInstallments,manualStartPeriod){
+    var paid=paidInstallments||0;
+    var remaining=numInstallments-paid;
+    var installmentAmount=Math.round(safeN(formData.amount)/numInstallments);
     var amts=calcAmts(installmentAmount,formData.responsible);
-    var startPeriod=getPeriod(formData.date,settings.periods);
-    var plan={id:'plan_'+Date.now(),description:formData.description,totalAmount:amt,installmentAmount:installmentAmount,numInstallments:numInstallments,startPeriod:startPeriod,startDate:formData.date,currency:formData.currency||'ARS',paidBy:formData.paidBy,responsible:formData.responsible,paymentMethod:formData.paymentMethod,bank:formData.bank,category:formData.category,javiAmount:amts.javiAmount,laliAmount:amts.laliAmount,createdAt:new Date().toISOString()};
+    // For retroactive plans the user picks startPeriod manually; for new plans derive from date.
+    var startPeriod=manualStartPeriod||getPeriod(formData.date,settings.periods);
+    var plan={id:'plan_'+Date.now(),description:formData.description,totalAmount:safeN(formData.amount),installmentAmount:installmentAmount,numInstallments:numInstallments,paidInstallments:paid,startPeriod:startPeriod,startDate:formData.date,currency:formData.currency||'ARS',paidBy:formData.paidBy,responsible:formData.responsible,paymentMethod:formData.paymentMethod,bank:formData.bank,category:formData.category,javiAmount:amts.javiAmount,laliAmount:amts.laliAmount,createdAt:new Date().toISOString()};
     var installments=generatePlanExpenses(plan,settings.periods);
     var newPlans=plans.concat([plan]),newExps=installments.concat(expenses);
     setPlans(newPlans);setExpenses(newExps);saveAll(newExps,newPlans,undefined,undefined,undefined);setView('dashboard');
