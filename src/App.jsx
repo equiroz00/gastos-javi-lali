@@ -868,6 +868,7 @@ function Settings(props){
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App(){
   var userState=useState(null);var currentUser=userState[0];var setCurrentUser=userState[1];
+  var deniedState=useState(false);var authDenied=deniedState[0];var setAuthDenied=deniedState[1];
   var viewState=useState('dashboard');var view=viewState[0];var setView=viewState[1];
   var expState=useState([]);var expenses=expState[0];var setExpenses=expState[1];
   var cfgState=useState({periods:[],theme:'default',font:'Nunito'});var settings=cfgState[0];var setSettings=cfgState[1];
@@ -878,7 +879,8 @@ export default function App(){
   var msgState=useState('');var syncMsg=msgState[0];var setSyncMsg=msgState[1];
   var editState=useState(null);var editingExpense=editState[0];var setEditingExpense=editState[1];
   var delState=useState(null);var pendingDelete=delState[0];var setPendingDelete=delState[1];
-  var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1]; // {currency, netBal}
+  var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1];
+  var unsubFirestoreRef=useState(null);var unsubFirestore=unsubFirestoreRef[0];var setUnsubFirestore=unsubFirestoreRef[1];
 
   // Apply theme before render
   applyTheme(settings.theme||'default', settings.font||'Nunito');
@@ -887,12 +889,36 @@ export default function App(){
   var allCats=DEFAULT_CATS.concat(customCats);
 
   useEffect(function(){
-    setCurrentUser(store.get('usr',null));
-    var unsub=onSnapshot(dataDoc,function(snapshot){
-      if(snapshot.exists()){var data=snapshot.data();setExpenses(data.expenses||[]);setPlans(data.plans||[]);setSettings(data.settings||{periods:[],theme:'default',font:'Nunito'});setCustomCats(data.customCats||[]);setPayments(data.payments||[]);}
-      setLoading(false);
-    },function(error){console.error('Firebase error:',error);setLoading(false);});
-    return unsub;
+    // 1. Escuchar cambios de sesión de Firebase Auth
+    var unsubAuth=onAuthStateChanged(auth,function(firebaseUser){
+      if(!firebaseUser){
+        // No hay sesión activa
+        setCurrentUser(null);setAuthDenied(false);setLoading(false);
+        if(unsubFirestore){unsubFirestore();setUnsubFirestore(null);}
+        return;
+      }
+      // Verificar si el UID está en el mapa de usuarios autorizados
+      var name=USER_MAP[firebaseUser.uid];
+      if(!name){
+        // Autenticado con Google pero no autorizado
+        setCurrentUser(null);setAuthDenied(true);setLoading(false);
+        signOut(auth);
+        return;
+      }
+      setAuthDenied(false);setCurrentUser(name);
+      // 2. Solo suscribirse a Firestore una vez que el usuario está autorizado
+      var unsub=onSnapshot(dataDoc,function(snapshot){
+        if(snapshot.exists()){
+          var data=snapshot.data();
+          setExpenses(data.expenses||[]);setPlans(data.plans||[]);
+          setSettings(data.settings||{periods:[],theme:'default',font:'Nunito'});
+          setCustomCats(data.customCats||[]);setPayments(data.payments||[]);
+        }
+        setLoading(false);
+      },function(error){console.error('Firestore error:',error);setLoading(false);});
+      setUnsubFirestore(function(){return unsub;});
+    });
+    return function(){unsubAuth();if(unsubFirestore)unsubFirestore();};
   },[]);
 
   function saveAll(newExp,newPlans,newSettings,newCats,newPayments){
@@ -907,7 +933,6 @@ export default function App(){
     if(s.periods&&s.periods.length)updated=reassignPlanExpenses(updated,s.periods,plans);
     setExpenses(updated);setSettings(s);saveAll(updated,undefined,s,undefined,undefined);
   }
-  function selectUser(u){setCurrentUser(u);store.set('usr',u);}
   function showMsg(msg,ms){setSyncMsg(msg);setTimeout(function(){setSyncMsg('');},ms||5000);}
 
   function exportCSV(from,to){
@@ -949,7 +974,7 @@ export default function App(){
   }
 
   if(loading)return React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:C.textMuted,fontFamily:F,background:C.bg,flexDirection:'column',gap:'1rem'}},React.createElement('div',{style:{fontSize:'2rem'}},'💑'),React.createElement('div',null,'Conectando...'));
-  if(!currentUser)return React.createElement(UserSelect,{onSelect:selectUser});
+  if(!currentUser)return React.createElement(LoginScreen,{denied:authDenied});
 
   if(editingExpense)return React.createElement('div',{style:{minHeight:'100vh',background:C.bg,maxWidth:'480px',margin:'0 auto',fontFamily:F,overflowY:'auto'}},
     React.createElement(AddEditExpense,{currentUser:currentUser,settings:settings,allCats:allCats,customCats:customCats,onSubmit:handleEdit,onSubmitPlan:handleAddPlan,onCancel:function(){setEditingExpense(null);},onSaveCats:saveCustomCats,initialData:Object.assign({},editingExpense,{amount:String(editingExpense.amount)})})
