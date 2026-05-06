@@ -60,7 +60,7 @@ var PENDING_PER = '⏳ Pendiente';
 // Reemplazá los valores con los UIDs reales (ver firestore.rules para instrucciones)
 var USER_MAP = {
   'h0FlnAU3wabBCTztmPXdLyFW6R42': 'Javi',
-  'UID_DE_LALI': 'Lali',
+  'JjDJiAjLmVSc0WODsfvULRLT59s2': 'Lali',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
