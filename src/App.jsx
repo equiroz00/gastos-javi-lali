@@ -59,7 +59,7 @@ var PENDING_PER = '⏳ Pendiente';
 // ── Auth: mapa de UIDs de Google → nombre en la app ──────────────────────────
 // Reemplazá los valores con los UIDs reales (ver firestore.rules para instrucciones)
 var USER_MAP = {
-  'UID_DE_JAVI': 'Javi',
+  'h0FlnAU3wabBCTztmPXdLyFW6R42': 'Javi',
   'UID_DE_LALI': 'Lali',
 };
 
