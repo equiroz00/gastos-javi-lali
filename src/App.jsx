@@ -866,6 +866,9 @@ function Settings(props){
   );
 }
 
+// Variable de módulo para el unsubscribe de Firestore — evita el stale closure de useState
+var _unsubFirestore = null;
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App(){
   var userState=useState(null);var currentUser=userState[0];var setCurrentUser=userState[1];
@@ -881,7 +884,7 @@ export default function App(){
   var editState=useState(null);var editingExpense=editState[0];var setEditingExpense=editState[1];
   var delState=useState(null);var pendingDelete=delState[0];var setPendingDelete=delState[1];
   var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1];
-  var unsubFirestoreRef=useState(null);var unsubFirestore=unsubFirestoreRef[0];var setUnsubFirestore=unsubFirestoreRef[1];
+  var redirectingState=useState(false);var redirecting=redirectingState[0];var setRedirecting=redirectingState[1];
 
   // Apply theme before render
   applyTheme(settings.theme||'default', settings.font||'Nunito');
@@ -890,36 +893,57 @@ export default function App(){
   var allCats=DEFAULT_CATS.concat(customCats);
 
   useEffect(function(){
-    // 1. Escuchar cambios de sesión de Firebase Auth
-    var unsubAuth=onAuthStateChanged(auth,function(firebaseUser){
-      if(!firebaseUser){
-        // No hay sesión activa
-        setCurrentUser(null);setAuthDenied(false);setLoading(false);
-        if(unsubFirestore){unsubFirestore();setUnsubFirestore(null);}
-        return;
-      }
-      // Verificar si el UID está en el mapa de usuarios autorizados
+    // ── Paso 1: capturar resultado del redirect de Google si venimos de uno ──
+    setRedirecting(true);
+    getRedirectResult(auth).then(function(){
+      setRedirecting(false);
+    }).catch(function(e){
+      setRedirecting(false);
+      console.error('getRedirectResult error:',e);
+    });
+
+    // ── Paso 2: listener de sesión — se dispara tanto al cargar como tras redirect ──
+    function subscribeFirestore(firebaseUser){
+      // Cancelar suscripción anterior si existe
+      if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+
       var name=USER_MAP[firebaseUser.uid];
       if(!name){
-        // Autenticado con Google pero no autorizado
         setCurrentUser(null);setAuthDenied(true);setLoading(false);
         signOut(auth);
         return;
       }
       setAuthDenied(false);setCurrentUser(name);
-      // 2. Solo suscribirse a Firestore una vez que el usuario está autorizado
-      var unsub=onSnapshot(dataDoc,function(snapshot){
+
+      _unsubFirestore=onSnapshot(dataDoc,function(snapshot){
         if(snapshot.exists()){
           var data=snapshot.data();
-          setExpenses(data.expenses||[]);setPlans(data.plans||[]);
+          setExpenses(data.expenses||[]);
+          setPlans(data.plans||[]);
           setSettings(data.settings||{periods:[],theme:'default',font:'Nunito'});
-          setCustomCats(data.customCats||[]);setPayments(data.payments||[]);
+          setCustomCats(data.customCats||[]);
+          setPayments(data.payments||[]);
         }
         setLoading(false);
-      },function(error){console.error('Firestore error:',error);setLoading(false);});
-      setUnsubFirestore(function(){return unsub;});
+      },function(error){
+        console.error('Firestore error:',error);
+        setLoading(false);
+      });
+    }
+
+    var unsubAuth=onAuthStateChanged(auth,function(firebaseUser){
+      if(!firebaseUser){
+        if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+        setCurrentUser(null);setAuthDenied(false);setLoading(false);
+        return;
+      }
+      subscribeFirestore(firebaseUser);
     });
-    return function(){unsubAuth();if(unsubFirestore)unsubFirestore();};
+
+    return function(){
+      unsubAuth();
+      if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+    };
   },[]);
 
   function saveAll(newExp,newPlans,newSettings,newCats,newPayments){
@@ -974,8 +998,8 @@ export default function App(){
     savePayments(newPayments);setPayModal(null);showMsg('✓ Pago registrado correctamente.');
   }
 
-  if(loading)return React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:C.textMuted,fontFamily:F,background:C.bg,flexDirection:'column',gap:'1rem'}},React.createElement('div',{style:{fontSize:'2rem'}},'💑'),React.createElement('div',null,'Conectando...'));
-  if(!currentUser)return React.createElement(LoginScreen,{denied:authDenied});
+  if(loading||redirecting)return React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:C.textMuted,fontFamily:F,background:C.bg,flexDirection:'column',gap:'1rem'}},React.createElement('div',{style:{fontSize:'2rem'}},'💑'),React.createElement('div',null,redirecting?'Verificando sesión...':'Conectando...'));
+  if(!currentUser)return React.createElement(LoginScreen,{denied:authDenied,redirecting:false});
 
   if(editingExpense)return React.createElement('div',{style:{minHeight:'100vh',background:C.bg,maxWidth:'480px',margin:'0 auto',fontFamily:F,overflowY:'auto'}},
     React.createElement(AddEditExpense,{currentUser:currentUser,settings:settings,allCats:allCats,customCats:customCats,onSubmit:handleEdit,onSubmitPlan:handleAddPlan,onCancel:function(){setEditingExpense(null);},onSaveCats:saveCustomCats,initialData:Object.assign({},editingExpense,{amount:String(editingExpense.amount)})})
