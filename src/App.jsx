@@ -266,7 +266,8 @@ function LoginScreen(props){
         ?React.createElement('div',{style:{background:'rgba(255,255,255,0.15)',borderRadius:'1rem',padding:'1rem 1.5rem',textAlign:'center',maxWidth:'280px'}},
             React.createElement('div',{style:{fontSize:'1.5rem',marginBottom:'0.5rem'}},'🚫'),
             React.createElement('p',{style:{color:C.white,fontWeight:700,margin:0,fontSize:'0.9rem'}},'Esta cuenta de Google no tiene acceso a la app.'),
-            React.createElement('button',{onClick:function(){signOut(auth);},style:{marginTop:'0.75rem',background:'rgba(255,255,255,0.2)',border:'1px solid rgba(255,255,255,0.4)',borderRadius:'0.65rem',padding:'0.5rem 1rem',color:C.white,fontWeight:700,fontSize:'0.82rem',cursor:'pointer',fontFamily:F}},'Intentar con otra cuenta'))
+            React.createElement('p',{style:{color:'rgba(255,255,255,0.75)',margin:'0.4rem 0 0',fontSize:'0.75rem'}},'Si sos Javi o Lali, tu UID de Google aún no fue agregado en el código. Revisá el USER_MAP en App.jsx.'),
+            React.createElement('button',{onClick:function(){signOut(auth);},style:{marginTop:'0.75rem',background:'rgba(255,255,255,0.2)',border:'1px solid rgba(255,255,255,0.4)',borderRadius:'0.65rem',padding:'0.5rem 1rem',color:C.white,fontWeight:700,fontSize:'0.82rem',cursor:'pointer',fontFamily:F}},'↩ Cerrar sesión'))
         :React.createElement('button',{onClick:handleGoogle,disabled:loading,style:{width:'100%',maxWidth:'280px',padding:'1rem 1.5rem',borderRadius:'1.25rem',background:'rgba(255,255,255,0.95)',border:'none',cursor:loading?'wait':'pointer',fontFamily:F,fontWeight:700,fontSize:'1rem',color:'#333',display:'flex',alignItems:'center',justifyContent:'center',gap:'0.75rem',boxShadow:'0 8px 24px rgba(0,0,0,0.2)',opacity:loading?0.7:1}},
             React.createElement('svg',{width:'20',height:'20',viewBox:'0 0 48 48'},
               React.createElement('path',{fill:'#EA4335',d:'M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'}),
@@ -866,8 +867,9 @@ function Settings(props){
   );
 }
 
-// Variable de módulo para el unsubscribe de Firestore — evita el stale closure de useState
+// Variables de módulo para unsubscribe — evitan el stale closure de useState
 var _unsubFirestore = null;
+var _unsubAuth = null;
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App(){
@@ -893,55 +895,68 @@ export default function App(){
   var allCats=DEFAULT_CATS.concat(customCats);
 
   useEffect(function(){
-    // ── Paso 1: capturar resultado del redirect de Google si venimos de uno ──
-    setRedirecting(true);
-    getRedirectResult(auth).then(function(){
-      setRedirecting(false);
-    }).catch(function(e){
-      setRedirecting(false);
-      console.error('getRedirectResult error:',e);
-    });
+    // ── El orden importa: primero procesar el redirect, luego escuchar auth ──
+    // Si corremos onAuthStateChanged antes de getRedirectResult, Firebase puede
+    // disparar el listener con null antes de que el redirect esté procesado.
 
-    // ── Paso 2: listener de sesión — se dispara tanto al cargar como tras redirect ──
-    function subscribeFirestore(firebaseUser){
-      // Cancelar suscripción anterior si existe
-      if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+    getRedirectResult(auth).catch(function(e){
+      // Error no crítico — puede ser que no había redirect pendiente
+      console.warn('getRedirectResult:', e.code);
+    }).finally(function(){
+      // Recién cuando getRedirectResult termina, subscribimos el listener de auth
+      var unsubAuth = onAuthStateChanged(auth, function(firebaseUser){
+        setRedirecting(false);
 
-      var name=USER_MAP[firebaseUser.uid];
-      if(!name){
-        setCurrentUser(null);setAuthDenied(true);setLoading(false);
-        signOut(auth);
-        return;
-      }
-      setAuthDenied(false);setCurrentUser(name);
-
-      _unsubFirestore=onSnapshot(dataDoc,function(snapshot){
-        if(snapshot.exists()){
-          var data=snapshot.data();
-          setExpenses(data.expenses||[]);
-          setPlans(data.plans||[]);
-          setSettings(data.settings||{periods:[],theme:'default',font:'Nunito'});
-          setCustomCats(data.customCats||[]);
-          setPayments(data.payments||[]);
+        if(!firebaseUser){
+          if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+          setCurrentUser(null);
+          setAuthDenied(false);
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-      },function(error){
-        console.error('Firestore error:',error);
-        setLoading(false);
-      });
-    }
 
-    var unsubAuth=onAuthStateChanged(auth,function(firebaseUser){
-      if(!firebaseUser){
+        // Verificar si el UID está autorizado
+        var name = USER_MAP[firebaseUser.uid];
+        if(!name){
+          // UID no está en el mapa — mostrar pantalla de acceso denegado
+          // NO llamamos signOut aquí para evitar el loop infinito.
+          // El usuario puede cerrar sesión manualmente desde la pantalla de denegado.
+          if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+          setCurrentUser(null);
+          setAuthDenied(true);
+          setLoading(false);
+          return;
+        }
+
+        // Usuario autorizado — conectar Firestore
+        setAuthDenied(false);
+        setCurrentUser(name);
         if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
-        setCurrentUser(null);setAuthDenied(false);setLoading(false);
-        return;
-      }
-      subscribeFirestore(firebaseUser);
+        _unsubFirestore = onSnapshot(dataDoc,
+          function(snapshot){
+            if(snapshot.exists()){
+              var data = snapshot.data();
+              setExpenses(data.expenses||[]);
+              setPlans(data.plans||[]);
+              setSettings(data.settings||{periods:[],theme:'default',font:'Nunito'});
+              setCustomCats(data.customCats||[]);
+              setPayments(data.payments||[]);
+            }
+            setLoading(false);
+          },
+          function(error){
+            console.error('Firestore error:', error.code, error.message);
+            setLoading(false);
+          }
+        );
+      });
+
+      // Guardar unsubAuth para el cleanup
+      _unsubAuth = unsubAuth;
     });
 
     return function(){
-      unsubAuth();
+      if(_unsubAuth){_unsubAuth();}
       if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
     };
   },[]);
