@@ -3,8 +3,8 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PieChart, Pie, Cell
 } from "recharts";
-import { db, auth, provider, dataDoc } from './firebase';
-import { setDoc, onSnapshot } from 'firebase/firestore';
+import { db, auth, provider } from './firebase';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDoc } from 'firebase/firestore';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
 // ── Themes ────────────────────────────────────────────────────────────────────
@@ -136,6 +136,43 @@ function sanitize(e,cats){
   var paidBy=(e.paidBy==='Javi'||e.paidBy==='Edinson')?'Javi':'Lali';
   var responsible=['Javi','Lali','Ambos'].indexOf(e.responsible)>=0?e.responsible:'Ambos';
   return Object.assign({},e,{description:String(e.description||''),amount:safeN(e.amount),javiAmount:safeN(e.javiAmount),laliAmount:safeN(e.laliAmount),category:normCat(e.category,cats),currency:e.currency||'ARS',date:date,paidBy:paidBy,responsible:responsible});
+}
+
+// ── Firestore collection helpers ──────────────────────────────────────────────
+// Cada entidad vive en su propia colección — escrituras ~400x más pequeñas.
+function expenseDoc(id){ return doc(db,'expenses',id); }
+function planDoc(id){ return doc(db,'plans',id); }
+function paymentDoc(id){ return doc(db,'payments',id); }
+function settingsDoc(){ return doc(db,'settings','main'); }
+
+// ── Migración automática desde arquitectura legacy ────────────────────────────
+// Si existe appdata/main (estructura vieja), migra todo a colecciones y lo borra.
+// Corre una sola vez por instancia de Firebase. Si ya está migrado, no hace nada.
+function runMigrationIfNeeded(onDone){
+  var legacyRef=doc(db,'appdata','main');
+  getDoc(legacyRef).then(function(snap){
+    if(!snap.exists()){onDone();return;}
+    var data=snap.data();
+    var expenses=data.expenses||[];
+    var plans=data.plans||[];
+    var payments=data.payments||[];
+    var settings=data.settings||{periods:[],theme:'default',font:'Nunito'};
+    var customCats=data.customCats||[];
+    // Firestore batch limit es 500 ops. Para esta app es más que suficiente.
+    var batch=writeBatch(db);
+    expenses.forEach(function(e){batch.set(expenseDoc(e.id),e);});
+    plans.forEach(function(p){batch.set(planDoc(p.id),p);});
+    payments.forEach(function(p){batch.set(paymentDoc(p.id),p);});
+    batch.set(settingsDoc(),Object.assign({},settings,{customCats:customCats}));
+    batch.delete(legacyRef);
+    batch.commit().then(function(){
+      console.log('Migración completada: '+expenses.length+' gastos, '+plans.length+' planes, '+payments.length+' pagos.');
+      onDone();
+    }).catch(function(e){
+      console.error('Error en migración:',e);
+      onDone(); // continuar de todas formas
+    });
+  }).catch(function(){onDone();});
 }
 
 // ── Font loader ───────────────────────────────────────────────────────────────
@@ -871,8 +908,8 @@ function Settings(props){
   );
 }
 
-// Variables de módulo para unsubscribe — evitan el stale closure de useState
-var _unsubFirestore = null;
+// Variables de módulo para unsubscribes — evitan stale closures de useState
+var _unsubs = [];
 var _unsubAuth = null;
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -899,60 +936,91 @@ export default function App(){
   var allCats=DEFAULT_CATS.concat(customCats);
 
   useEffect(function(){
-    // onAuthStateChanged es la única fuente de verdad de la sesión.
-    // signInWithPopup resuelve su promesa → Firebase actualiza la sesión interna
-    // → onAuthStateChanged dispara automáticamente con el usuario autenticado.
-    // No necesitamos getRedirectResult porque no usamos redirect.
     var unsubAuth=onAuthStateChanged(auth,function(firebaseUser){
       if(!firebaseUser){
-        if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+        _unsubs.forEach(function(u){u();});_unsubs=[];
         setCurrentUser(null);setAuthDenied(false);setLoading(false);
         return;
       }
       var name=USER_MAP[firebaseUser.uid];
       if(!name){
-        if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+        _unsubs.forEach(function(u){u();});_unsubs=[];
         setCurrentUser(null);setAuthDenied(true);setLoading(false);
         return;
       }
       setAuthDenied(false);setCurrentUser(name);
-      if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
-      _unsubFirestore=onSnapshot(dataDoc,
-        function(snapshot){
-          if(snapshot.exists()){
-            var data=snapshot.data();
-            setExpenses(data.expenses||[]);
-            setPlans(data.plans||[]);
-            setSettings(data.settings||{periods:[],theme:'default',font:'Nunito'});
-            setCustomCats(data.customCats||[]);
-            setPayments(data.payments||[]);
-          }
-          setLoading(false);
-        },
-        function(error){
-          console.error('Firestore error:',error.code,error.message);
-          setLoading(false);
+
+      // Primero correr migración, luego abrir listeners
+      runMigrationIfNeeded(function(){
+        _unsubs.forEach(function(u){u();});_unsubs=[];
+
+        // Coordinador: loading=false cuando los 4 listeners hayan disparado al menos una vez
+        var fired={exp:false,plans:false,pay:false,cfg:false};
+        function checkAllLoaded(){
+          if(fired.exp&&fired.plans&&fired.pay&&fired.cfg)setLoading(false);
         }
-      );
+
+        var u1=onSnapshot(collection(db,'expenses'),function(snap){
+          var exps=snap.docs.map(function(d){return d.data();});
+          setExpenses(exps);fired.exp=true;checkAllLoaded();
+        },function(e){console.error('expenses listener:',e.code);fired.exp=true;checkAllLoaded();});
+
+        var u2=onSnapshot(collection(db,'plans'),function(snap){
+          var ps=snap.docs.map(function(d){return d.data();});
+          setPlans(ps);fired.plans=true;checkAllLoaded();
+        },function(e){console.error('plans listener:',e.code);fired.plans=true;checkAllLoaded();});
+
+        var u3=onSnapshot(collection(db,'payments'),function(snap){
+          var pays=snap.docs.map(function(d){return d.data();});
+          setPayments(pays);fired.pay=true;checkAllLoaded();
+        },function(e){console.error('payments listener:',e.code);fired.pay=true;checkAllLoaded();});
+
+        var u4=onSnapshot(settingsDoc(),function(snap){
+          if(snap.exists()){
+            var cfg=snap.data();
+            setSettings({periods:cfg.periods||[],theme:cfg.theme||'default',font:cfg.font||'Nunito'});
+            setCustomCats(cfg.customCats||[]);
+          }
+          fired.cfg=true;checkAllLoaded();
+        },function(e){console.error('settings listener:',e.code);fired.cfg=true;checkAllLoaded();});
+
+        _unsubs=[u1,u2,u3,u4];
+      });
     });
     _unsubAuth=unsubAuth;
     return function(){
       if(_unsubAuth){_unsubAuth();}
-      if(_unsubFirestore){_unsubFirestore();_unsubFirestore=null;}
+      _unsubs.forEach(function(u){u();});_unsubs=[];
     };
   },[]);
 
-  function saveAll(newExp,newPlans,newSettings,newCats,newPayments){
-    setDoc(dataDoc,{expenses:newExp!==undefined?newExp:expenses,plans:newPlans!==undefined?newPlans:plans,settings:newSettings!==undefined?newSettings:settings,customCats:newCats!==undefined?newCats:customCats,payments:newPayments!==undefined?newPayments:payments},{merge:false});
+  // ── Escrituras granulares — cada operación toca solo el doc que cambió ────────
+  function _saveExpense(exp){ setDoc(expenseDoc(exp.id),exp); }
+  function _deleteExpense(id){ deleteDoc(expenseDoc(id)); }
+  function _savePlan(plan){ setDoc(planDoc(plan.id),plan); }
+  function _deletePlan(id){ deleteDoc(planDoc(id)); }
+  function _savePaymentDoc(pay){ setDoc(paymentDoc(pay.id),pay); }
+  function _saveSettings(s,cats){
+    setDoc(settingsDoc(),{
+      periods:s.periods||[],theme:s.theme||'default',
+      font:s.font||'Nunito',customCats:cats!==undefined?cats:(customCats||[])
+    });
   }
-  function saveExpenses(exps){setExpenses(exps);saveAll(exps,undefined,undefined,undefined,undefined);}
-  function savePlans(p){setPlans(p);saveAll(undefined,p,undefined,undefined,undefined);}
-  function saveCustomCats(cats){setCustomCats(cats);saveAll(undefined,undefined,undefined,cats,undefined);}
-  function savePayments(pays){setPayments(pays);saveAll(undefined,undefined,undefined,undefined,pays);}
+  function saveCustomCats(cats){
+    setCustomCats(cats);
+    _saveSettings(settings,cats);
+  }
   function saveSettings(s){
-    var updated=expenses.map(function(e){return Object.assign({},e,{period:(!e.fromPlan&&e.date)?getPeriod(e.date,s.periods):(e.period||'Sin período')});});
+    var updated=expenses.map(function(e){
+      return Object.assign({},e,{period:(!e.fromPlan&&e.date)?getPeriod(e.date,s.periods):(e.period||'Sin período')});
+    });
     if(s.periods&&s.periods.length)updated=reassignPlanExpenses(updated,s.periods,plans);
-    setExpenses(updated);setSettings(s);saveAll(updated,undefined,s,undefined,undefined);
+    // Actualizar docs de gastos que cambiaron de período
+    updated.forEach(function(e,i){
+      if(e.period!==(expenses[i]&&expenses[i].period)){_saveExpense(e);}
+    });
+    setExpenses(updated);setSettings(s);
+    _saveSettings(s,customCats);
   }
   function showMsg(msg,ms){setSyncMsg(msg);setTimeout(function(){setSyncMsg('');},ms||5000);}
 
@@ -967,31 +1035,58 @@ export default function App(){
     showMsg('✓ CSV con '+filtered.length+' gastos descargado.');
   }
 
-  function handleAdd(expense){var s=sanitize(Object.assign({},expense,{id:Date.now().toString()}),allCats);saveExpenses([s].concat(expenses));setView('dashboard');}
+  function handleAdd(expense){
+    var s=sanitize(Object.assign({},expense,{id:Date.now().toString()}),allCats);
+    setExpenses([s].concat(expenses));
+    _saveExpense(s);
+    setView('dashboard');
+  }
   function handleAddPlan(formData,numInstallments,paidInstallments,manualStartPeriod){
     var paid=paidInstallments||0;
-    var remaining=numInstallments-paid;
     var installmentAmount=Math.round(safeN(formData.amount)/numInstallments);
     var amts=calcAmts(installmentAmount,formData.responsible);
-    // For retroactive plans the user picks startPeriod manually; for new plans derive from date.
     var startPeriod=manualStartPeriod||getPeriod(formData.date,settings.periods);
     var plan={id:'plan_'+Date.now(),description:formData.description,totalAmount:safeN(formData.amount),installmentAmount:installmentAmount,numInstallments:numInstallments,paidInstallments:paid,startPeriod:startPeriod,startDate:formData.date,currency:formData.currency||'ARS',paidBy:formData.paidBy,responsible:formData.responsible,paymentMethod:formData.paymentMethod,bank:formData.bank,category:formData.category,javiAmount:amts.javiAmount,laliAmount:amts.laliAmount,createdAt:new Date().toISOString()};
     var installments=generatePlanExpenses(plan,settings.periods);
-    var newPlans=plans.concat([plan]),newExps=installments.concat(expenses);
-    setPlans(newPlans);setExpenses(newExps);saveAll(newExps,newPlans,undefined,undefined,undefined);setView('dashboard');
+    // Batch: plan + todas las cuotas en una sola operación atómica
+    var batch=writeBatch(db);
+    batch.set(planDoc(plan.id),plan);
+    installments.forEach(function(inst){batch.set(expenseDoc(inst.id),inst);});
+    batch.commit();
+    setPlans(plans.concat([plan]));
+    setExpenses(installments.concat(expenses));
+    setView('dashboard');
   }
-  function handleEdit(expense){var s=sanitize(expense,allCats);saveExpenses(expenses.map(function(e){return e.id===s.id?s:e;}));setEditingExpense(null);setView('dashboard');}
+  function handleEdit(expense){
+    var s=sanitize(expense,allCats);
+    setExpenses(expenses.map(function(e){return e.id===s.id?s:e;}));
+    _saveExpense(s);
+    setEditingExpense(null);
+    setView('dashboard');
+  }
   function requestDelete(id,expense){setPendingDelete({id:id,expense:expense});}
-  function confirmDelete(){if(!pendingDelete)return;saveExpenses(expenses.filter(function(e){return e.id!==pendingDelete.id;}));setPendingDelete(null);}
+  function confirmDelete(){
+    if(!pendingDelete)return;
+    setExpenses(expenses.filter(function(e){return e.id!==pendingDelete.id;}));
+    _deleteExpense(pendingDelete.id);
+    setPendingDelete(null);
+  }
   function handleCancelPlan(planId){
-    var newPlans=plans.filter(function(p){return p.id!==planId;});
-    var newExps=expenses.filter(function(e){return e.planId!==planId;});
-    setPlans(newPlans);setExpenses(newExps);saveAll(newExps,newPlans,undefined,undefined,undefined);
+    var planExps=expenses.filter(function(e){return e.planId===planId;});
+    // Batch: borrar plan + todas sus cuotas atomicamente
+    var batch=writeBatch(db);
+    batch.delete(planDoc(planId));
+    planExps.forEach(function(e){batch.delete(expenseDoc(e.id));});
+    batch.commit();
+    setPlans(plans.filter(function(p){return p.id!==planId;}));
+    setExpenses(expenses.filter(function(e){return e.planId!==planId;}));
   }
   function handlePayment(currency,netBal){setPayModal({currency:currency,netBal:netBal});}
   function confirmPayment(paymentData){
-    var newPayments=payments.concat([paymentData]);
-    savePayments(newPayments);setPayModal(null);showMsg('✓ Pago registrado correctamente.');
+    setPayments(payments.concat([paymentData]));
+    _savePaymentDoc(paymentData);
+    setPayModal(null);
+    showMsg('✓ Pago registrado correctamente.');
   }
 
   if(loading)return React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:C.textMuted,fontFamily:F,background:C.bg,flexDirection:'column',gap:'1rem'}},React.createElement('div',{style:{fontSize:'2rem'}},'💑'),React.createElement('div',null,'Conectando...'));
@@ -1013,7 +1108,7 @@ export default function App(){
         React.createElement('div',{style:{fontWeight:900,fontSize:'1.9rem',color:C.white,lineHeight:1.1,fontFamily:F}},'💑 Javi & Lali'),
         React.createElement('div',{style:{fontSize:'0.75rem',color:'rgba(255,255,255,0.75)',fontFamily:F}},'Hola, ',React.createElement('span',{style:{fontWeight:900,color:C.white}},currentUser))
       ),
-      React.createElement('button',{onClick:function(){setCurrentUser(null);store.del('usr');},style:{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:'0.6rem',padding:'0.35rem 0.7rem',fontSize:'0.75rem',color:C.white,cursor:'pointer',fontFamily:F,fontWeight:700}},'Cambiar')
+      React.createElement('button',{onClick:function(){signOut(auth);},style:{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:'0.6rem',padding:'0.35rem 0.7rem',fontSize:'0.75rem',color:C.white,cursor:'pointer',fontFamily:F,fontWeight:700}},'Salir')
     ),
     syncMsg?React.createElement('div',{style:{margin:'0.75rem 1rem 0',padding:'0.6rem 0.85rem',background:syncMsg.startsWith('✓')?'#d4f5eb':'#fdf0d5',borderRadius:'0.75rem',fontSize:'0.8rem',color:syncMsg.startsWith('✓')?'#1a6e4f':'#7a5c1a',fontWeight:700,border:'1px solid '+(syncMsg.startsWith('✓')?'#a8e8cf':'#f0d898')}},syncMsg):null,
     // Content

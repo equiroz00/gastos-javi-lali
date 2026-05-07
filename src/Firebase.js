@@ -1,9 +1,6 @@
 // ── firebase.js ───────────────────────────────────────────────────────────────
-// Actualizá los valores de firebaseConfig con los de tu proyecto en Firebase Console
-// (Project Settings → Your apps → SDK setup and configuration)
- 
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -19,4 +16,8 @@ const app      = initializeApp(firebaseConfig);
 export const db       = getFirestore(app);
 export const auth     = getAuth(app);
 export const provider = new GoogleAuthProvider();
-export const dataDoc  = doc(db, 'appdata', 'main');
+
+// Nota: dataDoc (appdata/main) ya no se exporta.
+// Las referencias a colecciones se construyen en App.jsx con collection(db, '...').
+// Si existe appdata/main, la función runMigrationIfNeeded() en App.jsx lo migra
+// automáticamente a la nueva estructura la primera vez que un usuario autorizado inicia sesión.
