@@ -326,6 +326,7 @@ function LoginScreen(props){
 // ── BalanceSection ────────────────────────────────────────────────────────────
 function BalanceSection(props){
   var periodExps=props.periodExps||[],payments=props.payments||[];
+  var openState=useState(null);var openCur=openState[0];var setOpenCur=openState[1];
   var byCur={};
   periodExps.forEach(function(e){var c=e.currency||'ARS';if(!byCur[c])byCur[c]=[];byCur[c].push(e);});
   var curs=Object.keys(byCur);
@@ -340,16 +341,64 @@ function BalanceSection(props){
       var netBal=calcNetBal(periodExps,payments,c);
       var noDebt=Math.abs(netBal)<1,laliOwes=netBal>0;
       var bg=noDebt?'linear-gradient(135deg,#2d9e7f,#1db88c)':C.gradMain;
+      var isOpen=openCur===c;
+      var curExps=periodExps.filter(function(e){return (e.currency||'ARS')===c;});
+      var javiPaid=curExps.filter(function(e){return e.paidBy==='Javi';}).reduce(function(s,e){return s+safeN(e.amount);},0);
+      var laliPaid=curExps.filter(function(e){return e.paidBy==='Lali';}).reduce(function(s,e){return s+safeN(e.amount);},0);
+      var javiOwes=curExps.reduce(function(s,e){return s+safeN(e.javiAmount);},0);
+      var laliOwes2=curExps.reduce(function(s,e){return s+safeN(e.laliAmount);},0);
+      var payAdj=(payments||[]).filter(function(p){return (p.currency||'ARS')===c;});
       return React.createElement('div',{key:c},
-        React.createElement('div',{style:{borderRadius:'1.25rem',padding:'1rem 1.5rem',background:bg,color:C.white,boxShadow:'0 4px 16px rgba(0,0,0,0.15)'}},
-          React.createElement('p',{style:{fontSize:'0.7rem',opacity:0.8,margin:'0 0 0.1rem'}},'Balance '+c+' — período seleccionado'),
-          noDebt
-            ?React.createElement('div',{style:{fontSize:'1.3rem',fontWeight:800}},'¡Al día! 🎉')
-            :React.createElement(React.Fragment,null,
-                React.createElement('div',{style:{fontSize:'1.7rem',fontWeight:800}},fmt(netBal,c)),
-                React.createElement('div',{style:{fontSize:'0.82rem',opacity:0.9}},(laliOwes?'👩 Lali':'👨 Javi')+' le debe a '+(laliOwes?'👨 Javi':'👩 Lali'))
-              )
+        React.createElement('div',{onClick:function(){setOpenCur(isOpen?null:c);},style:{borderRadius:isOpen?'1.25rem 1.25rem 0 0':'1.25rem',padding:'1rem 1.5rem',background:bg,color:C.white,boxShadow:'0 4px 16px rgba(0,0,0,0.15)',cursor:'pointer',userSelect:'none'}},
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}},
+            React.createElement('div',null,
+              React.createElement('p',{style:{fontSize:'0.7rem',opacity:0.8,margin:'0 0 0.1rem'}},'Balance '+c+' — período seleccionado'),
+              noDebt
+                ?React.createElement('div',{style:{fontSize:'1.3rem',fontWeight:800}},'¡Al día! 🎉')
+                :React.createElement(React.Fragment,null,
+                    React.createElement('div',{style:{fontSize:'1.7rem',fontWeight:800}},fmt(netBal,c)),
+                    React.createElement('div',{style:{fontSize:'0.82rem',opacity:0.9}},(laliOwes?'👩 Lali':'👨 Javi')+' le debe a '+(laliOwes?'👨 Javi':'👩 Lali'))
+                  )
+            ),
+            React.createElement('div',{style:{fontSize:'0.72rem',opacity:0.7,marginTop:'0.25rem',flexShrink:0}},isOpen?'▲':'▼ ver')
+          )
         ),
+        isOpen?React.createElement('div',{style:{background:C.surface,borderRadius:'0 0 1.25rem 1.25rem',border:'1px solid '+C.border,borderTop:'none',padding:'0.85rem 1rem'}},
+          React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,fontWeight:700,marginBottom:'0.6rem',textTransform:'uppercase',letterSpacing:'0.05em'}},'Cómo se calculó'),
+          React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginBottom:'0.5rem'}},
+            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},
+              React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'👨 Javi pagó'),
+              React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiPaid,c))
+            ),
+            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},
+              React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'👩 Lali pagó'),
+              React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliPaid,c))
+            )
+          ),
+          React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginBottom:'0.5rem'}},
+            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},
+              React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'Corresponde a Javi'),
+              React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiOwes,c))
+            ),
+            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},
+              React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'Corresponde a Lali'),
+              React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliOwes2,c))
+            )
+          ),
+          payAdj.length>0?React.createElement('div',{style:{background:'#f0fdf4',borderRadius:'0.65rem',padding:'0.5rem 0.75rem',marginBottom:'0.5rem',border:'1px solid #bbf7d0'}},
+            React.createElement('div',{style:{fontSize:'0.68rem',color:'#166534',fontWeight:700,marginBottom:'0.2rem'}},'Pagos registrados en '+c+':'),
+            payAdj.map(function(p){return React.createElement('div',{key:p.id,style:{fontSize:'0.68rem',color:'#15803d'}},p.date+' — '+p.from+' pagó '+fmt(safeN(p.amount),c)+' a '+p.to);})
+          ):null,
+          React.createElement('div',{style:{borderTop:'1px dashed '+C.border,paddingTop:'0.5rem'}},
+            noDebt
+              ?React.createElement('div',{style:{fontSize:'0.8rem',color:'#2d9e7f',fontWeight:700,textAlign:'center'}},'✓ Todo está al día')
+              :React.createElement('div',{style:{fontSize:'0.8rem',color:C.navy,fontWeight:700}},
+                  (laliOwes?'Lali':'Javi')+' le debe ',
+                  React.createElement('span',{style:{color:C.accent}},fmt(Math.abs(netBal),c)),
+                  ' a '+(laliOwes?'Javi':'Lali')
+                )
+          )
+        ):null,
         !noDebt?React.createElement('button',{onClick:function(){props.onPayment(c,netBal);},style:{width:'100%',marginTop:'0.35rem',padding:'0.5rem',background:'transparent',border:'1px solid '+C.border,borderRadius:'0.75rem',color:C.navy,fontWeight:700,fontSize:'0.8rem',cursor:'pointer',fontFamily:F}},'💸 Registrar pago en '+c):null
       );
     })
