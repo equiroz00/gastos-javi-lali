@@ -27,9 +27,9 @@
 |-------|---------|--------|
 | Firebase Auth con Google Sign-In | `App.jsx` + `firebase.js` | ✅ Entregado |
 | Firestore Security Rules con whitelist de UIDs | `firestore.rules` | ✅ Entregado |
-| Habilitar Google como proveedor en Firebase Console | Manual | ⏳ Pendiente (vos) |
-| Obtener UIDs reales y reemplazar placeholders | Manual | ⏳ Pendiente (vos) |
-| Deploy de reglas con Firebase CLI o Console | Manual | ⏳ Pendiente (vos) |
+| Habilitar Google como proveedor en Firebase Console | Manual | ✅ Completado |
+| Obtener UIDs reales y reemplazar placeholders | Manual | ✅ Completado |
+| Deploy de reglas con Firebase CLI o Console | Manual | ✅ Completado |
 
 **Pasos manuales para completar este sprint:**
 1. Firebase Console → Authentication → Sign-in method → Google → Habilitar
