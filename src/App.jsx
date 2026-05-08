@@ -243,6 +243,21 @@ function ConfirmDialog(props){
   );
 }
 
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function Toast(props){
+  if(!props.toast)return null;
+  var t=props.toast;
+  return React.createElement('div',{style:{position:'fixed',bottom:'5.5rem',left:'50%',transform:'translateX(-50%)',zIndex:200,maxWidth:'340px',width:'calc(100% - 2rem)',pointerEvents:'none'}},
+    React.createElement('div',{style:{background:C.navy,color:C.white,borderRadius:'1rem',padding:'0.75rem 1rem',display:'flex',alignItems:'center',gap:'0.75rem',boxShadow:'0 8px 24px rgba(0,0,0,0.3)',fontFamily:F}},
+      React.createElement('div',{style:{fontSize:'1.4rem',flexShrink:0}},t.emoji),
+      React.createElement('div',{style:{flex:1,minWidth:0}},
+        React.createElement('div',{style:{fontWeight:700,fontSize:'0.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},t.description),
+        React.createElement('div',{style:{fontSize:'0.75rem',opacity:0.75,marginTop:'0.1rem'}},t.amount+' · guardado ✓')
+      )
+    )
+  );
+}
+
 // ── PaymentModal ──────────────────────────────────────────────────────────────
 function PaymentModal(props){
   var currency=props.currency||'ARS',netBal=props.netBal||0;
@@ -349,7 +364,10 @@ function BalanceSection(props){
       var laliOwes2=curExps.reduce(function(s,e){return s+safeN(e.laliAmount);},0);
       var payAdj=(payments||[]).filter(function(p){return (p.currency||'ARS')===c;});
       return React.createElement('div',{key:c},
-        React.createElement('div',{onClick:function(){setOpenCur(isOpen?null:c);},style:{borderRadius:isOpen?'1.25rem 1.25rem 0 0':'1.25rem',padding:'1rem 1.5rem',background:bg,color:C.white,boxShadow:'0 4px 16px rgba(0,0,0,0.15)',cursor:'pointer',userSelect:'none'}},
+        React.createElement('div',{
+          onClick:function(){setOpenCur(isOpen?null:c);},
+          style:{borderRadius:isOpen?'1.25rem 1.25rem 0 0':'1.25rem',padding:'1rem 1.5rem',background:bg,color:C.white,boxShadow:'0 4px 16px rgba(0,0,0,0.15)',cursor:'pointer',userSelect:'none'}
+        },
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}},
             React.createElement('div',null,
               React.createElement('p',{style:{fontSize:'0.7rem',opacity:0.8,margin:'0 0 0.1rem'}},'Balance '+c+' — período seleccionado'),
@@ -733,26 +751,25 @@ function History(props){
   );
 }
 
-// ── AddEditExpense ────────────────────────────────────────────────────────────
+// ── AddEditExpense (Wizard 2 pasos) ───────────────────────────────────────────
 function AddEditExpense(props){
   var currentUser=props.currentUser,settings=props.settings||{},allCats=props.allCats||DEFAULT_CATS;
   var customCats=props.customCats||[],onSaveCats=props.onSaveCats,isEdit=!!props.initialData;
   var initForm=props.initialData||{date:todayStr(),description:'',amount:'',category:allCats[0]||DEFAULT_CATS[0],paymentMethod:PAY_METHODS[0],bank:BANKS[0],paidBy:currentUser,responsible:'Ambos',currency:'ARS',customCurrency:''};
   var formState=useState(initForm);var form=formState[0];var setForm=formState[1];
   var errState=useState({});var errors=errState[0];var setErrors=errState[1];
+  var stepState=useState(isEdit?2:1);var step=stepState[0];var setStep=stepState[1];
   var newCatState=useState(false);var showNewCat=newCatState[0];var setShowNewCat=newCatState[1];
   var emojiState=useState('');var newCatEmoji=emojiState[0];var setNewCatEmoji=emojiState[1];
   var nameState=useState('');var newCatName=nameState[0];var setNewCatName=nameState[1];
   var cuotaState=useState(false);var useCuotas=cuotaState[0];var setUseCuotas=cuotaState[1];
   var numState=useState(12);var numCuotas=numState[0];var setNumCuotas=numState[1];
   var custNumState=useState('');var customCuotas=custNumState[0];var setCustomCuotas=custNumState[1];
-  // Retroactive installments
   var retroState=useState(false);var isRetro=retroState[0];var setIsRetro=retroState[1];
   var paidState=useState('');var retroPaid=paidState[0];var setRetroPaid=paidState[1];
   var retroPerState=useState('');var retroStartPer=retroPerState[0];var setRetroStartPer=retroPerState[1];
 
   function set(k,v){setForm(function(f){var next=Object.assign({},f);next[k]=v;return next;});}
-
   var periods=settings.periods||[];
   var finalCuotas=customCuotas?parseInt(customCuotas)||numCuotas:numCuotas;
   var paidNum=isRetro?(parseInt(retroPaid)||0):0;
@@ -762,8 +779,22 @@ function AddEditExpense(props){
   var javiAmount=amts.javiAmount,laliAmount=amts.laliAmount;
   var showSplit=form.amount&&parseFloat(form.amount)>0;
   var installmentAmt=showSplit&&useCuotas?Math.round(parseFloat(form.amount)/finalCuotas):0;
+  var btnLabel=isEdit?'Guardar cambios ✓':(useCuotas?'Registrar '+remaining+' cuota'+(remaining!==1?'s':'')+' ✓':'Guardar gasto ✓');
+
+  var inpStyle=function(extra){return Object.assign({width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface},extra||{});};
+  var selStyle={width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',background:C.surface,boxSizing:'border-box',fontFamily:F,color:C.navy};
+  function Lbl(text){return React.createElement('label',{style:{fontSize:'0.8rem',color:C.textMuted,fontWeight:700,display:'block',marginBottom:'0.35rem',marginTop:'0.75rem'}},text);}
 
   function addNewCat(){if(!newCatName.trim())return;var cat=(newCatEmoji||'📌')+' '+newCatName.trim();onSaveCats(customCats.concat([cat]));set('category',cat);setNewCatEmoji('');setNewCatName('');setShowNewCat(false);}
+
+  function goToStep2(){
+    var e={};
+    if(!form.description.trim())e.description='Requerido';
+    if(!form.amount||parseFloat(form.amount)<=0)e.amount='Monto inválido';
+    if(Object.keys(e).length){setErrors(e);return;}
+    setErrors({});setStep(2);
+  }
+
   function submit(){
     var e={};
     if(!form.description.trim())e.description='Requerido';
@@ -774,34 +805,42 @@ function AddEditExpense(props){
     var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;
     var base=Object.assign({},form,{id:isEdit?form.id:Date.now().toString(),amount:parseFloat(form.amount),javiAmount:javiAmount,laliAmount:laliAmount,currency:finalCur,period:getPeriod(form.date,settings.periods)});
     if(!isEdit){base.createdBy=currentUser;base.createdAt=new Date().toISOString();}
-    if(!isEdit&&useCuotas&&finalCuotas>1){
-      props.onSubmitPlan(base,finalCuotas,isRetro?paidNum:0,isRetro?retroStartPer:null);
-    }else{
-      props.onSubmit(base);
-    }
+    if(!isEdit&&useCuotas&&finalCuotas>1){props.onSubmitPlan(base,finalCuotas,isRetro?paidNum:0,isRetro?retroStartPer:null);}
+    else{props.onSubmit(base);}
   }
-  var inpStyle=function(extra){return Object.assign({width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface},extra||{});};
-  var selStyle={width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',background:C.surface,boxSizing:'border-box',fontFamily:F,color:C.navy};
-  function Lbl(text){return React.createElement('label',{style:{fontSize:'0.8rem',color:C.textMuted,fontWeight:700,display:'block',marginBottom:'0.35rem',marginTop:'0.75rem'}},text);}
 
-  // Determine submit button label
-  var btnLabel;
-  if(isEdit){btnLabel='Guardar cambios ✓';}
-  else if(useCuotas){btnLabel='Registrar '+remaining+' cuota'+(remaining!==1?'s':'')+' ✓';}
-  else{btnLabel='Guardar gasto ✓';}
-
-  return React.createElement('div',{style:{padding:'1rem',paddingBottom:'2rem'}},
-    React.createElement('h2',{style:{fontWeight:900,fontSize:'1.2rem',color:C.navy,marginBottom:'0.5rem'}},isEdit?'✏️ Editar gasto':'Nuevo gasto'),
-    Lbl('Descripción'),React.createElement('input',{style:inpStyle({borderColor:errors.description?'#c0314f':C.border}),value:form.description,onChange:function(e){set('description',e.target.value);},placeholder:'Ej: Almuerzo en Lo de Juan'}),
+  // ── Paso 1 ────────────────────────────────────────────────────────────────
+  var step1=React.createElement('div',null,
+    React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,fontWeight:700,textAlign:'center',letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:'1rem'}},'Paso 1 de 2 — Lo esencial'),
+    Lbl('Descripción'),
+    React.createElement('input',{style:inpStyle({borderColor:errors.description?'#c0314f':C.border}),value:form.description,onChange:function(e){set('description',e.target.value);setErrors({});},placeholder:'Ej: Almuerzo en Lo de Juan'}),
     errors.description?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.7rem',margin:'0.15rem 0 0'}},'⚠ '+errors.description):null,
-    Lbl('Monto total'),React.createElement('input',{style:inpStyle({borderColor:errors.amount?'#c0314f':C.border}),type:'number',value:form.amount,onChange:function(e){set('amount',e.target.value);},placeholder:'0'}),
+    Lbl('Monto total'),
+    React.createElement('input',{style:inpStyle({borderColor:errors.amount?'#c0314f':C.border}),type:'number',value:form.amount,onChange:function(e){set('amount',e.target.value);setErrors({});},placeholder:'0'}),
     errors.amount?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.7rem',margin:'0.15rem 0 0'}},'⚠ '+errors.amount):null,
-    Lbl('Moneda'),React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap'}},BASE_CURS.concat(['Otra']).map(function(c){return React.createElement('button',{key:c,onClick:function(){set('currency',c);},style:{padding:'0.4rem 0.85rem',fontSize:'0.78rem',borderRadius:'0.75rem',border:'1px solid',cursor:'pointer',fontWeight:form.currency===c?800:500,fontFamily:F,background:form.currency===c?C.navy:'transparent',borderColor:form.currency===c?C.navy:C.border,color:form.currency===c?C.white:C.navy}},c);})),
+    Lbl('Moneda'),
+    React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap'}},BASE_CURS.concat(['Otra']).map(function(c){return React.createElement('button',{key:c,onClick:function(){set('currency',c);},style:{padding:'0.4rem 0.85rem',fontSize:'0.78rem',borderRadius:'0.75rem',border:'1px solid',cursor:'pointer',fontWeight:form.currency===c?800:500,fontFamily:F,background:form.currency===c?C.navy:'transparent',borderColor:form.currency===c?C.navy:C.border,color:form.currency===c?C.white:C.navy}},c);})),
     form.currency==='Otra'?React.createElement('input',{style:inpStyle({marginTop:'0.4rem'}),value:form.customCurrency||'',onChange:function(e){set('customCurrency',e.target.value.toUpperCase());},placeholder:'Ej: BRL, GBP...',maxLength:5}):null,
-    Lbl('Fecha'),React.createElement('input',{style:inpStyle(),type:'date',value:form.date,onChange:function(e){set('date',e.target.value);}}),
+    Lbl('Fecha'),
+    React.createElement('input',{style:inpStyle(),type:'date',value:form.date,onChange:function(e){set('date',e.target.value);}}),
+    settings.periods&&settings.periods.length?React.createElement('div',{style:{textAlign:'center',fontSize:'0.75rem',color:C.textMuted,marginTop:'0.5rem'}},'Período: ',React.createElement('strong',{style:{color:C.navy}},getPeriod(form.date,settings.periods))):null,
+    React.createElement('button',{onClick:submit,style:{width:'100%',padding:'1rem',background:C.gradMain,color:C.white,border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:F,boxShadow:'0 4px 12px rgba(0,0,0,0.15)',marginTop:'1rem'}},'Guardar gasto ✓'),
+    React.createElement('button',{onClick:goToStep2,style:{width:'100%',padding:'0.75rem',background:'transparent',border:'1px solid '+C.border,borderRadius:'1rem',color:C.navy,fontWeight:700,fontSize:'0.88rem',cursor:'pointer',fontFamily:F,marginTop:'0.5rem'}},'Más detalles ▶'),
+    React.createElement('button',{onClick:props.onCancel,style:{width:'100%',padding:'0.6rem',background:'none',border:'none',color:C.textMuted,fontSize:'0.85rem',cursor:'pointer',fontFamily:F,marginTop:'0.1rem'}},'Cancelar')
+  );
+
+  // ── Paso 2 ────────────────────────────────────────────────────────────────
+  var step2=React.createElement('div',null,
+    React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,fontWeight:700,textAlign:'center',letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:'0.75rem'}},isEdit?'Editar gasto':'Paso 2 de 2 — Detalles'),
+    React.createElement('div',{style:{background:C.bg,borderRadius:'0.85rem',padding:'0.65rem 0.9rem',marginBottom:'0.75rem',border:'1px solid '+C.border,display:'flex',justifyContent:'space-between',alignItems:'center'}},
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontWeight:700,color:C.navy,fontSize:'0.88rem'}},form.description||'Sin descripción'),
+        React.createElement('div',{style:{fontSize:'0.72rem',color:C.textMuted,marginTop:'0.1rem'}},form.date+(form.amount?' · '+fmt(parseFloat(form.amount)||0,cur):''))
+      ),
+      !isEdit?React.createElement('button',{onClick:function(){setStep(1);},style:{background:'transparent',border:'1px solid '+C.border,borderRadius:'0.6rem',padding:'0.2rem 0.6rem',fontSize:'0.7rem',color:C.textMuted,cursor:'pointer',fontFamily:F,fontWeight:700,flexShrink:0,marginLeft:'0.5rem'}},'✏️ Editar'):null
+    ),
     Lbl('Categoría'),
-    React.createElement('select',{value:form.category,onChange:function(e){set('category',e.target.value);},style:selStyle},
-      allCats.map(function(c){return React.createElement('option',{key:c,value:c},c);})),
+    React.createElement('select',{value:form.category,onChange:function(e){set('category',e.target.value);},style:selStyle},allCats.map(function(c){return React.createElement('option',{key:c,value:c},c);})),
     !showNewCat
       ?React.createElement('button',{onClick:function(){setShowNewCat(true);},style:{marginTop:'0.5rem',background:'transparent',border:'1px dashed '+C.accent,borderRadius:'0.65rem',color:C.accent,fontSize:'0.72rem',fontWeight:700,cursor:'pointer',padding:'0.35rem 0.75rem',fontFamily:F,display:'block'}},'➕ Nueva categoría')
       :React.createElement('div',{style:{marginTop:'0.5rem',background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',display:'flex',gap:'0.4rem',alignItems:'center',border:'1px solid '+C.border}},
@@ -811,6 +850,11 @@ function AddEditExpense(props){
           React.createElement('button',{onClick:function(){setShowNewCat(false);},style:{background:'none',border:'none',color:C.textMuted,cursor:'pointer',fontSize:'0.9rem'}},'✕')),
     Lbl('Medio de pago'),React.createElement('select',{value:form.paymentMethod,onChange:function(e){set('paymentMethod',e.target.value);},style:selStyle},PAY_METHODS.map(function(m){return React.createElement('option',{key:m},m);})),
     Lbl('Banco / Billetera'),React.createElement('select',{value:form.bank,onChange:function(e){set('bank',e.target.value);},style:selStyle},BANKS.map(function(b){return React.createElement('option',{key:b},b);})),
+    Lbl('¿Quién pagó?'),
+    React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:form.paidBy==='Javi',color:C.navy,onClick:function(){set('paidBy','Javi');}},'👨 Javi'),React.createElement(SegBtn,{active:form.paidBy==='Lali',color:C.accent,onClick:function(){set('paidBy','Lali');}},'👩 Lali')),
+    Lbl('¿Quién es responsable?'),
+    React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:form.responsible==='Javi',color:C.navy,onClick:function(){set('responsible','Javi');}},'👨 Javi'),React.createElement(SegBtn,{active:form.responsible==='Ambos',color:C.navy,onClick:function(){set('responsible','Ambos');}},'👫 Ambos'),React.createElement(SegBtn,{active:form.responsible==='Lali',color:C.accent,onClick:function(){set('responsible','Lali');}},'👩 Lali')),
+    showSplit&&!useCuotas?React.createElement('div',{style:{background:C.bg,borderRadius:'1rem',padding:'0.85rem 1rem',display:'flex',justifyContent:'space-between',marginTop:'0.75rem',border:'1px solid '+C.border}},React.createElement('div',{style:{textAlign:'center',flex:1}},React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'👨 Javi'),React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiAmount,cur))),React.createElement('div',{style:{width:'1px',background:C.border}}),React.createElement('div',{style:{textAlign:'center',flex:1}},React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'👩 Lali'),React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliAmount,cur)))):null,
     !isEdit?React.createElement(React.Fragment,null,
       Lbl('¿Pago en cuotas?'),
       React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},
@@ -819,19 +863,13 @@ function AddEditExpense(props){
       useCuotas?React.createElement('div',{style:{background:C.bg,borderRadius:'1rem',padding:'0.85rem',marginTop:'0.5rem',border:'1px solid '+C.border}},
         React.createElement('div',{style:{fontSize:'0.78rem',color:C.navy,fontWeight:700,marginBottom:'0.5rem'}},'Cantidad de cuotas totales'),
         React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap',marginBottom:'0.5rem'}},
-          CUOTA_OPTS.map(function(n){
-            var active=numCuotas===n&&!customCuotas;
-            return React.createElement('button',{key:n,onClick:function(){setNumCuotas(n);setCustomCuotas('');},style:{padding:'0.35rem 0.65rem',fontSize:'0.78rem',borderRadius:'0.65rem',border:'1px solid',cursor:'pointer',fontFamily:F,fontWeight:active?800:500,background:active?C.navy:'transparent',borderColor:active?C.navy:C.border,color:active?C.white:C.navy}},n);
-          }),
+          CUOTA_OPTS.map(function(n){var active=numCuotas===n&&!customCuotas;return React.createElement('button',{key:n,onClick:function(){setNumCuotas(n);setCustomCuotas('');},style:{padding:'0.35rem 0.65rem',fontSize:'0.78rem',borderRadius:'0.65rem',border:'1px solid',cursor:'pointer',fontFamily:F,fontWeight:active?800:500,background:active?C.navy:'transparent',borderColor:active?C.navy:C.border,color:active?C.white:C.navy}},n);}),
           React.createElement('input',{type:'number',value:customCuotas,onChange:function(e){setCustomCuotas(e.target.value);},placeholder:'Otra',min:2,max:60,style:{width:'4rem',border:'1px solid '+(customCuotas?C.navy:C.border),borderRadius:'0.65rem',padding:'0.35rem 0.5rem',fontSize:'0.78rem',outline:'none',fontFamily:F,color:C.navy,background:customCuotas?C.beige:'transparent',textAlign:'center'}})
         ),
-        // Retroactive toggle
         React.createElement('div',{style:{borderTop:'1px solid '+C.border,paddingTop:'0.6rem',marginTop:'0.35rem'}},
           React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginBottom:isRetro?'0.6rem':0}},
-            React.createElement(SegBtn,{active:!isRetro,color:C.navy,onClick:function(){setIsRetro(false);}},
-              '🆕 Compra nueva'),
-            React.createElement(SegBtn,{active:isRetro,color:'#b45309',onClick:function(){setIsRetro(true);}},
-              '🕐 Cuotas del pasado')
+            React.createElement(SegBtn,{active:!isRetro,color:C.navy,onClick:function(){setIsRetro(false);}},'🆕 Compra nueva'),
+            React.createElement(SegBtn,{active:isRetro,color:'#b45309',onClick:function(){setIsRetro(true);}},'🕐 Cuotas del pasado')
           ),
           isRetro?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',flexDirection:'column',gap:'0.45rem'}},
             React.createElement('div',{style:{fontSize:'0.75rem',color:'#92400e',fontWeight:700}},'Indicá cuántas cuotas ya se pagaron y a partir de qué período continúan.'),
@@ -844,26 +882,23 @@ function AddEditExpense(props){
               periods.slice().reverse().map(function(p){return React.createElement('option',{key:p.name,value:p.name},p.name);})),
             errors.retroStartPer?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.7rem',margin:0}},'⚠ '+errors.retroStartPer):null,
             remaining>0?React.createElement('div',{style:{background:C.bg,borderRadius:'0.6rem',padding:'0.45rem 0.6rem',border:'1px dashed '+C.border,fontSize:'0.75rem',color:C.navy,fontWeight:700}},
-              'Se registrarán ',React.createElement('span',{style:{color:'#b45309'}},remaining),' cuota'+(remaining!==1?'s ':' ')+' pendiente'+(remaining!==1?'s ':' ')+'('+( paidNum+1)+' a '+finalCuotas+')'
+              'Se registrarán ',React.createElement('span',{style:{color:'#b45309'}},remaining),' cuota'+(remaining!==1?'s ':' ')+'pendiente'+(remaining!==1?'s ':' ')+'('+(paidNum+1)+' a '+finalCuotas+')'
             ):null
           ):null
         ),
         showSplit?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'0.5rem'}},
-          React.createElement('div',null,
-            React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'Por cuota'),
-            React.createElement('div',{style:{fontWeight:900,color:C.navy,fontSize:'1.1rem'}},fmt(installmentAmt,cur))),
-          React.createElement('div',{style:{fontSize:'0.75rem',color:C.textMuted,textAlign:'right'}},
-            React.createElement('div',null,finalCuotas+' cuotas totales'),
-            React.createElement('div',{style:{fontWeight:700,color:C.navy}},'Total: '+fmt(parseFloat(form.amount)||0,cur)))
+          React.createElement('div',null,React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'Por cuota'),React.createElement('div',{style:{fontWeight:900,color:C.navy,fontSize:'1.1rem'}},fmt(installmentAmt,cur))),
+          React.createElement('div',{style:{fontSize:'0.75rem',color:C.textMuted,textAlign:'right'}},React.createElement('div',null,finalCuotas+' cuotas totales'),React.createElement('div',{style:{fontWeight:700,color:C.navy}},'Total: '+fmt(parseFloat(form.amount)||0,cur)))
         ):null
       ):null
     ):null,
-    Lbl('¿Quién pagó?'),React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:form.paidBy==='Javi',color:C.navy,onClick:function(){set('paidBy','Javi');}},'👨 Javi'),React.createElement(SegBtn,{active:form.paidBy==='Lali',color:C.accent,onClick:function(){set('paidBy','Lali');}},'👩 Lali')),
-    Lbl('¿Quién es responsable?'),React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},React.createElement(SegBtn,{active:form.responsible==='Javi',color:C.navy,onClick:function(){set('responsible','Javi');}},'👨 Javi'),React.createElement(SegBtn,{active:form.responsible==='Ambos',color:C.navy,onClick:function(){set('responsible','Ambos');}},'👫 Ambos'),React.createElement(SegBtn,{active:form.responsible==='Lali',color:C.accent,onClick:function(){set('responsible','Lali');}},'👩 Lali')),
-    showSplit&&!useCuotas?React.createElement('div',{style:{background:C.bg,borderRadius:'1rem',padding:'0.85rem 1rem',display:'flex',justifyContent:'space-between',marginTop:'0.75rem',border:'1px solid '+C.border}},React.createElement('div',{style:{textAlign:'center',flex:1}},React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'👨 Javi'),React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiAmount,cur))),React.createElement('div',{style:{width:'1px',background:C.border}}),React.createElement('div',{style:{textAlign:'center',flex:1}},React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted}},'👩 Lali'),React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliAmount,cur)))):null,
-    settings.periods&&settings.periods.length?React.createElement('div',{style:{textAlign:'center',fontSize:'0.75rem',color:C.textMuted,marginTop:'0.5rem'}},'Período: ',React.createElement('strong',{style:{color:C.navy}},getPeriod(form.date,settings.periods))):null,
     React.createElement('button',{onClick:submit,style:{width:'100%',padding:'1rem',background:C.gradMain,color:C.white,border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:F,boxShadow:'0 4px 12px rgba(0,0,0,0.15)',marginTop:'1rem'}},btnLabel),
     React.createElement('button',{onClick:props.onCancel,style:{width:'100%',padding:'0.75rem',background:'none',border:'none',color:C.textMuted,fontSize:'0.9rem',cursor:'pointer',fontFamily:F,marginTop:'0.25rem'}},'Cancelar')
+  );
+
+  return React.createElement('div',{style:{padding:'1rem',paddingBottom:'2rem'}},
+    React.createElement('h2',{style:{fontWeight:900,fontSize:'1.2rem',color:C.navy,marginBottom:'0.5rem'}},isEdit?'✏️ Editar gasto':'Nuevo gasto'),
+    step===1?step1:step2
   );
 }
 
@@ -976,6 +1011,7 @@ export default function App(){
   var editState=useState(null);var editingExpense=editState[0];var setEditingExpense=editState[1];
   var delState=useState(null);var pendingDelete=delState[0];var setPendingDelete=delState[1];
   var payModalState=useState(null);var payModal=payModalState[0];var setPayModal=payModalState[1];
+  var toastState=useState(null);var toast=toastState[0];var setToast=toastState[1];
   var redirectingState=useState(false);var redirecting=redirectingState[0];var setRedirecting=redirectingState[1];
 
   // Apply theme before render
@@ -1072,6 +1108,11 @@ export default function App(){
     _saveSettings(s,customCats);
   }
   function showMsg(msg,ms){setSyncMsg(msg);setTimeout(function(){setSyncMsg('');},ms||5000);}
+  function showToast(exp){
+    var t={emoji:catEm(exp.category),description:exp.description||'Gasto guardado',amount:fmt(safeN(exp.amount),exp.currency||'ARS')};
+    setTimeout(function(){setToast(t);},300);
+    setTimeout(function(){setToast(null);},2800);
+  }
 
   function exportCSV(from,to){
     var filtered=expenses.filter(function(e){if(!e.date)return false;if(from&&e.date<from)return false;if(to&&e.date>to)return false;return true;});
@@ -1088,6 +1129,7 @@ export default function App(){
     var s=sanitize(Object.assign({},expense,{id:Date.now().toString()}),allCats);
     setExpenses([s].concat(expenses));
     _saveExpense(s);
+    showToast(s);
     setView('dashboard');
   }
   function handleAddPlan(formData,numInstallments,paidInstallments,manualStartPeriod){
@@ -1110,6 +1152,7 @@ export default function App(){
     var s=sanitize(expense,allCats);
     setExpenses(expenses.map(function(e){return e.id===s.id?s:e;}));
     _saveExpense(s);
+    showToast(s);
     setEditingExpense(null);
     setView('dashboard');
   }
@@ -1151,6 +1194,7 @@ export default function App(){
     // Modals
     React.createElement(ConfirmDialog,{expense:pendingDelete?pendingDelete.expense:null,onCancel:function(){setPendingDelete(null);},onConfirm:confirmDelete}),
     payModal?React.createElement(PaymentModal,{currency:payModal.currency,netBal:payModal.netBal,onCancel:function(){setPayModal(null);},onConfirm:confirmPayment}):null,
+    React.createElement(Toast,{toast:toast}),
     // Header
     React.createElement('div',{style:{background:C.gradMain,padding:'0.75rem 1rem',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:10,boxShadow:'0 2px 12px rgba(0,0,0,0.2)'}},
       React.createElement('div',null,
