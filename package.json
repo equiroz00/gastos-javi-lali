@@ -15,7 +15,8 @@
     "firebase": "^12.12.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.15.4"
+    "recharts": "^2.15.4",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
