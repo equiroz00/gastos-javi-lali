@@ -1,6 +1,7 @@
-// ── constants.js ──────────────────────────────────────────────────────────────
+// ── src/constants.ts ──────────────────────────────────────────────────────────
+import type { ThemeConfig, FontConfig, ThemeKey, FontKey } from './types.js';
 
-export var THEMES = {
+export const THEMES: Record<ThemeKey, ThemeConfig> = {
   default:  { label:'Original',  emoji:'💜', bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#DED1C6', textMuted:'#8a7a85', border:'#DED1C6', white:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)' },
   amanecer: { label:'Amanecer',  emoji:'🌅', bg:'#f0f0fa', surface:'#ffffff', navy:'#2d3250', accent:'#f9b17a', beige:'#e4e4f5', textMuted:'#676fad', border:'#dcdcf0', white:'#FFFFFF', gradMain:'linear-gradient(135deg,#2d3250,#424769)', gradJavi:'linear-gradient(135deg,#424769,#2d3250)', gradLali:'linear-gradient(135deg,#f9b17a,#e09850)' },
   bosque:   { label:'Bosque',    emoji:'🌿', bg:'#051f20', surface:'#0b2b26', navy:'#daf1de', accent:'#8eb69b', beige:'#163832', textMuted:'#6a9a7a', border:'#1e4035', white:'#FFFFFF', gradMain:'linear-gradient(135deg,#163832,#235347)', gradJavi:'linear-gradient(135deg,#235347,#163832)', gradLali:'linear-gradient(135deg,#8eb69b,#5a8a6b)' },
@@ -9,7 +10,7 @@ export var THEMES = {
   noche:    { label:'Noche',     emoji:'🌙', bg:'#17181d', surface:'#292c35', navy:'#fcd9b8', accent:'#e09145', beige:'#35383f', textMuted:'#9a9080', border:'#3a3d46', white:'#FFFFFF', gradMain:'linear-gradient(135deg,#292c35,#17181d)', gradJavi:'linear-gradient(135deg,#e09145,#c07530)', gradLali:'linear-gradient(135deg,#fcd9b8,#e8b890)' },
 };
 
-export var FONTS = {
+export const FONTS: Record<FontKey, FontConfig> = {
   Nunito:        { label:'Nunito',          url:'Nunito:wght@400;600;700;800;900',           css:"'Nunito',sans-serif" },
   Montserrat:    { label:'Montserrat',      url:'Montserrat:wght@400;600;700;800;900',       css:"'Montserrat',sans-serif" },
   Quicksand:     { label:'Quicksand',       url:'Quicksand:wght@400;600;700',                css:"'Quicksand',sans-serif" },
@@ -25,28 +26,28 @@ export var FONTS = {
   Oswald:        { label:'Oswald',          url:'Oswald:wght@400;600;700',                   css:"'Oswald',sans-serif" },
 };
 
-export var PALETTE      = ['#174871','#A77693','#4a9d8f','#d4875a','#7b5fa0','#c4965a','#5a8fa0','#a05a6e','#4a7a5a','#9a7040'];
-export var DEFAULT_CATS = ['🏠 Hogar','🍕 Alimentación','🔑 Arriendo','💡 Servicios Públicos','🚌 Transporte','🎬 Entretenimiento','👥 Amigos','💆 Cuidado Personal','💪 Gimnasio','💊 Farmacia','👶 Hijito','👕 Ropa'];
-export var PAY_METHODS  = ['Efectivo','TC Visa Laura','TC Master Card Laura','TC Visa Extensión','TC Master Card Extensión','Dinero en Cuenta','TC Visa Javi','TC Amex Javi','TC Amex Laura'];
-export var BANKS        = ['Banco Nación','Banco Provincia','Banco Ciudad','Banco Credicoop','Galicia','Macro','Supervielle','Patagonia','Comafi','Hipotecario','Naranja X','Santander','BBVA','HSBC','Itaú','ICBC','Mercado Pago','Ualá','Brubank','Lemon','Personal Pay','Otro'];
-export var BASE_CURS    = ['ARS','USD','EUR'];
-export var CUR_SYM      = { ARS:'$', USD:'US$', EUR:'€' };
-export var CUOTA_OPTS   = [3,6,9,12,18,24];
-export var CHART_TYPES  = ['Tabla','Barras','Radar','Torta'];
-export var PENDING_PER  = '⏳ Pendiente';
+export const PALETTE: string[]      = ['#174871','#A77693','#4a9d8f','#d4875a','#7b5fa0','#c4965a','#5a8fa0','#a05a6e','#4a7a5a','#9a7040'];
+export const DEFAULT_CATS: string[] = ['🏠 Hogar','🍕 Alimentación','🔑 Arriendo','💡 Servicios Públicos','🚌 Transporte','🎬 Entretenimiento','👥 Amigos','💆 Cuidado Personal','💪 Gimnasio','💊 Farmacia','👶 Hijito','👕 Ropa'];
+export const PAY_METHODS: string[]  = ['Efectivo','TC Visa Laura','TC Master Card Laura','TC Visa Extensión','TC Master Card Extensión','Dinero en Cuenta','TC Visa Javi','TC Amex Javi','TC Amex Laura'];
+export const BANKS: string[]        = ['Banco Nación','Banco Provincia','Banco Ciudad','Banco Credicoop','Galicia','Macro','Supervielle','Patagonia','Comafi','Hipotecario','Naranja X','Santander','BBVA','HSBC','Itaú','ICBC','Mercado Pago','Ualá','Brubank','Lemon','Personal Pay','Otro'];
+export const BASE_CURS: string[]    = ['ARS','USD','EUR'];
+export const CUR_SYM: Record<string, string> = { ARS:'$', USD:'US$', EUR:'€' };
+export const CUOTA_OPTS: number[]   = [3,6,9,12,18,24];
+export const CHART_TYPES: string[]  = ['Tabla','Barras','Radar','Torta'];
+export const PENDING_PER            = '⏳ Pendiente';
 
-export var USER_MAP = {
+export const USER_MAP: Record<string, string> = {
   'h0FlnAU3wabBCTztmPXdLyFW6R42': 'Javi',
   'JjDJiAjLmVSc0WODsfvULRLT59s2': 'Lali',
 };
 
-// ── Mutable theme globals — actualizados antes de cada render ─────────────────
-export var C = { bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#DED1C6', textMuted:'#8a7a85', border:'#DED1C6', white:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)' };
-export var F = "'Nunito',sans-serif";
+// ── Mutable theme globals ─────────────────────────────────────────────────────
+export const C: ThemeConfig = { ...THEMES.default };
+export let F: string = "'Nunito',sans-serif";
 
-export function applyTheme(themeKey, fontKey) {
-  var t = THEMES[themeKey] || THEMES.default;
-  Object.keys(t).forEach(function(k){ C[k] = t[k]; });
-  var fd = FONTS[fontKey] || FONTS.Nunito;
+export function applyTheme(themeKey: string, fontKey: string): void {
+  const t = THEMES[themeKey as ThemeKey] || THEMES.default;
+  (Object.keys(t) as (keyof ThemeConfig)[]).forEach(k => { (C as Record<string, string>)[k] = t[k]; });
+  const fd = FONTS[fontKey as FontKey] || FONTS.Nunito;
   F = fd.css;
 }
