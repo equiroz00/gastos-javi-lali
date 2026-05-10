@@ -1,8 +1,8 @@
 // ── components/History.jsx ────────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, PENDING_PER } from '../constants.js';
-import { fmt, safeN, calcBal, sortByDate } from '../lib/helpers.js';
-import useAppStore from '../store/useAppStore.js';
+import { C, F, PENDING_PER } from '../constants';
+import { fmt, safeN, calcBal, sortByDate } from '../lib/helpers';
+import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter } from './ui.jsx';
 import ExpenseList from './ExpenseList.jsx';
 
