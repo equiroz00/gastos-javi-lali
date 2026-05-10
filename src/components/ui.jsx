@@ -1,8 +1,8 @@
 // ── components/ui.jsx ─────────────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, CHART_TYPES } from '../constants.js';
-import { fmt, safeN, catLb } from '../lib/helpers.js';
-import useAppStore from '../store/useAppStore.js';
+import { C, F, CHART_TYPES } from '../constants';
+import { fmt, safeN, catLb } from '../lib/helpers';
+import useAppStore from '../store/useAppStore';
 import { auth } from '../firebase.js';
 import { signOut } from 'firebase/auth';
 
