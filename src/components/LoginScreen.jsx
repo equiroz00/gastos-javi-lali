@@ -1,6 +1,6 @@
 // ── components/LoginScreen.jsx ────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
-import { C, F, FONTS } from '../constants.js';
+import { C, F, FONTS } from '../constants';
 import { auth, provider } from '../firebase.js';
 import { signInWithPopup, signOut } from 'firebase/auth';
 
