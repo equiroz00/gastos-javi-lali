@@ -4,9 +4,9 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PieChart, Pie, Cell
 } from 'recharts';
-import { C, F, PALETTE, PENDING_PER } from '../constants.js';
-import { fmtS, safeN, catEm, catLb, normCat, calcBal, lastPayment, pctChange } from '../lib/helpers.js';
-import useAppStore from '../store/useAppStore.js';
+import { C, F, PALETTE, PENDING_PER } from '../constants';
+import { fmtS, safeN, catEm, catLb, normCat, calcBal, lastPayment, pctChange } from '../lib/helpers';
+import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter, ChartSelector } from './ui.jsx';
 
 function TablaCategoria(props){

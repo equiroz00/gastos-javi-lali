@@ -1,8 +1,8 @@
 // ── components/AddEditExpense.jsx ─────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS, PENDING_PER } from '../constants.js';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, catEm } from '../lib/helpers.js';
-import useAppStore from '../store/useAppStore.js';
+import { C, F, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS, PENDING_PER } from '../constants';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, catEm } from '../lib/helpers';
+import useAppStore from '../store/useAppStore';
 import { SegBtn } from './ui.jsx';
 
 export default function AddEditExpense(props){

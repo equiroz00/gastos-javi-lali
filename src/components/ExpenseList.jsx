@@ -1,7 +1,7 @@
 // ── components/ExpenseList.jsx ────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, PENDING_PER } from '../constants.js';
-import { fmt, safeN, catEm, catLb } from '../lib/helpers.js';
+import { C, F, PENDING_PER } from '../constants';
+import { fmt, safeN, catEm, catLb } from '../lib/helpers';
 
 function ExpenseRow(props){
   var e=props.expense,cur=e.currency||'ARS';
