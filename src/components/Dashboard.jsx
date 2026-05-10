@@ -1,7 +1,7 @@
 // ── components/Dashboard.jsx ──────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { C, F, DEFAULT_CATS, PENDING_PER } from '../constants';
-import { fmt, fmtS, safeN, catEm, catLb, calcBal, calcNetBal, sortByDate, getWeekStart, normCat } from '../lib/helpers.js';
+import { fmt, fmtS, safeN, catEm, catLb, calcBal, calcNetBal, sortByDate, getWeekStart, normCat } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter } from './ui.jsx';
 import ExpenseList from './ExpenseList.jsx';
