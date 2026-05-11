@@ -1,6 +1,6 @@
 // ── src/store/useAppStore.ts ──────────────────────────────────────────────────
 import { create } from 'zustand';
-import { db, auth } from '../firebase.js';
+import { db, auth } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import {

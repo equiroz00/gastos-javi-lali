@@ -1,6 +1,6 @@
 // ── src/lib/helpers.ts ────────────────────────────────────────────────────────
-import { CUR_SYM, PENDING_PER } from '../constants.js';
-import type { Expense, Plan, Payment, Period, Currency, Responsible, UserName } from '../types.js';
+import { CUR_SYM, PENDING_PER } from '../constants';
+import type { Expense, Plan, Payment, Period, Currency, Responsible, UserName } from '../types';
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 export function todayStr(): string {

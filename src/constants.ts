@@ -1,5 +1,5 @@
 // ── src/constants.ts ──────────────────────────────────────────────────────────
-import type { ThemeConfig, FontConfig, ThemeKey, FontKey } from './types.js';
+import type { ThemeConfig, FontConfig, ThemeKey, FontKey } from './types';
 
 export const THEMES: Record<ThemeKey, ThemeConfig> = {
   default:  { label:'Original',  emoji:'💜', bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#DED1C6', textMuted:'#8a7a85', border:'#DED1C6', white:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)' },
