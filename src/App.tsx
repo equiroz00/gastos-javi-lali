@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot } from 'firebase/firestore';
-import { auth } from './firebase.js';
+import { auth } from './firebase';
 import { C, F, USER_MAP, applyTheme, FONTS } from './constants';
 import type { UserName, Settings, Expense, Plan, Payment } from './types';
 import useAppStore from './store/useAppStore';
