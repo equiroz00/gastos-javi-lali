@@ -1,7 +1,7 @@
 // ── components/LoginScreen.jsx ────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { C, F, FONTS } from '../constants';
-import { auth, provider } from '../firebase.js';
+import { auth, provider } from '../firebase';
 import { signInWithPopup, signOut } from 'firebase/auth';
 
 export default function LoginScreen(props){
