@@ -3,13 +3,13 @@ import React, { useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot } from 'firebase/firestore';
 import { auth } from './firebase.js';
-import { C, F, USER_MAP, applyTheme, FONTS } from './constants.js';
-import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
-import useAppStore from './store/useAppStore.js';
+import { C, F, USER_MAP, applyTheme, FONTS } from './constants';
+import type { UserName, Settings, Expense, Plan, Payment } from './types';
+import useAppStore from './store/useAppStore';
 import {
   runMigrationIfNeeded, settingsDoc,
   expensesCol, plansCol, paymentsCol,
-} from './store/useAppStore.js';
+} from './store/useAppStore';
 import LoginScreen    from './components/LoginScreen.jsx';
 import Dashboard      from './components/Dashboard.jsx';
 import AddEditExpense from './components/AddEditExpense.jsx';
