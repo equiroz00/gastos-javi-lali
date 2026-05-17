@@ -10,7 +10,7 @@ import useAppStore from './store/useAppStore';
 import {
   runMigrationIfNeeded, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc,
-} from './store/useAppStore.js';
+} from './store/useAppStore';
 import LoginScreen    from './components/LoginScreen.jsx';
 import Dashboard      from './components/Dashboard.jsx';
 import AddEditExpense from './components/AddEditExpense.jsx';
