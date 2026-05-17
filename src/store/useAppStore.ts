@@ -6,12 +6,12 @@ import { signOut } from 'firebase/auth';
 import {
   getPeriod, generatePlanExpenses, reassignPlanExpenses,
   sanitize, calcAmts, safeN, catEm, fmt,
-} from '../lib/helpers.js';
-import { DEFAULT_CATS, PENDING_PER } from '../constants.js';
+} from '../lib/helpers';
+import { DEFAULT_CATS, PENDING_PER } from '../constants';
 import type {
   AppState, Expense, Plan, Payment, Period, Settings,
   Currency, UserName, Responsible,
-} from '../types.js';
+} from '../types';
 
 // ── Firestore refs ────────────────────────────────────────────────────────────
 export const expenseDoc  = (id: string) => doc(db, 'expenses', id);

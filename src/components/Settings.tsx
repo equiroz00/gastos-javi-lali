@@ -1,7 +1,7 @@
 // ── components/Settings.tsx ───────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, THEMES, FONTS } from '../constants.js';
-import useAppStore from '../store/useAppStore.js';
+import { C, F, THEMES, FONTS } from '../constants';
+import useAppStore from '../store/useAppStore';
 import { Card } from './ui.jsx';
 
 export default function Settings() {
