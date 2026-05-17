@@ -4,9 +4,9 @@ import { Loader2 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot } from 'firebase/firestore';
 import { auth } from './firebase.js';
-import { C, F, USER_MAP, applyTheme, FONTS } from './constants.js';
-import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
-import useAppStore from './store/useAppStore.js';
+import { C, F, USER_MAP, applyTheme, FONTS } from './constants';
+import type { UserName, Settings, Expense, Plan, Payment } from './types';
+import useAppStore from './store/useAppStore';
 import {
   runMigrationIfNeeded, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc,
@@ -16,7 +16,7 @@ import Dashboard      from './components/Dashboard.jsx';
 import AddEditExpense from './components/AddEditExpense.jsx';
 import History        from './components/History.jsx';
 import Stats          from './components/Stats.jsx';
-import Settings       from './components/Settings.jsx';
+import Settings       from './components/Settings.tsx';
 import { Toast, ConfirmDialog, PaymentModal } from './components/ui.jsx';
 
 // Module-level unsubscribes — avoid stale closures
