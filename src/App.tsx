@@ -1,15 +1,16 @@
 // ── src/App.tsx ───────────────────────────────────────────────────────────────
 import React, { useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot } from 'firebase/firestore';
-import { auth } from './firebase';
-import { C, F, USER_MAP, applyTheme, FONTS } from './constants';
-import type { UserName, Settings, Expense, Plan, Payment } from './types';
-import useAppStore from './store/useAppStore';
+import { auth } from './firebase.js';
+import { C, F, USER_MAP, applyTheme, FONTS } from './constants.js';
+import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
+import useAppStore from './store/useAppStore.js';
 import {
   runMigrationIfNeeded, settingsDoc,
-  expensesCol, plansCol, paymentsCol,
-} from './store/useAppStore';
+  expensesCol, plansCol, paymentsCol, userPrefDoc,
+} from './store/useAppStore.js';
 import LoginScreen    from './components/LoginScreen.jsx';
 import Dashboard      from './components/Dashboard.jsx';
 import AddEditExpense from './components/AddEditExpense.jsx';
@@ -39,6 +40,8 @@ export default function App() {
   const editingExpense = useAppStore(s => s.editingExpense);
   const settings       = useAppStore(s => s.settings);
   const syncMsg        = useAppStore(s => s.syncMsg);
+  const userTheme      = useAppStore(s => s.userTheme);
+  const userFont       = useAppStore(s => s.userFont);
 
   const setCurrentUser = useAppStore(s => s.setCurrentUser);
   const setAuthDenied  = useAppStore(s => s.setAuthDenied);
@@ -48,13 +51,16 @@ export default function App() {
   const setPayments    = useAppStore(s => s.setPayments);
   const setSettings    = useAppStore(s => s.setSettings);
   const setCustomCats  = useAppStore(s => s.setCustomCats);
+  const setUserTheme   = useAppStore(s => s.setUserTheme);
+  const setUserFont    = useAppStore(s => s.setUserFont);
   const setView        = useAppStore(s => s.setView);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
 
-  applyTheme(settings.theme || 'default', settings.font || 'Nunito');
+  // Theme is now per-user — falls back to 'default'/'Nunito' before login
+  applyTheme(userTheme || 'default', userFont || 'Nunito');
 
   useEffect(() => {
-    const fontKey = settings.font || 'Nunito';
+    const fontKey = userFont || 'Nunito';
     const fd = FONTS[fontKey as keyof typeof FONTS] || FONTS.Nunito;
     const l = document.createElement('link');
     l.href = `https://fonts.googleapis.com/css2?family=${fd.url}&display=swap`;
@@ -62,7 +68,7 @@ export default function App() {
     document.head.appendChild(l);
     document.body.style.fontFamily = fd.css;
     document.body.style.background = C.bg;
-  }, [settings.font]);
+  }, [userFont]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, firebaseUser => {
@@ -81,9 +87,9 @@ export default function App() {
 
       runMigrationIfNeeded(() => {
         _unsubs.forEach(u => u()); _unsubs = [];
-        const fired = { exp: false, plans: false, pay: false, cfg: false };
+        const fired = { exp: false, plans: false, pay: false, cfg: false, prefs: false };
         const checkDone = () => {
-          if (fired.exp && fired.plans && fired.pay && fired.cfg) setLoading(false);
+          if (fired.exp && fired.plans && fired.pay && fired.cfg && fired.prefs) setLoading(false);
         };
 
         const u1 = onSnapshot(expensesCol(), snap => {
@@ -110,7 +116,17 @@ export default function App() {
           fired.cfg = true; checkDone();
         }, e => { console.error('settings:', e.code); fired.cfg = true; checkDone(); });
 
-        _unsubs = [u1, u2, u3, u4];
+        // Per-user preferences — theme and font are independent per user
+        const u5 = onSnapshot(userPrefDoc(name), snap => {
+          if (snap.exists()) {
+            const prefs = snap.data();
+            setUserTheme(prefs.theme || 'default');
+            setUserFont(prefs.font || 'Nunito');
+          }
+          fired.prefs = true; checkDone();
+        }, e => { console.error('userPrefs:', e.code); fired.prefs = true; checkDone(); });
+
+        _unsubs = [u1, u2, u3, u4, u5];
       });
     });
     _unsubAuth = unsubAuth;
@@ -121,9 +137,9 @@ export default function App() {
   }, []);
 
   if (loading) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', flexDirection:'column', gap:'1rem', background:C.bg, fontFamily:F, color:C.textMuted }}>
-      <div style={{ fontSize:'2rem' }}>💑</div>
-      <div>Conectando...</div>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', flexDirection:'column', gap:'0.75rem', background:'#111', fontFamily:F }}>
+      <Loader2 size={36} color="#C5BFAE" strokeWidth={1.5} style={{ animation:'spin 1s linear infinite' }} />
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 

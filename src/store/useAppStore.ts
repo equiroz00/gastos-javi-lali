@@ -1,17 +1,17 @@
 // ── src/store/useAppStore.ts ──────────────────────────────────────────────────
 import { create } from 'zustand';
-import { db, auth } from '../firebase';
+import { db, auth } from '../firebase.js';
 import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import {
   getPeriod, generatePlanExpenses, reassignPlanExpenses,
   sanitize, calcAmts, safeN, catEm, fmt,
-} from '../lib/helpers';
-import { DEFAULT_CATS, PENDING_PER } from '../constants';
+} from '../lib/helpers.js';
+import { DEFAULT_CATS, PENDING_PER } from '../constants.js';
 import type {
   AppState, Expense, Plan, Payment, Period, Settings,
   Currency, UserName, Responsible,
-} from '../types';
+} from '../types.js';
 
 // ── Firestore refs ────────────────────────────────────────────────────────────
 export const expenseDoc  = (id: string) => doc(db, 'expenses', id);
@@ -21,6 +21,8 @@ export const settingsDoc = ()            => doc(db, 'settings', 'main');
 export const expensesCol = ()            => collection(db, 'expenses');
 export const plansCol    = ()            => collection(db, 'plans');
 export const paymentsCol = ()            => collection(db, 'payments');
+// Per-user preferences (theme + font) — keyed by user name ('Javi' | 'Lali')
+export const userPrefDoc = (userName: string) => doc(db, 'userPreferences', userName);
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 export function runMigrationIfNeeded(onDone: () => void): void {
@@ -56,6 +58,11 @@ interface AppActions {
   setPayments:   (pays: Payment[])   => void;
   setSettings:   (s: Settings)       => void;
   setCustomCats: (cats: string[])    => void;
+
+  // Per-user preferences
+  setUserTheme: (theme: string) => void;
+  setUserFont:  (font: string)  => void;
+  saveUserPreferences: (theme: string, font: string) => void;
 
   // UI
   setView:             (v: string)           => void;
@@ -100,6 +107,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   payments:    [],
   settings:    { periods: [], theme: 'default', font: 'Nunito' },
   customCats:  [],
+  userTheme:   'default',
+  userFont:    'Nunito',
   view:        'dashboard',
   editingExpense: null,
   pendingDelete:  null,
@@ -118,6 +127,17 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   setPayments:   pays => set({ payments: pays }),
   setSettings:   s    => set({ settings: s }),
   setCustomCats: cats => set({ customCats: cats }),
+
+  // ── Per-user preferences ───────────────────────────────────────────────────
+  setUserTheme: theme => set({ userTheme: theme }),
+  setUserFont:  font  => set({ userFont: font }),
+  saveUserPreferences: (theme, font) => {
+    const state = get();
+    set({ userTheme: theme, userFont: font });
+    if (state.currentUser) {
+      setDoc(userPrefDoc(state.currentUser), { theme, font });
+    }
+  },
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   setView:           v => set({ view: v }),

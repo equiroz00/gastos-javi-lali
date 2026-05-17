@@ -91,6 +91,11 @@ export interface DeleteData {
   expense: Expense;
 }
 
+export interface UserPreferences {
+  theme: string;
+  font: string;
+}
+
 export interface AppState {
   // Auth
   currentUser: UserName | null;
@@ -103,6 +108,10 @@ export interface AppState {
   payments: Payment[];
   settings: Settings;
   customCats: string[];
+
+  // Per-user preferences (theme + font — independent per user)
+  userTheme: string;
+  userFont: string;
 
   // UI
   view: string;
@@ -131,7 +140,7 @@ export interface ExpenseForm {
 
 // ── Helpers de tipo ───────────────────────────────────────────────────────────
 
-export type ThemeKey = 'default' | 'amanecer' | 'bosque' | 'oceano' | 'moca' | 'noche';
+export type ThemeKey = 'default' | 'amanecer' | 'bosque' | 'oceano' | 'moca' | 'noche' | 'carbon' | 'selva' | 'madera' | 'pergamino';
 export type FontKey = 'Nunito' | 'Montserrat' | 'Quicksand' | 'Jost' | 'Syne' | 'Exo2' | 'Monda' | 'Forum' | 'Alice' | 'EBGaramond' | 'JuliusSansOne' | 'ZenDots' | 'Oswald';
 
 export interface ThemeConfig {
