@@ -1,7 +1,8 @@
 // ── components/ExpenseList.jsx ────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, PENDING_PER } from '../constants';
-import { fmt, safeN, catEm, catLb } from '../lib/helpers';
+import { Pencil, Trash2 } from 'lucide-react';
+import { C, F, PENDING_PER } from '../constants.js';
+import { fmt, safeN, catEm, catLb } from '../lib/helpers.js';
 
 function ExpenseRow(props){
   var e=props.expense,cur=e.currency||'ARS';
@@ -27,8 +28,10 @@ function ExpenseRow(props){
       )
     ),
     open&&!e.fromPlan?React.createElement('div',{style:{display:'flex',gap:'0.5rem',padding:'0.45rem 1rem',background:C.bg,borderTop:'1px solid '+C.border}},
-      React.createElement('button',{onClick:function(){props.onEdit(e);},style:{flex:1,padding:'0.35rem',background:C.beige,border:'none',borderRadius:'0.6rem',color:C.navy,fontWeight:700,fontSize:'0.75rem',cursor:'pointer',fontFamily:F}},'✏️ Editar'),
-      React.createElement('button',{onClick:function(){props.onDelete(e.id,e);},style:{flex:1,padding:'0.35rem',background:'#fde8ee',border:'none',borderRadius:'0.6rem',color:'#c0314f',fontWeight:700,fontSize:'0.75rem',cursor:'pointer',fontFamily:F}},'🗑️ Eliminar')
+      React.createElement('button',{onClick:function(){props.onEdit(e);},style:{flex:1,padding:'0.4rem',background:C.beige,border:'none',borderRadius:'0.6rem',color:C.navy,fontWeight:700,fontSize:'0.75rem',cursor:'pointer',fontFamily:F,display:'flex',alignItems:'center',justifyContent:'center',gap:'0.35rem'}},
+        React.createElement(Pencil,{size:13,strokeWidth:2}),'Editar'),
+      React.createElement('button',{onClick:function(){props.onDelete(e.id,e);},style:{flex:1,padding:'0.4rem',background:'#fde8ee',border:'none',borderRadius:'0.6rem',color:'#c0314f',fontWeight:700,fontSize:'0.75rem',cursor:'pointer',fontFamily:F,display:'flex',alignItems:'center',justifyContent:'center',gap:'0.35rem'}},
+        React.createElement(Trash2,{size:13,strokeWidth:2}),'Eliminar')
     ):null
   );
 }

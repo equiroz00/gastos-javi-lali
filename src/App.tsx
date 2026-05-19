@@ -1,35 +1,35 @@
 // ── src/App.tsx ───────────────────────────────────────────────────────────────
 import React, { useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Home, Plus, BarChart2, ClipboardList, Settings2, LogOut } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot } from 'firebase/firestore';
 import { auth } from './firebase.js';
-import { C, F, USER_MAP, applyTheme, FONTS } from './constants';
-import type { UserName, Settings, Expense, Plan, Payment } from './types';
-import useAppStore from './store/useAppStore';
+import { C, F, USER_MAP, applyTheme, FONTS } from './constants.js';
+import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
+import useAppStore from './store/useAppStore.js';
 import {
   runMigrationIfNeeded, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc,
-} from './store/useAppStore';
+} from './store/useAppStore.js';
 import LoginScreen    from './components/LoginScreen.jsx';
 import Dashboard      from './components/Dashboard.jsx';
 import AddEditExpense from './components/AddEditExpense.jsx';
 import History        from './components/History.jsx';
 import Stats          from './components/Stats.jsx';
-import Settings       from './components/Settings.tsx';
+import Settings       from './components/Settings.jsx';
 import { Toast, ConfirmDialog, PaymentModal } from './components/ui.jsx';
 
 // Module-level unsubscribes — avoid stale closures
 let _unsubs: Array<() => void> = [];
 let _unsubAuth: (() => void) | null = null;
 
-interface Tab { id: string; icon: string; label: string; }
+interface Tab { id: string; icon: React.ReactNode; label: string; }
 const TABS: Tab[] = [
-  { id:'dashboard', icon:'🏠', label:'Inicio'   },
-  { id:'add',       icon:'➕', label:'Agregar'  },
-  { id:'stats',     icon:'📊', label:'Stats'    },
-  { id:'history',   icon:'📋', label:'Historial'},
-  { id:'settings',  icon:'⚙️', label:'Config'   },
+  { id:'dashboard', icon:<Home      size={20} strokeWidth={1.8} />, label:'Inicio'    },
+  { id:'add',       icon:<Plus      size={20} strokeWidth={1.8} />, label:'Agregar'   },
+  { id:'stats',     icon:<BarChart2 size={20} strokeWidth={1.8} />, label:'Stats'     },
+  { id:'history',   icon:<ClipboardList size={20} strokeWidth={1.8} />, label:'Historial' },
+  { id:'settings',  icon:<Settings2 size={20} strokeWidth={1.8} />, label:'Config'    },
 ];
 
 export default function App() {
@@ -167,9 +167,10 @@ export default function App() {
         </div>
         <button
           onClick={() => useAppStore.getState().handleSignOut()}
-          style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:'0.6rem', padding:'0.35rem 0.7rem', fontSize:'0.75rem', color:C.white, cursor:'pointer', fontFamily:F, fontWeight:700 }}
+          style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:'0.6rem', padding:'0.4rem 0.6rem', color:C.white, cursor:'pointer', display:'flex', alignItems:'center', gap:'0.35rem' }}
         >
-          Salir
+          <LogOut size={15} strokeWidth={2} />
+          <span style={{ fontSize:'0.75rem', fontWeight:700, fontFamily:F }}>Salir</span>
         </button>
       </div>
 
@@ -195,9 +196,9 @@ export default function App() {
           <button
             key={t.id}
             onClick={() => setView(t.id)}
-            style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.5rem 0', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:view===t.id ? C.navy : C.textMuted, fontSize:'0.6rem', fontWeight:view===t.id ? 900 : 500, gap:'0.1rem' }}
+            style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.5rem 0', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:view===t.id ? C.navy : C.textMuted, fontSize:'0.6rem', fontWeight:view===t.id ? 900 : 500, gap:'0.2rem' }}
           >
-            <span style={{ fontSize:'1.2rem', lineHeight:1 }}>{t.icon}</span>
+            {t.icon}
             {t.label}
           </button>
         ))}
