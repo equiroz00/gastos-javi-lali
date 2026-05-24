@@ -1,28 +1,29 @@
 // ── src/store/useAppStore.ts ──────────────────────────────────────────────────
 import { create } from 'zustand';
-import { db, auth } from '../firebase.js';
+import { db, auth } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import {
   getPeriod, generatePlanExpenses, reassignPlanExpenses,
   sanitize, calcAmts, safeN, catEm, fmt,
 } from '../lib/helpers';
-import { DEFAULT_CATS, PENDING_PER } from '../constants';
+import { DEFAULT_CATS } from '../constants';
 import type {
-  AppState, Expense, Plan, Payment, Period, Settings,
-  Currency, UserName, Responsible,
+  AppState, Expense, Plan, Payment, Settings,
+  Currency, UserName,
 } from '../types';
 
 // ── Firestore refs ────────────────────────────────────────────────────────────
-export const expenseDoc  = (id: string) => doc(db, 'expenses', id);
-export const planDoc     = (id: string) => doc(db, 'plans', id);
-export const paymentDoc  = (id: string) => doc(db, 'payments', id);
-export const settingsDoc = ()            => doc(db, 'settings', 'main');
-export const expensesCol = ()            => collection(db, 'expenses');
-export const plansCol    = ()            => collection(db, 'plans');
-export const paymentsCol = ()            => collection(db, 'payments');
-// Per-user preferences (theme + font) — keyed by user name ('Javi' | 'Lali')
-export const userPrefDoc = (userName: string) => doc(db, 'userPreferences', userName);
+export const expenseDoc     = (id: string) => doc(db, 'expenses', id);
+export const planDoc        = (id: string) => doc(db, 'plans', id);
+export const paymentDoc     = (id: string) => doc(db, 'payments', id);
+export const settingsDoc    = ()            => doc(db, 'settings', 'main');
+export const expensesCol    = ()            => collection(db, 'expenses');
+export const plansCol       = ()            => collection(db, 'plans');
+export const paymentsCol    = ()            => collection(db, 'payments');
+export const userPrefDoc    = (u: string)   => doc(db, 'userPreferences', u);
+export const activityLogCol = ()            => collection(db, 'activityLog');
+export const activityLogDoc = (id: string)  => doc(db, 'activityLog', id);
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 export function runMigrationIfNeeded(onDone: () => void): void {
@@ -30,10 +31,10 @@ export function runMigrationIfNeeded(onDone: () => void): void {
   getDoc(legacyRef).then(snap => {
     if (!snap.exists()) { onDone(); return; }
     const data = snap.data();
-    const expenses: Expense[] = data.expenses || [];
-    const plans: Plan[]       = data.plans    || [];
-    const payments: Payment[] = data.payments || [];
-    const settings: Settings  = data.settings || { periods: [], theme: 'default', font: 'Nunito' };
+    const expenses: Expense[]  = data.expenses  || [];
+    const plans: Plan[]        = data.plans      || [];
+    const payments: Payment[]  = data.payments   || [];
+    const settings: Settings   = data.settings   || { periods: [], theme: 'default', font: 'Nunito' };
     const customCats: string[] = data.customCats || [];
     const batch = writeBatch(db);
     expenses.forEach(e => batch.set(expenseDoc(e.id), e));
@@ -45,101 +46,111 @@ export function runMigrationIfNeeded(onDone: () => void): void {
   }).catch(onDone);
 }
 
+// ── Activity log type ─────────────────────────────────────────────────────────
+export interface ActivityEntry {
+  id: string;
+  action: 'add' | 'edit' | 'delete';
+  description: string;
+  amount?: number;
+  currency?: string;
+  doneBy: string;
+  timestamp: string;
+}
+
 // ── Store actions interface ───────────────────────────────────────────────────
 interface AppActions {
-  // Auth setters
   setCurrentUser: (u: UserName | null) => void;
   setAuthDenied:  (v: boolean) => void;
   setLoading:     (v: boolean) => void;
-
-  // Data setters (called from onSnapshot)
-  setExpenses:   (exps: Expense[])   => void;
-  setPlans:      (ps: Plan[])        => void;
-  setPayments:   (pays: Payment[])   => void;
-  setSettings:   (s: Settings)       => void;
-  setCustomCats: (cats: string[])    => void;
-
-  // Per-user preferences
-  setUserTheme: (theme: string) => void;
-  setUserFont:  (font: string)  => void;
+  setExpenses:    (exps: Expense[])   => void;
+  setPlans:       (ps: Plan[])        => void;
+  setPayments:    (pays: Payment[])   => void;
+  setSettings:    (s: Settings)       => void;
+  setCustomCats:  (cats: string[])    => void;
+  setUserTheme:   (theme: string)     => void;
+  setUserFont:    (font: string)      => void;
   saveUserPreferences: (theme: string, font: string) => void;
-
-  // UI
-  setView:             (v: string)           => void;
-  setEditingExpense:   (e: Expense | null)   => void;
+  setActivityLog: (entries: ActivityEntry[]) => void;
+  setLastReadTs:  (ts: string) => void;
+  markAllRead:    () => void;
+  setView:             (v: string)                    => void;
+  setEditingExpense:   (e: Expense | null)            => void;
   setPendingDelete:    (d: AppState['pendingDelete']) => void;
   setPayModal:         (m: AppState['payModal'])      => void;
-  showToast:           (expense: Expense)    => void;
-  showMsg:             (msg: string, ms?: number) => void;
+  showToast:           (expense: Expense)             => void;
+  showMsg:             (msg: string, ms?: number)     => void;
   handleSignOut:       () => void;
-
-  // Expense actions
-  handleAdd:           (expense: Expense)    => void;
-  handleAddMultiple:   (exps: Expense[])     => void;
-  handleEdit:          (expense: Expense)    => void;
+  handleAdd:           (expense: Expense)             => void;
+  handleAddMultiple:   (exps: Expense[])              => void;
+  handleEdit:          (expense: Expense)             => void;
   requestDelete:       (id: string, expense: Expense) => void;
   confirmDelete:       () => void;
-
-  // Plan actions
   handleAddPlan:       (formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
-  handleCancelPlan:    (planId: string)      => void;
-
-  // Payment actions
+  handleCancelPlan:    (planId: string) => void;
   openPaymentModal:    (currency: Currency, netBal: number) => void;
   confirmPayment:      (paymentData: Payment) => void;
-
-  // Settings
-  saveCustomCats:      (cats: string[])      => void;
-  saveSettings:        (s: Settings)         => void;
-
-  // Export
+  saveCustomCats:      (cats: string[]) => void;
+  saveSettings:        (s: Settings)    => void;
   exportCSV:           (from: string, to: string) => void;
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 const useAppStore = create<AppState & AppActions>((set, get) => ({
-  // ── Initial state ──────────────────────────────────────────────────────────
-  currentUser: null,
-  authDenied:  false,
-  loading:     true,
-  expenses:    [],
-  plans:       [],
-  payments:    [],
-  settings:    { periods: [], theme: 'default', font: 'Nunito' },
-  customCats:  [],
-  userTheme:   'default',
-  userFont:    'Nunito',
-  view:        'dashboard',
+  currentUser:    null,
+  authDenied:     false,
+  loading:        true,
+  expenses:       [],
+  plans:          [],
+  payments:       [],
+  settings:       { periods: [], theme: 'default', font: 'Nunito' },
+  customCats:     [],
+  userTheme:      'default',
+  userFont:       'Nunito',
+  activityLog:    [] as ActivityEntry[],
+  lastReadTs:     '',
+  view:           'dashboard',
   editingExpense: null,
   pendingDelete:  null,
-  payModal:    null,
-  toast:       null,
-  syncMsg:     '',
+  payModal:       null,
+  toast:          null,
+  syncMsg:        '',
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
-  setCurrentUser: u  => set({ currentUser: u }),
-  setAuthDenied:  v  => set({ authDenied: v }),
-  setLoading:     v  => set({ loading: v }),
+  // Auth
+  setCurrentUser: u => set({ currentUser: u }),
+  setAuthDenied:  v => set({ authDenied: v }),
+  setLoading:     v => set({ loading: v }),
 
-  // ── Data setters ───────────────────────────────────────────────────────────
+  // Data setters
   setExpenses:   exps => set({ expenses: exps }),
   setPlans:      ps   => set({ plans: ps }),
   setPayments:   pays => set({ payments: pays }),
   setSettings:   s    => set({ settings: s }),
   setCustomCats: cats => set({ customCats: cats }),
 
-  // ── Per-user preferences ───────────────────────────────────────────────────
+  // Per-user preferences
   setUserTheme: theme => set({ userTheme: theme }),
   setUserFont:  font  => set({ userFont: font }),
   saveUserPreferences: (theme, font) => {
     const state = get();
     set({ userTheme: theme, userFont: font });
     if (state.currentUser) {
-      setDoc(userPrefDoc(state.currentUser), { theme, font });
+      setDoc(userPrefDoc(state.currentUser), { theme, font }, { merge: true });
     }
   },
 
-  // ── UI ─────────────────────────────────────────────────────────────────────
+  // Activity log
+  setActivityLog: entries => set({ activityLog: entries }),
+  setLastReadTs:  ts      => set({ lastReadTs: ts }),
+  markAllRead: () => {
+    const now = new Date().toISOString();
+    const state = get();
+    set({ lastReadTs: now });
+    if (state.currentUser) {
+      setDoc(userPrefDoc(state.currentUser), { lastReadTs: now }, { merge: true });
+    }
+  },
+
+  // UI
   setView:           v => set({ view: v }),
   setEditingExpense: e => set({ editingExpense: e }),
   setPendingDelete:  d => set({ pendingDelete: d }),
@@ -160,9 +171,25 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     setTimeout(() => set({ syncMsg: '' }), ms);
   },
 
-  handleSignOut: () => { signOut(auth); },
+  handleSignOut: () => signOut(auth),
 
-  // ── Expense actions ────────────────────────────────────────────────────────
+  // ── Internal helper — logs activity to Firestore ───────────────────────────
+  _logActivity: (action: 'add' | 'edit' | 'delete', expense: Expense) => {
+    const state = get();
+    if (!state.currentUser) return;
+    const entry: ActivityEntry = {
+      id: 'log_' + Date.now(),
+      action,
+      description: expense.description || '',
+      amount: safeN(expense.amount),
+      currency: expense.currency || 'ARS',
+      doneBy: state.currentUser,
+      timestamp: new Date().toISOString(),
+    };
+    setDoc(activityLogDoc(entry.id), entry);
+  },
+
+  // Expense actions
   handleAdd: expense => {
     const state = get();
     const allCats = DEFAULT_CATS.concat(state.customCats);
@@ -170,6 +197,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     set({ expenses: [s, ...state.expenses], view: 'dashboard' });
     setDoc(expenseDoc(s.id), s);
     state.showToast(s);
+    (state as any)._logActivity('add', s);
   },
 
   handleAddMultiple: exps => {
@@ -180,7 +208,9 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     sanitized.forEach(s => batch.set(expenseDoc(s.id), s));
     batch.commit();
     set({ expenses: [...sanitized, ...state.expenses], view: 'dashboard' });
-    state.showToast(sanitized[sanitized.length - 1]);
+    const last = sanitized[sanitized.length - 1];
+    state.showToast(last);
+    (state as any)._logActivity('add', last);
   },
 
   handleEdit: expense => {
@@ -190,6 +220,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     set({ expenses: state.expenses.map(e => e.id === s.id ? s : e), editingExpense: null, view: 'dashboard' });
     setDoc(expenseDoc(s.id), s);
     state.showToast(s);
+    (state as any)._logActivity('edit', s);
   },
 
   requestDelete: (id, expense) => set({ pendingDelete: { id, expense } }),
@@ -197,12 +228,13 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   confirmDelete: () => {
     const state = get();
     if (!state.pendingDelete) return;
-    const id = state.pendingDelete.id;
+    const { id, expense } = state.pendingDelete;
     set({ expenses: state.expenses.filter(e => e.id !== id), pendingDelete: null });
     deleteDoc(expenseDoc(id));
+    (state as any)._logActivity('delete', expense);
   },
 
-  // ── Plan actions ───────────────────────────────────────────────────────────
+  // Plan actions
   handleAddPlan: (formData, numInstallments, paidInstallments, manualStartPeriod) => {
     const state = get();
     const paid = paidInstallments || 0;
@@ -246,7 +278,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     set({ plans: state.plans.filter(p => p.id !== planId), expenses: state.expenses.filter(e => e.planId !== planId) });
   },
 
-  // ── Payment actions ────────────────────────────────────────────────────────
+  // Payment actions
   openPaymentModal: (currency, netBal) => set({ payModal: { currency, netBal } }),
 
   confirmPayment: paymentData => {
@@ -256,7 +288,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     state.showMsg('✓ Pago registrado correctamente.');
   },
 
-  // ── Settings actions ───────────────────────────────────────────────────────
+  // Settings
   saveCustomCats: cats => {
     const state = get();
     set({ customCats: cats });
@@ -277,7 +309,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     setDoc(settingsDoc(), { ...s, customCats: state.customCats });
   },
 
-  // ── CSV Export ─────────────────────────────────────────────────────────────
+  // CSV Export
   exportCSV: (from, to) => {
     const state = get();
     const filtered = state.expenses.filter(e => {

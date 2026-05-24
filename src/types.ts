@@ -1,19 +1,14 @@
 // ── src/types.ts ──────────────────────────────────────────────────────────────
-// Interfaces compartidas — fuente de verdad de la forma de los datos.
-// Todos los componentes y el store importan desde acá.
-
-export type Currency = 'ARS' | 'USD' | 'EUR' | string;
-export type UserName = 'Javi' | 'Lali';
+export type Currency    = 'ARS' | 'USD' | 'EUR' | string;
+export type UserName    = 'Javi' | 'Lali';
 export type Responsible = 'Javi' | 'Lali' | 'Ambos';
-
-// ── Entidades de datos ────────────────────────────────────────────────────────
 
 export interface Expense {
   id: string;
   description: string;
   amount: number;
   currency: Currency;
-  date: string;           // 'YYYY-MM-DD'
+  date: string;
   period: string;
   paidBy: UserName;
   responsible: Responsible;
@@ -24,7 +19,6 @@ export interface Expense {
   laliAmount: number;
   createdBy?: UserName;
   createdAt?: string;
-  // Campos de cuotas
   fromPlan?: boolean;
   planId?: string;
   installmentNum?: number;
@@ -63,8 +57,8 @@ export interface Payment {
 
 export interface Period {
   name: string;
-  start: string;   // 'YYYY-MM-DD'
-  end: string;     // 'YYYY-MM-DD'
+  start: string;
+  end: string;
 }
 
 export interface Settings {
@@ -72,8 +66,6 @@ export interface Settings {
   theme: string;
   font: string;
 }
-
-// ── Estado del store ──────────────────────────────────────────────────────────
 
 export interface ToastData {
   emoji: string;
@@ -96,6 +88,16 @@ export interface UserPreferences {
   font: string;
 }
 
+export interface ActivityEntry {
+  id: string;
+  action: 'add' | 'edit' | 'delete';
+  description: string;
+  amount?: number;
+  currency?: string;
+  doneBy: string;
+  timestamp: string;
+}
+
 export interface AppState {
   // Auth
   currentUser: UserName | null;
@@ -109,9 +111,13 @@ export interface AppState {
   settings: Settings;
   customCats: string[];
 
-  // Per-user preferences (theme + font — independent per user)
+  // Per-user preferences
   userTheme: string;
   userFont: string;
+
+  // Activity log (notifications)
+  activityLog: ActivityEntry[];
+  lastReadTs: string;
 
   // UI
   view: string;
@@ -121,8 +127,6 @@ export interface AppState {
   toast: ToastData | null;
   syncMsg: string;
 }
-
-// ── Tipos de formulario ───────────────────────────────────────────────────────
 
 export interface ExpenseForm {
   id?: string;
@@ -138,29 +142,15 @@ export interface ExpenseForm {
   customCurrency?: string;
 }
 
-// ── Helpers de tipo ───────────────────────────────────────────────────────────
-
 export type ThemeKey = 'default' | 'amanecer' | 'bosque' | 'oceano' | 'moca' | 'noche' | 'carbon' | 'selva' | 'madera' | 'pergamino';
-export type FontKey = 'Nunito' | 'Montserrat' | 'Quicksand' | 'Jost' | 'Syne' | 'Exo2' | 'Monda' | 'Forum' | 'Alice' | 'EBGaramond' | 'JuliusSansOne' | 'ZenDots' | 'Oswald';
+export type FontKey  = 'Nunito' | 'Montserrat' | 'Quicksand' | 'Jost' | 'Syne' | 'Exo2' | 'Monda' | 'Forum' | 'Alice' | 'EBGaramond' | 'JuliusSansOne' | 'ZenDots' | 'Oswald';
 
 export interface ThemeConfig {
-  label: string;
-  emoji: string;
-  bg: string;
-  surface: string;
-  navy: string;
-  accent: string;
-  beige: string;
-  textMuted: string;
-  border: string;
-  white: string;
-  gradMain: string;
-  gradJavi: string;
-  gradLali: string;
+  label: string; emoji: string; bg: string; surface: string;
+  navy: string; accent: string; beige: string; textMuted: string;
+  border: string; white: string; gradMain: string; gradJavi: string; gradLali: string;
 }
 
 export interface FontConfig {
-  label: string;
-  url: string;
-  css: string;
+  label: string; url: string; css: string;
 }
