@@ -1,17 +1,17 @@
 // ── src/store/useAppStore.ts ──────────────────────────────────────────────────
 import { create } from 'zustand';
-import { db, auth } from '../firebase';
+import { db, auth } from '../firebase.js';
 import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import {
   getPeriod, generatePlanExpenses, reassignPlanExpenses,
   sanitize, calcAmts, safeN, catEm, fmt,
-} from '../lib/helpers';
-import { DEFAULT_CATS } from '../constants';
+} from '../lib/helpers.js';
+import { DEFAULT_CATS } from '../constants.js';
 import type {
   AppState, Expense, Plan, Payment, Settings,
   Currency, UserName,
-} from '../types';
+} from '../types.js';
 
 // ── Firestore refs ────────────────────────────────────────────────────────────
 export const expenseDoc     = (id: string) => doc(db, 'expenses', id);
