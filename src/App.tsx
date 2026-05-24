@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { Loader2, Home, Plus, BarChart2, ClipboardList, Settings2, LogOut } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
+<<<<<<< HEAD
 import { onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase';
 import { C, F, USER_MAP, applyTheme, FONTS } from './constants';
@@ -19,11 +20,29 @@ import History           from './components/History.jsx';
 import Stats             from './components/Stats.jsx';
 import SettingsScreen    from './components/Settings.jsx';
 import NotificationPanel from './components/NotificationPanel.jsx';
+=======
+import { onSnapshot } from 'firebase/firestore';
+import { auth } from './firebase.js';
+import { C, F, USER_MAP, applyTheme, FONTS } from './constants.js';
+import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
+import useAppStore from './store/useAppStore.js';
+import {
+  runMigrationIfNeeded, settingsDoc,
+  expensesCol, plansCol, paymentsCol, userPrefDoc,
+} from './store/useAppStore.js';
+import LoginScreen    from './components/LoginScreen.jsx';
+import Dashboard      from './components/Dashboard.jsx';
+import AddEditExpense from './components/AddEditExpense.jsx';
+import History        from './components/History.jsx';
+import Stats          from './components/Stats.jsx';
+import Settings       from './components/Settings.jsx';
+>>>>>>> eb10f6bd77f93342d461f0e5fa3fecc88df2ca45
 import { Toast, ConfirmDialog, PaymentModal } from './components/ui.jsx';
 
 let _unsubs: Array<() => void> = [];
 let _unsubAuth: (() => void) | null = null;
 
+<<<<<<< HEAD
 // ── Greeting helper ───────────────────────────────────────────────────────────
 function getGreeting(name: string | null): string {
   // Argentina timezone (UTC-3)
@@ -41,6 +60,15 @@ const TABS: Tab[] = [
   { id:'stats',     icon:<BarChart2    size={20} strokeWidth={1.8} />, label:'Stats'     },
   { id:'history',   icon:<ClipboardList size={20} strokeWidth={1.8} />, label:'Historial' },
   { id:'settings',  icon:<Settings2    size={20} strokeWidth={1.8} />, label:'Config'    },
+=======
+interface Tab { id: string; icon: React.ReactNode; label: string; }
+const TABS: Tab[] = [
+  { id:'dashboard', icon:<Home      size={20} strokeWidth={1.8} />, label:'Inicio'    },
+  { id:'add',       icon:<Plus      size={20} strokeWidth={1.8} />, label:'Agregar'   },
+  { id:'stats',     icon:<BarChart2 size={20} strokeWidth={1.8} />, label:'Stats'     },
+  { id:'history',   icon:<ClipboardList size={20} strokeWidth={1.8} />, label:'Historial' },
+  { id:'settings',  icon:<Settings2 size={20} strokeWidth={1.8} />, label:'Config'    },
+>>>>>>> eb10f6bd77f93342d461f0e5fa3fecc88df2ca45
 ];
 
 export default function App() {
@@ -186,6 +214,7 @@ export default function App() {
             {getGreeting(currentUser)}
           </div>
         </div>
+<<<<<<< HEAD
         <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
           <NotificationPanel />
           <button
@@ -196,6 +225,15 @@ export default function App() {
             <span style={{ fontSize:'0.75rem', fontWeight:700, fontFamily:F }}>Salir</span>
           </button>
         </div>
+=======
+        <button
+          onClick={() => useAppStore.getState().handleSignOut()}
+          style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:'0.6rem', padding:'0.4rem 0.6rem', color:C.white, cursor:'pointer', display:'flex', alignItems:'center', gap:'0.35rem' }}
+        >
+          <LogOut size={15} strokeWidth={2} />
+          <span style={{ fontSize:'0.75rem', fontWeight:700, fontFamily:F }}>Salir</span>
+        </button>
+>>>>>>> eb10f6bd77f93342d461f0e5fa3fecc88df2ca45
       </div>
 
       {/* Sync message */}
