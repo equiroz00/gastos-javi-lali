@@ -13,6 +13,7 @@ export default function AddEditExpense(props){
   var currentUser      = useAppStore(function(s){ return s.currentUser; });
   var settings         = useAppStore(function(s){ return s.settings; });
   var customCats       = useAppStore(function(s){ return s.customCats; });
+  var expenses         = useAppStore(function(s){ return s.expenses; });
   var saveCustomCats   = useAppStore(function(s){ return s.saveCustomCats; });
   var handleAdd        = useAppStore(function(s){ return s.handleAdd; });
   var handleAddMultiple= useAppStore(function(s){ return s.handleAddMultiple; });
@@ -42,6 +43,39 @@ export default function AddEditExpense(props){
   var paidState=useState('');var retroPaid=paidState[0];var setRetroPaid=paidState[1];
   var retroPerState=useState('');var retroStartPer=retroPerState[0];var setRetroStartPer=retroPerState[1];
   var queueState=useState([]);var queue=queueState[0];var setQueue=queueState[1];
+
+  // ── Autocomplete ──────────────────────────────────────────────────────────
+  var acState=useState([]);var acSuggestions=acState[0];var setAcSuggestions=acState[1];
+
+  function onDescriptionChange(val){
+    set('description', val);
+    setErrors({});
+    var q = val.trim().toLowerCase();
+    if(q.length < 2){ setAcSuggestions([]); return; }
+    // Deduplicate by description — keep the most recent occurrence of each
+    var seen = {};
+    var matches = [];
+    expenses
+      .filter(function(e){ return (e.description||'').toLowerCase().indexOf(q) >= 0; })
+      .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); })
+      .forEach(function(e){
+        var key = (e.description||'').toLowerCase();
+        if(!seen[key]){ seen[key] = true; matches.push(e); }
+      });
+    setAcSuggestions(matches.slice(0, 6));
+  }
+
+  function onAcSelect(exp){
+    // Complete only description, category and currency
+    setForm(function(f){
+      return Object.assign({}, f, {
+        description: exp.description,
+        category:    exp.category    || f.category,
+        currency:    exp.currency    || f.currency,
+      });
+    });
+    setAcSuggestions([]);
+  }
 
   function set(k,v){setForm(function(f){var next=Object.assign({},f);next[k]=v;return next;});}
 
@@ -136,6 +170,50 @@ export default function AddEditExpense(props){
     setView('dashboard');
   }
 
+  // ── Autocomplete dropdown ──────────────────────────────────────────────────
+  var acDropdown = acSuggestions.length > 0 ? React.createElement('div',{
+    style:{position:'relative',zIndex:50}
+  },
+    React.createElement('div',{
+      style:{position:'absolute',top:'0.1rem',left:0,right:0,background:C.surface,border:'1px solid '+C.border,borderRadius:'0.75rem',boxShadow:'0 4px 16px rgba(0,0,0,0.12)',overflow:'hidden'}
+    },
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'0.4rem 0.75rem',borderBottom:'1px solid '+C.border,background:C.bg}},
+        React.createElement('span',{style:{fontSize:'0.68rem',color:C.textMuted,fontWeight:700}},'Gastos anteriores similares'),
+        React.createElement('button',{onClick:function(){setAcSuggestions([]);},style:{background:'none',border:'none',cursor:'pointer',color:C.textMuted,fontSize:'0.85rem',lineHeight:1,padding:'0.1rem 0.2rem'}},'✕')
+      ),
+      acSuggestions.map(function(exp){
+        return React.createElement('button',{
+          key:exp.id,
+          onMouseDown:function(e){e.preventDefault();onAcSelect(exp);},
+          style:{width:'100%',display:'flex',alignItems:'center',gap:'0.6rem',padding:'0.55rem 0.75rem',background:'none',border:'none',borderBottom:'1px solid '+C.border,cursor:'pointer',textAlign:'left',fontFamily:F}
+        },
+          React.createElement('div',{style:{fontSize:'1.1rem',flexShrink:0}},catEm(exp.category)),
+          React.createElement('div',{style:{flex:1,minWidth:0}},
+            React.createElement('div',{style:{fontSize:'0.82rem',fontWeight:700,color:C.navy,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},exp.description),
+            React.createElement('div',{style:{fontSize:'0.68rem',color:C.textMuted,marginTop:'0.05rem'}},
+              exp.date+' · '+fmt(safeN(exp.amount),exp.currency||'ARS')+' · '+(exp.paidBy==='Javi'?'👨':'👩')+' '+exp.paidBy
+            )
+          )
+        );
+      })
+    )
+  ) : null;
+
+  // ── Description field (with autocomplete) ─────────────────────────────────
+  var descField = function(showError){
+    return React.createElement('div',{style:{position:'relative'}},
+      React.createElement('input',{
+        style:inpStyle({borderColor:showError&&errors.description?'#c0314f':C.border}),
+        value:form.description,
+        onChange:function(e){onDescriptionChange(e.target.value);},
+        onBlur:function(){setTimeout(function(){setAcSuggestions([]);},150);},
+        placeholder:'Ej: Almuerzo en Lo de Juan',
+        autoComplete:'off'
+      }),
+      acDropdown
+    );
+  };
+
   // ── Split button ──────────────────────────────────────────────────────────
   var splitButton = React.createElement('button',{
     onClick:function(){setShowSplitModal(true);},
@@ -164,7 +242,7 @@ export default function AddEditExpense(props){
   var step1 = React.createElement('div',null,
     React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,fontWeight:700,textAlign:'center',letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:'1rem'}},'Paso 1 de 2 — Lo esencial'),
     Lbl('Descripción'),
-    React.createElement('input',{style:inpStyle({borderColor:errors.description?'#c0314f':C.border}),value:form.description,onChange:function(e){set('description',e.target.value);setErrors({});},placeholder:'Ej: Almuerzo en Lo de Juan'}),
+    descField(true),
     errors.description?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.7rem',margin:'0.15rem 0 0'}},'⚠ '+errors.description):null,
     Lbl('Monto total'),
     React.createElement('input',{style:inpStyle({borderColor:errors.amount?'#c0314f':C.border}),type:'number',value:form.amount,onChange:function(e){onAmountChange(e.target.value);setErrors({});},placeholder:'0'}),
@@ -204,7 +282,7 @@ export default function AddEditExpense(props){
     isEditMode
       ?React.createElement('div',{style:{background:C.bg,borderRadius:'0.85rem',padding:'0.75rem',marginBottom:'0.5rem',border:'1px solid '+C.border}},
           Lbl('Descripción'),
-          React.createElement('input',{style:inpStyle(),value:form.description,onChange:function(e){set('description',e.target.value);},placeholder:'Descripción'}),
+          descField(false),
           React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginTop:'0.5rem'}},
             React.createElement('div',{style:{flex:1}},Lbl('Monto'),React.createElement('input',{style:inpStyle(),type:'number',value:form.amount,onChange:function(e){onAmountChange(e.target.value);},placeholder:'0'})),
             React.createElement('div',{style:{flex:1}},Lbl('Fecha'),React.createElement('input',{style:inpStyle(),type:'date',value:form.date,onChange:function(e){set('date',e.target.value);}}))
