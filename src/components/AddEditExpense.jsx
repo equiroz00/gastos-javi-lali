@@ -1,7 +1,7 @@
 // ── components/AddEditExpense.jsx ─────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants;
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, catEm } from '../lib/helpers';
+import { C, F, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, catEm } from '../lib/helpers.js';
 import useAppStore from '../store/useAppStore';
 import { SegBtn } from './ui.jsx';
 import SplitModal from './SplitModal.jsx';
