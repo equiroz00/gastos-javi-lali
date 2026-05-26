@@ -43,6 +43,7 @@ export default function AddEditExpense(props){
   var paidState=useState('');var retroPaid=paidState[0];var setRetroPaid=paidState[1];
   var retroPerState=useState('');var retroStartPer=retroPerState[0];var setRetroStartPer=retroPerState[1];
   var queueState=useState([]);var queue=queueState[0];var setQueue=queueState[1];
+  var dupState=useState(null);var dupWarning=dupState[0];var setDupWarning=dupState[1];
 
   // ── Autocomplete ──────────────────────────────────────────────────────────
   var acState=useState([]);var acSuggestions=acState[0];var setAcSuggestions=acState[1];
@@ -119,10 +120,21 @@ export default function AddEditExpense(props){
     setShowSplitModal(false);
   }
 
-  // When amount changes, reset stored split so it recalculates
+  // When amount changes, reset stored split and check for duplicates in current period
   function onAmountChange(val){
-    set('amount', val);
     setForm(function(f){ return Object.assign({},f,{amount:val,javiAmount:0,laliAmount:0}); });
+    setErrors({});
+    var n = Math.floor(safeN(val));
+    if(n <= 0){ setDupWarning(null); return; }
+    var currentPeriod = getPeriod(form.date, periods);
+    var cur2 = BASE_CURS.indexOf(form.currency)>=0?form.currency:(form.customCurrency||'ARS');
+    var match = expenses.find(function(e){
+      return Math.floor(safeN(e.amount)) === n
+        && (e.currency||'ARS') === cur2
+        && e.period === currentPeriod
+        && (!isEditMode || e.id !== (initialData&&initialData.id));
+    });
+    setDupWarning(match || null);
   }
 
   function enqueue(){
@@ -247,6 +259,17 @@ export default function AddEditExpense(props){
     Lbl('Monto total'),
     React.createElement('input',{style:inpStyle({borderColor:errors.amount?'#c0314f':C.border}),type:'number',value:form.amount,onChange:function(e){onAmountChange(e.target.value);setErrors({});},placeholder:'0'}),
     errors.amount?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.7rem',margin:'0.15rem 0 0'}},'⚠ '+errors.amount):null,
+    // ── Duplicate warning ──
+    dupWarning?React.createElement('div',{style:{marginTop:'0.5rem',background:'#fef9c3',border:'1px solid #fde047',borderRadius:'0.75rem',padding:'0.6rem 0.85rem',display:'flex',gap:'0.5rem',alignItems:'flex-start'}},
+      React.createElement('span',{style:{fontSize:'1rem',flexShrink:0}},'⚠️'),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontSize:'0.78rem',fontWeight:800,color:'#854d0e'}},'Posible gasto duplicado'),
+        React.createElement('div',{style:{fontSize:'0.72rem',color:'#92400e',marginTop:'0.15rem'}},
+          '"'+dupWarning.description+'" · '+dupWarning.date+' · '+(dupWarning.paidBy==='Javi'?'👨':'👩')+' '+dupWarning.paidBy
+        ),
+        React.createElement('button',{onClick:function(){setDupWarning(null);},style:{marginTop:'0.3rem',background:'none',border:'none',fontSize:'0.68rem',color:'#92400e',cursor:'pointer',padding:0,fontWeight:700,fontFamily:F}},'Ignorar y continuar →')
+      )
+    ):null,
     Lbl('Moneda'),
     React.createElement('div',{style:{display:'flex',gap:'0.4rem',flexWrap:'wrap'}},
       BASE_CURS.concat(['Otra']).map(function(c){return React.createElement('button',{key:c,onClick:function(){set('currency',c);},style:{padding:'0.4rem 0.85rem',fontSize:'0.78rem',borderRadius:'0.75rem',border:'1px solid',cursor:'pointer',fontWeight:form.currency===c?800:500,fontFamily:F,background:form.currency===c?C.navy:'transparent',borderColor:form.currency===c?C.navy:C.border,color:form.currency===c?C.white:C.navy}},c);})
