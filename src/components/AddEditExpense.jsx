@@ -1,6 +1,6 @@
 // ── components/AddEditExpense.jsx ─────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
+import { C, F, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants;
 import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, catEm } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { SegBtn } from './ui.jsx';
@@ -120,20 +120,40 @@ export default function AddEditExpense(props){
     setShowSplitModal(false);
   }
 
-  // When amount changes, reset stored split and check for duplicates in current period
+  // When amount changes, reset stored split and check for duplicates
   function onAmountChange(val){
     setForm(function(f){ return Object.assign({},f,{amount:val,javiAmount:0,laliAmount:0}); });
     setErrors({});
-    var n = Math.floor(safeN(val));
+    var n = Math.round(safeN(val));
     if(n <= 0){ setDupWarning(null); return; }
-    var currentPeriod = getPeriod(form.date, periods);
     var cur2 = BASE_CURS.indexOf(form.currency)>=0?form.currency:(form.customCurrency||'ARS');
-    var match = expenses.find(function(e){
-      return Math.floor(safeN(e.amount)) === n
+    var currentPeriod = getPeriod(form.date, periods);
+
+    // Filter candidate expenses: same rounded amount + same currency + not self (edit mode)
+    var candidates = expenses.filter(function(e){
+      return Math.round(safeN(e.amount)) === n
         && (e.currency||'ARS') === cur2
-        && e.period === currentPeriod
+        && !e.fromPlan
         && (!isEditMode || e.id !== (initialData&&initialData.id));
     });
+
+    if(!candidates.length){ setDupWarning(null); return; }
+
+    // Primary check: same period
+    var match = null;
+    if(currentPeriod && currentPeriod !== 'Sin período'){
+      match = candidates.find(function(e){ return e.period === currentPeriod; }) || null;
+    }
+
+    // Fallback: if period is not configured or no match, check last 60 days
+    if(!match){
+      var cutoff = new Date();
+      cutoff.setDate(cutoff.getDate()-60);
+      match = candidates.find(function(e){
+        return e.date && new Date(e.date+'T12:00:00') >= cutoff;
+      }) || null;
+    }
+
     setDupWarning(match || null);
   }
 
