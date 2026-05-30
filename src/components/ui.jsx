@@ -84,14 +84,23 @@ export function PaymentModal(){
   var payModal=useAppStore(function(s){ return s.payModal; });
   var setPayModal=useAppStore(function(s){ return s.setPayModal; });
   var confirmPayment=useAppStore(function(s){ return s.confirmPayment; });
-  if(!payModal) return null;
-  var currency=payModal.currency||'ARS',netBal=payModal.netBal||0;
+  // Hooks must always be called unconditionally — before any early return
+  var currency=(payModal&&payModal.currency)||'ARS';
+  var netBal=(payModal&&payModal.netBal)||0;
   var absAmt=Math.abs(netBal);
   var debtor=netBal>0?'Lali':'Javi';
   var creditor=netBal>0?'Javi':'Lali';
-  var amtState=useState(absAmt>0?String(Math.round(absAmt)):'');var amt=amtState[0];var setAmt=amtState[1];
+  var amtState=useState('');var amt=amtState[0];var setAmt=amtState[1];
   var dateState=useState(new Date().toISOString().split('T')[0]);var date=dateState[0];var setDate=dateState[1];
   var errState=useState('');var err=errState[0];var setErr=errState[1];
+  // Sync amount when modal opens/changes
+  React.useEffect(function(){
+    if(payModal){
+      setAmt(absAmt>0?String(Math.round(absAmt)):'');
+      setErr('');
+    }
+  },[payModal]);
+  if(!payModal) return null;
   function submit(){
     if(!amt||parseFloat(amt)<=0){setErr('Ingresá un monto válido.');return;}
     confirmPayment({id:'pay_'+Date.now(),date:date,amount:parseFloat(amt),currency:currency,from:debtor,to:creditor,registeredAt:new Date().toISOString()});

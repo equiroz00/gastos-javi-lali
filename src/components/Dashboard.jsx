@@ -145,8 +145,21 @@ function ActivePlans(){
   );
 }
 
+// ── useIsDesktop hook (local copy — avoids cross-file import) ──────────────────
+function useIsDesktop(){
+  var initState = useState(function(){ return window.innerWidth>=768; });
+  var isDesktop = initState[0]; var setIsDesktop = initState[1];
+  useEffect(function(){
+    var handler = function(){ setIsDesktop(window.innerWidth>=768); };
+    window.addEventListener('resize',handler);
+    return function(){ window.removeEventListener('resize',handler); };
+  },[]);
+  return isDesktop;
+}
+
 // ── Dashboard ──────────────────────────────────────────────────────────────────
 export default function Dashboard(){
+  var isDesktop = useIsDesktop();
   var expenses = useAppStore(function(s){ return s.expenses; });
   var settings = useAppStore(function(s){ return s.settings; });
   var plans    = useAppStore(function(s){ return s.plans; });
@@ -166,54 +179,86 @@ export default function Dashboard(){
   var curEntries = Object.entries(totByCur);
   var weekStart = getWeekStart();
   var weekExps = sortByDate(expenses.filter(function(e){ return e.date&&new Date(e.date+'T12:00:00')>=weekStart&&e.period!==PENDING_PER; }));
-
-  // Pass filtered expenses to BalanceSection via a wrapper
-  // (BalanceSection reads from store; we override via a local filtered view)
   var filteredForBalance = periodExps;
 
-  return React.createElement('div',{style:{padding:'1rem',display:'flex',flexDirection:'column',gap:'0.75rem'}},
-    // Balance (passes period-filtered expenses)
-    React.createElement(BalanceSectionFiltered,{periodExps:filteredForBalance,payments:payments}),
-    // Period selector + total
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.6rem'}},
-      React.createElement(Card,{style:{padding:'0.75rem'}},
-        React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted,marginBottom:'0.3rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}},'Período'),
-        periods.length>0
-          ?React.createElement('select',{value:selPeriod,onChange:function(e){setSelPeriod(e.target.value);},style:{width:'100%',border:'none',fontSize:'0.78rem',fontWeight:800,color:C.navy,background:'transparent',outline:'none',cursor:'pointer',fontFamily:F,padding:0}},
-              periods.slice().reverse().map(function(p){return React.createElement('option',{key:p.name,value:p.name},p.name);}))
-          :React.createElement('div',{style:{fontWeight:700,color:C.textMuted,fontSize:'0.78rem'}},'Sin períodos'),
-        React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted,marginTop:'0.2rem'}},periodExps.length+' gastos')
+  // ── Sections defined once, reused in both layouts ────────────────────────────
+
+  var balanceSection = React.createElement(BalanceSectionFiltered,{periodExps:filteredForBalance,payments:payments});
+
+  var periodCard = React.createElement(Card,{style:{padding:'0.75rem'}},
+    React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted,marginBottom:'0.3rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}},'Período'),
+    periods.length>0
+      ?React.createElement('select',{value:selPeriod,onChange:function(e){setSelPeriod(e.target.value);},style:{width:'100%',border:'none',fontSize:'0.78rem',fontWeight:800,color:C.navy,background:'transparent',outline:'none',cursor:'pointer',fontFamily:F,padding:0}},
+          periods.slice().reverse().map(function(p){return React.createElement('option',{key:p.name,value:p.name},p.name);}))
+      :React.createElement('div',{style:{fontWeight:700,color:C.textMuted,fontSize:'0.78rem'}},'Sin períodos'),
+    React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted,marginTop:'0.2rem'}},periodExps.length+' gastos')
+  );
+
+  var totalCard = curEntries.length<=1
+    ?React.createElement(Card,{style:{padding:'0.75rem'}},
+        React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}},'Total '+(curEntries[0]?curEntries[0][0]:'ARS')),
+        React.createElement('div',{style:{fontWeight:800,color:C.navy,marginTop:'0.2rem',fontSize:'0.95rem'}},curEntries[0]?fmtS(curEntries[0][1],curEntries[0][0]):'—')
+      )
+    :React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.4rem'}},
+        curEntries.map(function(entry){
+          return React.createElement(Card,{key:entry[0],style:{padding:'0.5rem 0.6rem'}},
+            React.createElement('div',{style:{fontSize:'0.6rem',color:C.textMuted,fontWeight:700}},entry[0]),
+            React.createElement('div',{style:{fontWeight:800,color:C.navy,fontSize:'0.82rem'}},fmtS(entry[1],entry[0]))
+          );
+        })
+      );
+
+  var weekSection = React.createElement('div',null,
+    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.5rem'}},
+      React.createElement('h2',{style:{fontWeight:800,color:C.navy,fontSize:'0.88rem',margin:0}},'📅 Esta semana'),
+      React.createElement('span',{style:{fontSize:'0.68rem',color:C.textMuted}},weekExps.length+' gastos')
+    ),
+    weekExps.length===0
+      ?React.createElement(Card,{style:{padding:'1.5rem',textAlign:'center',color:C.textMuted,fontSize:'0.85rem'}},'No hay gastos esta semana')
+      :React.createElement(Card,{style:{padding:0,overflow:'hidden'}},
+          React.createElement('div',{style:{maxHeight: isDesktop ? 'calc(6 * 68px)' : 'calc(4 * 68px)',overflowY:'auto'}},
+            React.createElement(ExpenseList,{expenses:weekExps,onDelete:function(id,e){requestDelete(id,e);},onEdit:function(e){setEditingExpense(e);}})
+          ),
+          weekExps.length>(isDesktop?6:4)?React.createElement('div',{style:{textAlign:'center',padding:'0.4rem',fontSize:'0.7rem',color:C.textMuted,borderTop:'1px solid '+C.border}},'↕ Deslizá para ver más'):null
+        )
+  );
+
+  // ── DESKTOP — 3 columns × 2 rows ─────────────────────────────────────────────
+  if(isDesktop){
+    return React.createElement('div',{style:{padding:'1.25rem',display:'flex',flexDirection:'column',gap:'1rem'}},
+      // Row 1: 3-column grid
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'1rem',alignItems:'start'}},
+        // Col 1 — Balance
+        React.createElement('div',null, balanceSection),
+        // Col 2 — Período + Total (stacked)
+        React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.75rem'}},
+          periodCard,
+          totalCard
+        ),
+        // Col 3 — Cuotas activas
+        React.createElement('div',null,
+          plans.length>0
+            ?React.createElement(ActivePlans,null)
+            :React.createElement(Card,{style:{padding:'1.25rem',textAlign:'center',color:C.textMuted,fontSize:'0.82rem'}},
+                React.createElement('div',{style:{fontSize:'1.5rem',marginBottom:'0.4rem'}},'💳'),
+                React.createElement('div',{style:{fontWeight:700}},'Sin cuotas activas')
+              )
+        )
       ),
-      curEntries.length<=1
-        ?React.createElement(Card,{style:{padding:'0.75rem'}},
-            React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}},'Total '+(curEntries[0]?curEntries[0][0]:'ARS')),
-            React.createElement('div',{style:{fontWeight:800,color:C.navy,marginTop:'0.2rem',fontSize:'0.95rem'}},curEntries[0]?fmtS(curEntries[0][1],curEntries[0][0]):'—')
-          )
-        :React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.4rem'}},
-            curEntries.map(function(entry){
-              return React.createElement(Card,{key:entry[0],style:{padding:'0.5rem 0.6rem'}},
-                React.createElement('div',{style:{fontSize:'0.6rem',color:C.textMuted,fontWeight:700}},entry[0]),
-                React.createElement('div',{style:{fontWeight:800,color:C.navy,fontSize:'0.82rem'}},fmtS(entry[1],entry[0]))
-              );
-            })
-          )
+      // Row 2: Esta semana — full width
+      weekSection
+    );
+  }
+
+  // ── MOBILE — columna única (sin cambios) ─────────────────────────────────────
+  return React.createElement('div',{style:{padding:'1rem',display:'flex',flexDirection:'column',gap:'0.75rem'}},
+    balanceSection,
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.6rem'}},
+      periodCard,
+      totalCard
     ),
     React.createElement(ActivePlans,null),
-    // This week
-    React.createElement('div',null,
-      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.5rem'}},
-        React.createElement('h2',{style:{fontWeight:800,color:C.navy,fontSize:'0.88rem',margin:0}},'📅 Esta semana'),
-        React.createElement('span',{style:{fontSize:'0.68rem',color:C.textMuted}},weekExps.length+' gastos')
-      ),
-      weekExps.length===0
-        ?React.createElement(Card,{style:{padding:'1.5rem',textAlign:'center',color:C.textMuted,fontSize:'0.85rem'}},'No hay gastos esta semana')
-        :React.createElement(Card,{style:{padding:0,overflow:'hidden'}},
-            React.createElement('div',{style:{maxHeight:'calc(4 * 68px)',overflowY:'auto'}},
-              React.createElement(ExpenseList,{expenses:weekExps,onDelete:function(id,e){requestDelete(id,e);},onEdit:function(e){setEditingExpense(e);}})
-            ),
-            weekExps.length>4?React.createElement('div',{style:{textAlign:'center',padding:'0.4rem',fontSize:'0.7rem',color:C.textMuted,borderTop:'1px solid '+C.border}},'↕ Deslizá para ver más'):null
-          )
-    )
+    weekSection
   );
 }
 

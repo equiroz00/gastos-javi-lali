@@ -35,15 +35,27 @@ function getGreeting(name: string | null): string {
 }
 
 interface Tab { id: string; icon: React.ReactNode; label: string; }
+// 'add' is always at index 2 (center) — rendered as FAB
 const TABS: Tab[] = [
-  { id:'dashboard', icon:<Home         size={20} strokeWidth={1.8} />, label:'Inicio'    },
-  { id:'add',       icon:<Plus         size={20} strokeWidth={1.8} />, label:'Agregar'   },
-  { id:'stats',     icon:<BarChart2    size={20} strokeWidth={1.8} />, label:'Stats'     },
+  { id:'dashboard', icon:<Home          size={20} strokeWidth={1.8} />, label:'Inicio'    },
+  { id:'stats',     icon:<BarChart2     size={20} strokeWidth={1.8} />, label:'Stats'     },
+  { id:'add',       icon:<Plus          size={26} strokeWidth={2.5} />, label:'Agregar'   },
   { id:'history',   icon:<ClipboardList size={20} strokeWidth={1.8} />, label:'Historial' },
-  { id:'settings',  icon:<Settings2    size={20} strokeWidth={1.8} />, label:'Config'    },
+  { id:'settings',  icon:<Settings2     size={20} strokeWidth={1.8} />, label:'Config'    },
 ];
 
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = React.useState(() => window.innerWidth >= 768);
+  React.useEffect(() => {
+    const handler = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isDesktop;
+}
+
 export default function App() {
+  const isDesktop      = useIsDesktop();
   const currentUser    = useAppStore(s => s.currentUser);
   const authDenied     = useAppStore(s => s.authDenied);
   const loading        = useAppStore(s => s.loading);
@@ -53,19 +65,19 @@ export default function App() {
   const userTheme      = useAppStore(s => s.userTheme);
   const userFont       = useAppStore(s => s.userFont);
 
-  const setCurrentUser   = useAppStore(s => s.setCurrentUser);
-  const setAuthDenied    = useAppStore(s => s.setAuthDenied);
-  const setLoading       = useAppStore(s => s.setLoading);
-  const setExpenses      = useAppStore(s => s.setExpenses);
-  const setPlans         = useAppStore(s => s.setPlans);
-  const setPayments      = useAppStore(s => s.setPayments);
-  const setSettings      = useAppStore(s => s.setSettings);
-  const setCustomCats    = useAppStore(s => s.setCustomCats);
-  const setUserTheme     = useAppStore(s => s.setUserTheme);
-  const setUserFont      = useAppStore(s => s.setUserFont);
-  const setActivityLog   = useAppStore(s => s.setActivityLog);
-  const setLastReadTs    = useAppStore(s => s.setLastReadTs);
-  const setView          = useAppStore(s => s.setView);
+  const setCurrentUser    = useAppStore(s => s.setCurrentUser);
+  const setAuthDenied     = useAppStore(s => s.setAuthDenied);
+  const setLoading        = useAppStore(s => s.setLoading);
+  const setExpenses       = useAppStore(s => s.setExpenses);
+  const setPlans          = useAppStore(s => s.setPlans);
+  const setPayments       = useAppStore(s => s.setPayments);
+  const setSettings       = useAppStore(s => s.setSettings);
+  const setCustomCats     = useAppStore(s => s.setCustomCats);
+  const setUserTheme      = useAppStore(s => s.setUserTheme);
+  const setUserFont       = useAppStore(s => s.setUserFont);
+  const setActivityLog    = useAppStore(s => s.setActivityLog);
+  const setLastReadTs     = useAppStore(s => s.setLastReadTs);
+  const setView           = useAppStore(s => s.setView);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
 
   applyTheme(userTheme || 'default', userFont || 'Nunito');
@@ -136,7 +148,6 @@ export default function App() {
           fired.prefs = true; checkDone();
         }, e => { console.error('userPrefs:', e.code); fired.prefs = true; checkDone(); });
 
-        // Activity log — last 50 entries, newest first
         const logQ = query(activityLogCol(), orderBy('timestamp', 'desc'), limit(50));
         const u6 = onSnapshot(logQ, snap => {
           setActivityLog(snap.docs.map(d => d.data() as ActivityEntry));
@@ -158,74 +169,135 @@ export default function App() {
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', flexDirection:'column', gap:'1rem', background:'#111', fontFamily:F }}>
       <Loader2 size={40} color="#C5BFAE" strokeWidth={1.5} style={{ animation:'spin 1s linear infinite' }} />
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      <p style={{ color:'#C5BFAE', fontSize:'0.9rem', margin:0, opacity:0.8 }}>
-        {getGreeting(currentUser)}
-      </p>
+      <p style={{ color:'#C5BFAE', fontSize:'0.9rem', margin:0, opacity:0.8 }}>{getGreeting(currentUser)}</p>
     </div>
   );
 
   if (!currentUser) return <LoginScreen denied={authDenied} />;
 
+  // ── Edit mode (both mobile and desktop use same form) ──────────────────────
   if (editingExpense) return (
-    <div style={{ minHeight:'100vh', background:C.bg, maxWidth:'480px', margin:'0 auto', fontFamily:F, overflowY:'auto' }}>
+    <div style={{ minHeight:'100vh', background:C.bg, maxWidth: isDesktop ? '600px' : '480px', margin:'0 auto', fontFamily:F, overflowY:'auto' }}>
       <AddEditExpense isEditMode initialData={{ ...editingExpense, amount: String(editingExpense.amount) }} />
     </div>
   );
 
-  return (
-    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', maxWidth:'480px', margin:'0 auto', fontFamily:F }}>
-      <ConfirmDialog />
-      <PaymentModal />
-      <Toast />
+  // ── Shared header ──────────────────────────────────────────────────────────
+  const Header = (
+    <div style={{ background:C.gradMain, padding:'0.75rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 12px rgba(0,0,0,0.2)' }}>
+      <div>
+        <div style={{ fontWeight:900, fontSize:'1.5rem', color:C.white, lineHeight:1.1, fontFamily:F }}>💑 Javi & Lali</div>
+        <div style={{ fontSize:'0.75rem', color:'rgba(255,255,255,0.8)', fontFamily:F, marginTop:'0.1rem' }}>{getGreeting(currentUser)}</div>
+      </div>
+      <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
+        <NotificationPanel />
+        <button
+          onClick={() => useAppStore.getState().handleSignOut()}
+          style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:'0.6rem', padding:'0.4rem 0.6rem', color:C.white, cursor:'pointer', display:'flex', alignItems:'center', gap:'0.35rem' }}
+        >
+          <LogOut size={15} strokeWidth={2} />
+          <span style={{ fontSize:'0.75rem', fontWeight:700, fontFamily:F }}>Salir</span>
+        </button>
+      </div>
+    </div>
+  );
 
-      {/* Header */}
-      <div style={{ background:C.gradMain, padding:'0.75rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 12px rgba(0,0,0,0.2)' }}>
-        <div>
-          <div style={{ fontWeight:900, fontSize:'1.5rem', color:C.white, lineHeight:1.1, fontFamily:F }}>💑 Javi & Lali</div>
-          <div style={{ fontSize:'0.75rem', color:'rgba(255,255,255,0.8)', fontFamily:F, marginTop:'0.1rem' }}>
-            {getGreeting(currentUser)}
+  const SyncBar = syncMsg ? (
+    <div style={{ margin:'0.75rem 1rem 0', padding:'0.6rem 0.85rem', background:syncMsg.startsWith('✓') ? '#d4f5eb' : '#fdf0d5', borderRadius:'0.75rem', fontSize:'0.8rem', color:syncMsg.startsWith('✓') ? '#1a6e4f' : '#7a5c1a', fontWeight:700, border:'1px solid ' + (syncMsg.startsWith('✓') ? '#a8e8cf' : '#f0d898') }}>
+      {syncMsg}
+    </div>
+  ) : null;
+
+  const Content = (
+    <>
+      {view === 'dashboard' && <Dashboard />}
+      {view === 'add'       && <AddEditExpense />}
+      {view === 'stats'     && <Stats />}
+      {view === 'history'   && <History />}
+      {view === 'settings'  && <SettingsScreen />}
+    </>
+  );
+
+  // ── DESKTOP layout ─────────────────────────────────────────────────────────
+  if (isDesktop) {
+    // Sidebar nav items (no FAB on desktop — just a prominent button)
+    const sideNavTabs = TABS.filter(t => t.id !== 'add');
+    return (
+      <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', fontFamily:F }}>
+        <ConfirmDialog /><PaymentModal /><Toast />
+        {Header}
+        <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
+          {/* Sidebar */}
+          <div style={{ width:'200px', flexShrink:0, background:C.surface, borderRight:'1px solid '+C.border, display:'flex', flexDirection:'column', padding:'1rem 0.75rem', gap:'0.35rem', position:'sticky', top:0, height:'calc(100vh - 56px)', overflowY:'auto' }}>
+            {/* Add button — prominent at top of sidebar */}
+            <button
+              onClick={() => setView('add')}
+              style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.7rem 1rem', borderRadius:'0.9rem', border:'none', cursor:'pointer', fontFamily:F, fontWeight:800, fontSize:'0.85rem', background:C.gradMain, color:C.white, boxShadow:'0 4px 14px rgba(0,0,0,0.18)', marginBottom:'0.5rem' }}
+            >
+              <Plus size={18} strokeWidth={2.5} />
+              Agregar gasto
+            </button>
+            {sideNavTabs.map(t => {
+              const active = view === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setView(t.id)}
+                  style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 1rem', borderRadius:'0.75rem', border:'none', cursor:'pointer', fontFamily:F, fontWeight:active ? 800 : 500, fontSize:'0.85rem', background:active ? C.navy+'18' : 'transparent', color:active ? C.navy : C.textMuted, textAlign:'left' }}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Main content */}
+          <div style={{ flex:1, overflowY:'auto', paddingTop:'0.75rem', paddingBottom:'2rem', maxWidth:'900px' }}>
+            {SyncBar}
+            {Content}
           </div>
         </div>
-        <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
-          <NotificationPanel />
-          <button
-            onClick={() => useAppStore.getState().handleSignOut()}
-            style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:'0.6rem', padding:'0.4rem 0.6rem', color:C.white, cursor:'pointer', display:'flex', alignItems:'center', gap:'0.35rem' }}
-          >
-            <LogOut size={15} strokeWidth={2} />
-            <span style={{ fontSize:'0.75rem', fontWeight:700, fontFamily:F }}>Salir</span>
-          </button>
-        </div>
+      </div>
+    );
+  }
+
+  // ── MOBILE layout ──────────────────────────────────────────────────────────
+  return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', maxWidth:'480px', margin:'0 auto', fontFamily:F }}>
+      <ConfirmDialog /><PaymentModal /><Toast />
+      {Header}
+      <div style={{ flex:1, overflowY:'auto', paddingBottom:'5.5rem', paddingTop:'0.75rem' }}>
+        {SyncBar}
+        {Content}
       </div>
 
-      {/* Sync message */}
-      {syncMsg && (
-        <div style={{ margin:'0.75rem 1rem 0', padding:'0.6rem 0.85rem', background:syncMsg.startsWith('✓') ? '#d4f5eb' : '#fdf0d5', borderRadius:'0.75rem', fontSize:'0.8rem', color:syncMsg.startsWith('✓') ? '#1a6e4f' : '#7a5c1a', fontWeight:700, border:'1px solid ' + (syncMsg.startsWith('✓') ? '#a8e8cf' : '#f0d898') }}>
-          {syncMsg}
-        </div>
-      )}
-
-      {/* Content */}
-      <div style={{ flex:1, overflowY:'auto', paddingBottom:'5rem', paddingTop:'0.75rem' }}>
-        {view === 'dashboard' && <Dashboard />}
-        {view === 'add'       && <AddEditExpense />}
-        {view === 'stats'     && <Stats />}
-        {view === 'history'   && <History />}
-        {view === 'settings'  && <SettingsScreen />}
-      </div>
-
-      {/* Bottom nav */}
-      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:'480px', background:C.surface, borderTop:'1px solid '+C.border, display:'flex', boxShadow:'0 -2px 12px rgba(0,0,0,0.1)', zIndex:10 }}>
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setView(t.id)}
-            style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.5rem 0', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:view===t.id ? C.navy : C.textMuted, fontSize:'0.6rem', fontWeight:view===t.id ? 900 : 500, gap:'0.2rem' }}
-          >
-            {t.icon}
-            {t.label}
-          </button>
-        ))}
+      {/* Bottom nav with FAB in center */}
+      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:'480px', background:C.surface, borderTop:'1px solid '+C.border, display:'flex', alignItems:'flex-end', boxShadow:'0 -2px 12px rgba(0,0,0,0.1)', zIndex:10, paddingBottom:'env(safe-area-inset-bottom)' }}>
+        {TABS.map(t => {
+          const isAdd = t.id === 'add';
+          const active = view === t.id;
+          if (isAdd) return (
+            <div key={t.id} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', paddingBottom:'0.5rem' }}>
+              <button
+                onClick={() => setView('add')}
+                style={{ display:'flex', alignItems:'center', justifyContent:'center', width:'54px', height:'54px', borderRadius:'50%', border:'none', cursor:'pointer', background:C.gradMain, color:C.white, boxShadow:'0 4px 16px rgba(0,0,0,0.25)', transform:'translateY(-12px)', marginBottom:'-4px' }}
+              >
+                <Plus size={26} strokeWidth={2.5} />
+              </button>
+              <span style={{ fontSize:'0.6rem', fontFamily:F, color: active ? C.navy : C.textMuted, fontWeight: active ? 900 : 500, marginTop:'2px' }}>Agregar</span>
+            </div>
+          );
+          return (
+            <button
+              key={t.id}
+              onClick={() => setView(t.id)}
+              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.6rem 0 0.5rem', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:active ? C.navy : C.textMuted, fontSize:'0.6rem', fontWeight:active ? 900 : 500, gap:'0.2rem' }}
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
