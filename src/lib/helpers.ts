@@ -7,10 +7,17 @@ export function todayStr(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+// Round to 2 decimal places — used across all monetary calculations
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// Full number format (no K/M abbreviation) with up to 2 decimal places
+// Used in balance bubbles and anywhere precise amounts are shown
 export function fmt(n: number, c?: Currency): string {
   const cur = c || 'ARS';
   const sym = (CUR_SYM as Record<string, string>)[cur] || (cur + ' ');
-  return sym + Math.abs(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return sym + Math.abs(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 export function fmtS(n: number, c?: Currency): string {
@@ -66,9 +73,9 @@ export function getWeekStart(): Date {
 // ── Calculations ──────────────────────────────────────────────────────────────
 export function calcAmts(amt: string | number, resp: Responsible): { javiAmount: number; laliAmount: number } {
   const n = safeN(amt);
-  if (resp === 'Javi') return { javiAmount: n, laliAmount: 0 };
-  if (resp === 'Lali') return { javiAmount: 0, laliAmount: n };
-  return { javiAmount: n / 2, laliAmount: n / 2 };
+  if (resp === 'Javi') return { javiAmount: round2(n), laliAmount: 0 };
+  if (resp === 'Lali') return { javiAmount: 0, laliAmount: round2(n) };
+  return { javiAmount: round2(n / 2), laliAmount: round2(n / 2) };
 }
 
 export function calcBal(exps: Expense[]): number {

@@ -223,30 +223,33 @@ export default function Dashboard(){
         )
   );
 
-  // ── DESKTOP — 3 columns × 2 rows ─────────────────────────────────────────────
+  // ── DESKTOP layout ─────────────────────────────────────────────────────────
   if(isDesktop){
-    return React.createElement('div',{style:{padding:'1.25rem',display:'flex',flexDirection:'column',gap:'1rem'}},
-      // Row 1: 3-column grid
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'1rem',alignItems:'start'}},
-        // Col 1 — Balance
+    return React.createElement('div',{style:{padding:'1.25rem',display:'flex',flexDirection:'column',gap:'1rem',maxWidth:'1100px'}},
+      // Row 1: Balance | Período + Total (stacked) — 2 columns, tight
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1.4fr 1fr',gap:'1rem',alignItems:'start'}},
+        // Col 1 — Balance (puede crecer si hay más monedas)
         React.createElement('div',null, balanceSection),
-        // Col 2 — Período + Total (stacked)
+        // Col 2 — Período selector + Total ARS (stacked)
         React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.75rem'}},
           periodCard,
           totalCard
-        ),
-        // Col 3 — Cuotas activas
+        )
+      ),
+      // Row 2: Cuotas activas | Esta semana — mismo ancho que row 1
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:'1rem',alignItems:'start'}},
+        // Col 1 — Cuotas activas (o placeholder)
         React.createElement('div',null,
           plans.length>0
             ?React.createElement(ActivePlans,null)
-            :React.createElement(Card,{style:{padding:'1.25rem',textAlign:'center',color:C.textMuted,fontSize:'0.82rem'}},
-                React.createElement('div',{style:{fontSize:'1.5rem',marginBottom:'0.4rem'}},'💳'),
+            :React.createElement(Card,{style:{padding:'1.5rem',textAlign:'center',color:C.textMuted,fontSize:'0.82rem'}},
+                React.createElement('div',{style:{fontSize:'1.8rem',marginBottom:'0.4rem'}},'💳'),
                 React.createElement('div',{style:{fontWeight:700}},'Sin cuotas activas')
               )
-        )
-      ),
-      // Row 2: Esta semana — full width
-      weekSection
+        ),
+        // Col 2 — Esta semana
+        weekSection
+      )
     );
   }
 
@@ -290,34 +293,76 @@ function BalanceSectionFiltered(props){
       var laliOwes2=curExps.reduce(function(s,e){return s+safeN(e.laliAmount);},0);
       var payAdj=(payments||[]).filter(function(p){return (p.currency||'ARS')===c;});
       return React.createElement('div',{key:c},
-        React.createElement('div',{onClick:function(){setOpenCur(isOpen?null:c);},style:{borderRadius:isOpen?'1.25rem 1.25rem 0 0':'1.25rem',padding:'1rem 1.5rem',background:bg,color:C.white,boxShadow:'0 4px 16px rgba(0,0,0,0.15)',cursor:'pointer',userSelect:'none'}},
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}},
+        // ── Header bubble (clickable — toggle breakdown) ──────────────────────
+        React.createElement('div',{
+          style:{borderRadius:isOpen?'1.25rem 1.25rem 0 0':'1.25rem',padding:'1rem 1.5rem',background:bg,color:C.white,boxShadow:'0 4px 16px rgba(0,0,0,0.15)',cursor:'pointer',userSelect:'none'}
+        },
+          // top row: label + toggle arrow
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'},onClick:function(){setOpenCur(isOpen?null:c);}},
             React.createElement('div',null,
               React.createElement('p',{style:{fontSize:'0.7rem',opacity:0.8,margin:'0 0 0.1rem'}},'Balance '+c+' — período seleccionado'),
-              noDebt?React.createElement('div',{style:{fontSize:'1.3rem',fontWeight:800}},'¡Al día! 🎉'):React.createElement(React.Fragment,null,React.createElement('div',{style:{fontSize:'1.7rem',fontWeight:800}},fmt(netBal,c)),React.createElement('div',{style:{fontSize:'0.82rem',opacity:0.9}},(laliOwes?'👩 Lali':'👨 Javi')+' le debe a '+(laliOwes?'👨 Javi':'👩 Lali')))
+              noDebt
+                ?React.createElement('div',{style:{fontSize:'1.3rem',fontWeight:800}},'¡Al día! 🎉')
+                :React.createElement(React.Fragment,null,
+                    React.createElement('div',{style:{fontSize:'1.7rem',fontWeight:800}},fmt(netBal,c)),
+                    React.createElement('div',{style:{fontSize:'0.82rem',opacity:0.9}},(laliOwes?'👩 Lali':'👨 Javi')+' le debe a '+(laliOwes?'👨 Javi':'👩 Lali'))
+                  )
             ),
             React.createElement('div',{style:{fontSize:'0.72rem',opacity:0.7,marginTop:'0.25rem',flexShrink:0}},isOpen?'▲':'▼ ver')
-          )
+          ),
+          // ── Payment button — inside bubble, below debt line ────────────────
+          !noDebt?React.createElement('button',{
+            onClick:function(ev){ev.stopPropagation();openPaymentModal(c,netBal);},
+            style:{
+              width:'100%',marginTop:'0.75rem',padding:'0.5rem 0.75rem',
+              background:'linear-gradient(135deg,rgba(255,255,255,0.22),rgba(220,220,220,0.18))',
+              backdropFilter:'blur(4px)',
+              border:'1px solid rgba(255,255,255,0.45)',
+              borderRadius:'0.8rem',
+              color:C.white,fontWeight:800,fontSize:'0.8rem',cursor:'pointer',fontFamily:F,
+              display:'flex',alignItems:'center',justifyContent:'center',gap:'0.4rem',
+              boxShadow:'0 2px 8px rgba(0,0,0,0.12)',
+              transition:'background 0.15s'
+            }
+          },'💸 Registrar pago en '+c):null
         ),
+        // ── Breakdown panel (expanded) ────────────────────────────────────────
         isOpen?React.createElement('div',{style:{background:C.surface,borderRadius:'0 0 1.25rem 1.25rem',border:'1px solid '+C.border,borderTop:'none',padding:'0.85rem 1rem'}},
           React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,fontWeight:700,marginBottom:'0.6rem',textTransform:'uppercase',letterSpacing:'0.05em'}},'Cómo se calculó'),
           React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginBottom:'0.5rem'}},
-            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'👨 Javi pagó'),React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiPaid,c))),
-            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'👩 Lali pagó'),React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliPaid,c)))
+            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},
+              React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'👨 Javi pagó'),
+              React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiPaid,c))
+            ),
+            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},
+              React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'👩 Lali pagó'),
+              React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliPaid,c))
+            )
           ),
           React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginBottom:'0.5rem'}},
-            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'Corresponde a Javi'),React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiOwes,c))),
-            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'Corresponde a Lali'),React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliOwes2,c)))
+            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},
+              React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'Corresponde a Javi'),
+              React.createElement('div',{style:{fontWeight:800,color:C.navy}},fmt(javiOwes,c))
+            ),
+            React.createElement('div',{style:{flex:1,background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border}},
+              React.createElement('div',{style:{fontSize:'0.63rem',color:C.textMuted,marginBottom:'0.2rem'}},'Corresponde a Lali'),
+              React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliOwes2,c))
+            )
           ),
           payAdj.length>0?React.createElement('div',{style:{background:'#f0fdf4',borderRadius:'0.65rem',padding:'0.5rem 0.75rem',marginBottom:'0.5rem',border:'1px solid #bbf7d0'}},
             React.createElement('div',{style:{fontSize:'0.68rem',color:'#166534',fontWeight:700,marginBottom:'0.2rem'}},'Pagos en '+c+':'),
             payAdj.map(function(p){return React.createElement('div',{key:p.id,style:{fontSize:'0.68rem',color:'#15803d'}},p.date+' — '+p.from+' pagó '+fmt(safeN(p.amount),c)+' a '+p.to);})
           ):null,
           React.createElement('div',{style:{borderTop:'1px dashed '+C.border,paddingTop:'0.5rem'}},
-            noDebt?React.createElement('div',{style:{fontSize:'0.8rem',color:'#2d9e7f',fontWeight:700,textAlign:'center'}},'✓ Todo está al día'):React.createElement('div',{style:{fontSize:'0.8rem',color:C.navy,fontWeight:700}},(laliOwes?'Lali':'Javi')+' le debe ',React.createElement('span',{style:{color:C.accent}},fmt(Math.abs(netBal),c)),' a '+(laliOwes?'Javi':'Lali'))
+            noDebt
+              ?React.createElement('div',{style:{fontSize:'0.8rem',color:'#2d9e7f',fontWeight:700,textAlign:'center'}},'✓ Todo está al día')
+              :React.createElement('div',{style:{fontSize:'0.8rem',color:C.navy,fontWeight:700}},
+                  (laliOwes?'Lali':'Javi')+' le debe ',
+                  React.createElement('span',{style:{color:C.accent}},fmt(Math.abs(netBal),c)),
+                  ' a '+(laliOwes?'Javi':'Lali')
+                )
           )
-        ):null,
-        !noDebt?React.createElement('button',{onClick:function(){openPaymentModal(c,netBal);},style:{width:'100%',marginTop:'0.35rem',padding:'0.5rem',background:'transparent',border:'1px solid '+C.border,borderRadius:'0.75rem',color:C.navy,fontWeight:700,fontSize:'0.8rem',cursor:'pointer',fontFamily:F}},'💸 Registrar pago en '+c):null
+        ):null
       );
     })
   );

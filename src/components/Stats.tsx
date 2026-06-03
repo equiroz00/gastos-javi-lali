@@ -1,5 +1,15 @@
 // ── components/Stats.tsx ──────────────────────────────────────────────────────
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = React.useState(() => window.innerWidth >= 768);
+  useEffect(() => {
+    const h = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return isDesktop;
+}
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PieChart, Pie, Cell,
@@ -361,6 +371,7 @@ function TopGastos({ filtered, cur }: { filtered: Expense[]; cur: Currency }) {
 
 // ── Main Stats component ───────────────────────────────────────────────────────
 export default function Stats() {
+  const isDesktop  = useIsDesktop();
   const expenses   = useAppStore(s => s.expenses);
   const settings   = useAppStore(s => s.settings);
   const payments   = useAppStore(s => s.payments);
@@ -454,14 +465,13 @@ export default function Stats() {
 
   const tt = { formatter: (v: number) => fmtS(v, cur), contentStyle: { fontFamily:F, fontSize:'0.78rem', borderRadius:'0.6rem', border:'1px solid '+C.border, background:C.surface } };
 
-  return (
-    <div style={{ padding:'1rem', paddingBottom:'2rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-      <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}>📊 Estadísticas</h2>
+  // ── Shared card blocks (defined once, used in both layouts) ─────────────────
+  const WrapAvoid = ({ children, mb = '1rem' }: { children: React.ReactNode; mb?: string }) => (
+    <div style={{ breakInside:'avoid' as any, marginBottom:mb }}>{children}</div>
+  );
 
-      <ScrollFilter items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />
-      {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={c => setCur(c as Currency)} />}
-
-      {/* Summary cards */}
+  const summaryCards = (
+    <WrapAvoid>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.6rem' }}>
         <Card style={{ padding:'0.75rem', background:C.gradMain }}>
           <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>TOTAL {cur}</div>
@@ -484,8 +494,11 @@ export default function Stats() {
           )}
         </Card>
       </div>
+    </WrapAvoid>
+  );
 
-      {/* Balance + last payment */}
+  const balanceCard = (
+    <WrapAvoid>
       <div style={{ display:'grid', gridTemplateColumns: lp ? '1fr 1fr' : '1fr', gap:'0.6rem' }}>
         <Card style={{ padding:'0.75rem', background: Math.abs(bal) < 1 ? 'linear-gradient(135deg,#2d9e7f,#1db88c)' : C.gradMain }}>
           <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>BALANCE</div>
@@ -506,15 +519,15 @@ export default function Stats() {
           </Card>
         )}
       </div>
+    </WrapAvoid>
+  );
 
-      {/* 🆕 Projected spending — only for ongoing periods */}
-      <ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} />
-
-      {/* Who paid more */}
+  const whoPayedCard = (
+    <WrapAvoid>
       <Card>
         <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>💳 ¿Quién pagó más?</h3>
         <div style={{ display:'flex', gap:'0.6rem', marginBottom:'0.6rem' }}>
-          {(['Javi', 'Lali'] as const).map((name, i) => {
+          {(['Javi', 'Lali'] as const).map((name) => {
             const paid = name === 'Javi' ? javiPaid : laliPaid;
             const grad = name === 'Javi' ? C.gradJavi : C.gradLali;
             return (
@@ -527,43 +540,42 @@ export default function Stats() {
           })}
         </div>
         <div style={{ display:'flex', gap:'0.6rem' }}>
-          {[['Javi', C.navy, javiTotal, 'Resp. Javi'], ['Lali', C.accent, laliTotal, 'Resp. Lali']] .map(([name, color, val]) => (
+          {[['Javi', C.navy, javiTotal], ['Lali', C.accent, laliTotal]].map(([name, color, val]) => (
             <div key={String(name)} style={{ flex:1, background:C.bg, borderRadius:'0.75rem', padding:'0.5rem', textAlign:'center', border:'1px solid '+C.border }}>
-              <div style={{ fontSize:'0.65rem', color:C.textMuted }}>{name === 'Javi' ? 'Resp. Javi' : 'Resp. Lali'}</div>
+              <div style={{ fontSize:'0.65rem', color:C.textMuted }}>Resp. {name}</div>
               <div style={{ fontWeight:800, color:String(color), fontSize:'0.85rem' }}>{fmtS(Number(val), cur)}</div>
             </div>
           ))}
         </div>
       </Card>
+    </WrapAvoid>
+  );
 
-      {/* 🆕 Category comparison vs previous period */}
-      {prevExps.length > 0 && (
-        <CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} total={total} />
-      )}
-
-      {/* Category chart */}
+  const catCard = (
+    <WrapAvoid>
       <Card>
         <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}>🗂 Gasto por categoría</h3>
         <ChartSelector value={catChart} onChange={setCatChart} />
         <CategoryChart data={catData} type={catChart} cur={cur} />
       </Card>
+    </WrapAvoid>
+  );
 
-      {/* Payment method chart */}
+  const pmCard = (
+    <WrapAvoid>
       <Card>
         <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}>💳 Métodos de pago</h3>
         <ChartSelector value={pmChart} onChange={setPmChart} />
         <PMChart data={pmData} type={pmChart} cur={cur} />
       </Card>
+    </WrapAvoid>
+  );
 
-      {/* 🆕 Top 5 expenses */}
-      <TopGastos filtered={filtered} cur={cur} />
-
-      {/* 🆕 Stacked area chart — all periods */}
+  const fullWidthCards = (
+    <>
       <EvolucionArea allExpenses={expenses} allCatsFull={allCatsFull} configPeriods={configPeriods} cur={cur} />
-
-      {/* Stacked bar — "Todos" view */}
       {period === 'Todos' && perData.length > 1 && (
-        <Card>
+        <Card style={{ marginTop:'0.75rem' }}>
           <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>📊 Evolución Javi vs Lali</h3>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={perData} margin={{ top:5, right:5, bottom:30, left:0 }}>
@@ -585,6 +597,51 @@ export default function Stats() {
           </div>
         </Card>
       )}
+    </>
+  );
+
+  const filters = (
+    <>
+      <ScrollFilter items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />
+      {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={c => setCur(c as Currency)} />}
+    </>
+  );
+
+  // ── DESKTOP — 3-column CSS masonry ─────────────────────────────────────────
+  if (isDesktop) {
+    return (
+      <div style={{ padding:'1.25rem', paddingBottom:'2rem' }}>
+        <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:'0 0 0.75rem' }}>📊 Estadísticas</h2>
+        {filters}
+        <div style={{ columns:3, columnGap:'1rem', marginTop:'0.75rem' }}>
+          {summaryCards}
+          {balanceCard}
+          <WrapAvoid><ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} /></WrapAvoid>
+          {whoPayedCard}
+          {prevExps.length > 0 && <WrapAvoid><CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} total={total} /></WrapAvoid>}
+          {catCard}
+          {pmCard}
+          <WrapAvoid><TopGastos filtered={filtered} cur={cur} /></WrapAvoid>
+        </div>
+        <div style={{ marginTop:'0.75rem' }}>{fullWidthCards}</div>
+      </div>
+    );
+  }
+
+  // ── MOBILE — single column (unchanged) ─────────────────────────────────────
+  return (
+    <div style={{ padding:'1rem', paddingBottom:'2rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+      <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}>📊 Estadísticas</h2>
+      {filters}
+      {summaryCards}
+      {balanceCard}
+      <ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} />
+      {whoPayedCard}
+      {prevExps.length > 0 && <CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} total={total} />}
+      {catCard}
+      {pmCard}
+      <TopGastos filtered={filtered} cur={cur} />
+      {fullWidthCards}
     </div>
   );
 }
