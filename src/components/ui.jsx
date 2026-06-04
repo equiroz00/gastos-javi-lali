@@ -103,7 +103,7 @@ export function PaymentModal(){
   if(!payModal) return null;
   function submit(){
     if(!amt||parseFloat(amt)<=0){setErr('Ingresá un monto válido.');return;}
-    confirmPayment({id:'pay_'+Date.now(),date:date,amount:parseFloat(amt),currency:currency,from:debtor,to:creditor,registeredAt:new Date().toISOString()});
+    confirmPayment({id:'pay_'+Date.now(),date:date,amount:parseFloat(amt),currency:currency,from:debtor,to:creditor,period:payModal.period||undefined,registeredAt:new Date().toISOString()});
   }
   var inp={width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface};
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}},

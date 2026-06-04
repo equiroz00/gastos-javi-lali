@@ -87,8 +87,9 @@ interface AppActions {
   confirmDelete:       () => void;
   handleAddPlan:       (formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
   handleCancelPlan:    (planId: string) => void;
-  openPaymentModal:    (currency: Currency, netBal: number) => void;
+  openPaymentModal:    (currency: Currency, netBal: number, period?: string) => void;
   confirmPayment:      (paymentData: Payment) => void;
+  deletePayment:       (id: string) => void;
   saveCustomCats:      (cats: string[]) => void;
   saveSettings:        (s: Settings)    => void;
   exportCSV:           (from: string, to: string) => void;
@@ -279,13 +280,20 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   // Payment actions
-  openPaymentModal: (currency, netBal) => set({ payModal: { currency, netBal } }),
+  openPaymentModal: (currency, netBal, period?) => set({ payModal: { currency, netBal, period } }),
 
   confirmPayment: paymentData => {
     const state = get();
     set({ payments: [...state.payments, paymentData], payModal: null });
     setDoc(paymentDoc(paymentData.id), paymentData);
     state.showMsg('✓ Pago registrado correctamente.');
+  },
+
+  deletePayment: id => {
+    const state = get();
+    set({ payments: state.payments.filter(p => p.id !== id) });
+    deleteDoc(paymentDoc(id));
+    state.showMsg('✓ Pago eliminado.');
   },
 
   // Settings

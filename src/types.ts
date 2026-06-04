@@ -17,6 +17,7 @@ export interface Expense {
   bank: string;
   javiAmount: number;
   laliAmount: number;
+  notes?: string;
   createdBy?: UserName;
   createdAt?: string;
   fromPlan?: boolean;
@@ -52,6 +53,7 @@ export interface Payment {
   currency: Currency;
   from: UserName;
   to: UserName;
+  period?: string;
   registeredAt: string;
 }
 
@@ -76,6 +78,7 @@ export interface ToastData {
 export interface PayModalData {
   currency: Currency;
   netBal: number;
+  period?: string;
 }
 
 export interface DeleteData {

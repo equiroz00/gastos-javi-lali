@@ -25,7 +25,7 @@ export default function AddEditExpense(props){
   var allCats = DEFAULT_CATS.concat(customCats);
 
   function blankForm(){
-    return {date:todayStr(),description:'',amount:'',category:allCats[0]||DEFAULT_CATS[0],paymentMethod:PAY_METHODS[0],bank:BANKS[0],paidBy:currentUser,responsible:'Ambos',currency:'ARS',customCurrency:'',javiAmount:0,laliAmount:0};
+    return {date:todayStr(),description:'',amount:'',category:allCats[0]||DEFAULT_CATS[0],paymentMethod:PAY_METHODS[0],bank:BANKS[0],paidBy:currentUser,responsible:'Ambos',currency:'ARS',customCurrency:'',javiAmount:0,laliAmount:0,notes:''};
   }
 
   var initForm = initialData||blankForm();
@@ -352,7 +352,15 @@ export default function AddEditExpense(props){
     React.createElement('select',{value:form.paymentMethod,onChange:function(e){set('paymentMethod',e.target.value);},style:selStyle},PAY_METHODS.map(function(m){return React.createElement('option',{key:m},m);})),
     Lbl('Banco / Billetera'),
     React.createElement('select',{value:form.bank,onChange:function(e){set('bank',e.target.value);},style:selStyle},BANKS.map(function(b){return React.createElement('option',{key:b},b);})),
-    // Split button also in step 2
+    // Campo de notas opcional
+    Lbl('Notas (opcional)'),
+    React.createElement('textarea',{
+      value:form.notes||'',
+      onChange:function(e){set('notes',e.target.value);},
+      placeholder:'Agregá un comentario o detalle adicional...',
+      rows:2,
+      style:{width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.5rem 0.75rem',fontSize:'0.85rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,boxSizing:'border-box',resize:'vertical',minHeight:'60px',lineHeight:'1.4'}
+    }),
     splitButton,
     showSplit?React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginTop:'0.4rem',padding:'0.5rem 0.6rem',background:C.bg,borderRadius:'0.65rem',border:'1px solid '+C.border}},
       React.createElement('div',{style:{flex:1,textAlign:'center'}},React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'👨 Javi'),React.createElement('div',{style:{fontWeight:800,color:C.navy,fontSize:'0.85rem'}},fmt(javiAmt,cur))),

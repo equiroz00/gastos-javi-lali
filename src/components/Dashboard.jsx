@@ -173,7 +173,9 @@ export default function Dashboard(){
 
   useEffect(function(){ if(latestPeriod&&!selPeriod) setSelPeriod(latestPeriod); },[latestPeriod]);
 
-  var periodExps = selPeriod?expenses.filter(function(e){return e.period===selPeriod;}):expenses;
+  var periodExps = (selPeriod && selPeriod!=='Todos')
+    ? expenses.filter(function(e){return e.period===selPeriod;})
+    : expenses;
   var totByCur = {};
   periodExps.forEach(function(e){ var c=e.currency||'ARS'; totByCur[c]=(totByCur[c]||0)+safeN(e.amount); });
   var curEntries = Object.entries(totByCur);
@@ -183,13 +185,15 @@ export default function Dashboard(){
 
   // ── Sections defined once, reused in both layouts ────────────────────────────
 
-  var balanceSection = React.createElement(BalanceSectionFiltered,{periodExps:filteredForBalance,payments:payments});
+  var balanceSection = React.createElement(BalanceSectionFiltered,{periodExps:filteredForBalance,payments:payments,selPeriod:selPeriod});
 
   var periodCard = React.createElement(Card,{style:{padding:'0.75rem'}},
     React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted,marginBottom:'0.3rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}},'Período'),
     periods.length>0
       ?React.createElement('select',{value:selPeriod,onChange:function(e){setSelPeriod(e.target.value);},style:{width:'100%',border:'none',fontSize:'0.78rem',fontWeight:800,color:C.navy,background:'transparent',outline:'none',cursor:'pointer',fontFamily:F,padding:0}},
-          periods.slice().reverse().map(function(p){return React.createElement('option',{key:p.name,value:p.name},p.name);}))
+          [React.createElement('option',{key:'Todos',value:'Todos'},'📊 Todos los períodos')]
+            .concat(periods.slice().reverse().map(function(p){return React.createElement('option',{key:p.name,value:p.name},p.name);}))
+        )
       :React.createElement('div',{style:{fontWeight:700,color:C.textMuted,fontSize:'0.78rem'}},'Sin períodos'),
     React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted,marginTop:'0.2rem'}},periodExps.length+' gastos')
   );
@@ -226,19 +230,14 @@ export default function Dashboard(){
   // ── DESKTOP layout ─────────────────────────────────────────────────────────
   if(isDesktop){
     return React.createElement('div',{style:{padding:'1.25rem',display:'flex',flexDirection:'column',gap:'1rem',maxWidth:'1100px'}},
-      // Row 1: Balance | Período + Total (stacked) — 2 columns, tight
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1.4fr 1fr',gap:'1rem',alignItems:'start'}},
-        // Col 1 — Balance (puede crecer si hay más monedas)
         React.createElement('div',null, balanceSection),
-        // Col 2 — Período selector + Total ARS (stacked)
         React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.75rem'}},
           periodCard,
           totalCard
         )
       ),
-      // Row 2: Cuotas activas | Esta semana — mismo ancho que row 1
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:'1rem',alignItems:'start'}},
-        // Col 1 — Cuotas activas (o placeholder)
         React.createElement('div',null,
           plans.length>0
             ?React.createElement(ActivePlans,null)
@@ -247,42 +246,50 @@ export default function Dashboard(){
                 React.createElement('div',{style:{fontWeight:700}},'Sin cuotas activas')
               )
         ),
-        // Col 2 — Esta semana
         weekSection
       )
     );
   }
 
-  // ── MOBILE — columna única (sin cambios) ─────────────────────────────────────
+  // ── MOBILE — Esta semana ANTES de Cuotas activas ──────────────────────────
   return React.createElement('div',{style:{padding:'1rem',display:'flex',flexDirection:'column',gap:'0.75rem'}},
     balanceSection,
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.6rem'}},
       periodCard,
       totalCard
     ),
-    React.createElement(ActivePlans,null),
-    weekSection
+    weekSection,
+    React.createElement(ActivePlans,null)
   );
 }
 
 // Wrapper that accepts filtered expenses as prop for balance calculation
 function BalanceSectionFiltered(props){
   var openPaymentModal = useAppStore(function(s){ return s.openPaymentModal; });
+  var deletePayment    = useAppStore(function(s){ return s.deletePayment; });
   var periodExps = props.periodExps||[];
-  var payments   = props.payments||[];
+  var allPayments  = props.payments||[];
+  var selPeriod  = props.selPeriod||'Todos';
   var openState  = useState(null); var openCur = openState[0]; var setOpenCur = openState[1];
+
+  // Filter payments: "Todos" → todos los pagos; período específico → solo los de ese período
+  // Pagos sin campo `period` (legacy) se muestran en "Todos" pero no en períodos específicos
+  var filteredPayments = selPeriod==='Todos'
+    ? allPayments
+    : allPayments.filter(function(p){ return p.period===selPeriod; });
+
   var byCur={};
   periodExps.forEach(function(e){var c=e.currency||'ARS';if(!byCur[c])byCur[c]=[];byCur[c].push(e);});
   var curs=Object.keys(byCur);
   if(!curs.length){
     return React.createElement('div',{style:{borderRadius:'1.25rem',padding:'1rem 1.5rem',background:C.gradMain,color:C.white,boxShadow:'0 4px 16px rgba(0,0,0,0.2)'}},
-      React.createElement('p',{style:{fontSize:'0.72rem',opacity:0.8,margin:'0 0 0.15rem'}},'Balance período'),
+      React.createElement('p',{style:{fontSize:'0.72rem',opacity:0.8,margin:'0 0 0.15rem'}},'Balance '+(selPeriod==='Todos'?'acumulado':selPeriod)),
       React.createElement('div',{style:{fontSize:'1.3rem',fontWeight:800}},'¡Sin gastos aún!')
     );
   }
   return React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.5rem'}},
     curs.map(function(c){
-      var netBal=calcNetBal(periodExps,payments,c);
+      var netBal=calcNetBal(periodExps,filteredPayments,c);
       var noDebt=Math.abs(netBal)<1,laliOwes=netBal>0;
       var bg=noDebt?'linear-gradient(135deg,#2d9e7f,#1db88c)':C.gradMain;
       var isOpen=openCur===c;
@@ -291,16 +298,16 @@ function BalanceSectionFiltered(props){
       var laliPaid=curExps.filter(function(e){return e.paidBy==='Lali';}).reduce(function(s,e){return s+safeN(e.amount);},0);
       var javiOwes=curExps.reduce(function(s,e){return s+safeN(e.javiAmount);},0);
       var laliOwes2=curExps.reduce(function(s,e){return s+safeN(e.laliAmount);},0);
-      var payAdj=(payments||[]).filter(function(p){return (p.currency||'ARS')===c;});
+      var payAdj=filteredPayments.filter(function(p){return (p.currency||'ARS')===c;});
+      var balLabel = selPeriod==='Todos' ? 'Balance acumulado '+c : 'Balance '+c+' — '+selPeriod;
       return React.createElement('div',{key:c},
-        // ── Header bubble (clickable — toggle breakdown) ──────────────────────
+        // ── Header bubble ─────────────────────────────────────────────────────
         React.createElement('div',{
           style:{borderRadius:isOpen?'1.25rem 1.25rem 0 0':'1.25rem',padding:'1rem 1.5rem',background:bg,color:C.white,boxShadow:'0 4px 16px rgba(0,0,0,0.15)',cursor:'pointer',userSelect:'none'}
         },
-          // top row: label + toggle arrow
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'},onClick:function(){setOpenCur(isOpen?null:c);}},
             React.createElement('div',null,
-              React.createElement('p',{style:{fontSize:'0.7rem',opacity:0.8,margin:'0 0 0.1rem'}},'Balance '+c+' — período seleccionado'),
+              React.createElement('p',{style:{fontSize:'0.7rem',opacity:0.8,margin:'0 0 0.1rem'}},balLabel),
               noDebt
                 ?React.createElement('div',{style:{fontSize:'1.3rem',fontWeight:800}},'¡Al día! 🎉')
                 :React.createElement(React.Fragment,null,
@@ -310,23 +317,13 @@ function BalanceSectionFiltered(props){
             ),
             React.createElement('div',{style:{fontSize:'0.72rem',opacity:0.7,marginTop:'0.25rem',flexShrink:0}},isOpen?'▲':'▼ ver')
           ),
-          // ── Payment button — inside bubble, below debt line ────────────────
+          // Botón registrar pago — solo si hay deuda
           !noDebt?React.createElement('button',{
-            onClick:function(ev){ev.stopPropagation();openPaymentModal(c,netBal);},
-            style:{
-              width:'100%',marginTop:'0.75rem',padding:'0.5rem 0.75rem',
-              background:'linear-gradient(135deg,rgba(255,255,255,0.22),rgba(220,220,220,0.18))',
-              backdropFilter:'blur(4px)',
-              border:'1px solid rgba(255,255,255,0.45)',
-              borderRadius:'0.8rem',
-              color:C.white,fontWeight:800,fontSize:'0.8rem',cursor:'pointer',fontFamily:F,
-              display:'flex',alignItems:'center',justifyContent:'center',gap:'0.4rem',
-              boxShadow:'0 2px 8px rgba(0,0,0,0.12)',
-              transition:'background 0.15s'
-            }
+            onClick:function(ev){ev.stopPropagation();openPaymentModal(c,netBal,selPeriod==='Todos'?undefined:selPeriod);},
+            style:{width:'100%',marginTop:'0.75rem',padding:'0.5rem 0.75rem',background:'linear-gradient(135deg,rgba(255,255,255,0.22),rgba(220,220,220,0.18))',backdropFilter:'blur(4px)',border:'1px solid rgba(255,255,255,0.45)',borderRadius:'0.8rem',color:C.white,fontWeight:800,fontSize:'0.8rem',cursor:'pointer',fontFamily:F,display:'flex',alignItems:'center',justifyContent:'center',gap:'0.4rem',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}
           },'💸 Registrar pago en '+c):null
         ),
-        // ── Breakdown panel (expanded) ────────────────────────────────────────
+        // ── Panel expandido (breakdown) ───────────────────────────────────────
         isOpen?React.createElement('div',{style:{background:C.surface,borderRadius:'0 0 1.25rem 1.25rem',border:'1px solid '+C.border,borderTop:'none',padding:'0.85rem 1rem'}},
           React.createElement('div',{style:{fontSize:'0.7rem',color:C.textMuted,fontWeight:700,marginBottom:'0.6rem',textTransform:'uppercase',letterSpacing:'0.05em'}},'Cómo se calculó'),
           React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginBottom:'0.5rem'}},
@@ -349,9 +346,20 @@ function BalanceSectionFiltered(props){
               React.createElement('div',{style:{fontWeight:800,color:C.accent}},fmt(laliOwes2,c))
             )
           ),
+          // Lista de pagos con botón eliminar
           payAdj.length>0?React.createElement('div',{style:{background:'#f0fdf4',borderRadius:'0.65rem',padding:'0.5rem 0.75rem',marginBottom:'0.5rem',border:'1px solid #bbf7d0'}},
-            React.createElement('div',{style:{fontSize:'0.68rem',color:'#166534',fontWeight:700,marginBottom:'0.2rem'}},'Pagos en '+c+':'),
-            payAdj.map(function(p){return React.createElement('div',{key:p.id,style:{fontSize:'0.68rem',color:'#15803d'}},p.date+' — '+p.from+' pagó '+fmt(safeN(p.amount),c)+' a '+p.to);})
+            React.createElement('div',{style:{fontSize:'0.68rem',color:'#166534',fontWeight:700,marginBottom:'0.35rem'}},'Pagos en '+c+(selPeriod!=='Todos'?' — '+selPeriod:'')+':'),
+            payAdj.map(function(p){
+              return React.createElement('div',{key:p.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'0.5rem',padding:'0.2rem 0',borderTop:'1px solid #d1fae5'}},
+                React.createElement('span',{style:{fontSize:'0.68rem',color:'#15803d'}},
+                  p.date+' — '+p.from+' pagó '+fmt(safeN(p.amount),c)+' a '+p.to+(p.period&&selPeriod==='Todos'?' ('+p.period+')':'')
+                ),
+                React.createElement('button',{
+                  onClick:function(){if(window.confirm('¿Eliminar este pago?')){deletePayment(p.id);}},
+                  style:{background:'none',border:'none',color:'#c0314f',cursor:'pointer',fontSize:'0.75rem',fontWeight:700,fontFamily:F,flexShrink:0,padding:'0.1rem 0.3rem'}
+                },'✕')
+              );
+            })
           ):null,
           React.createElement('div',{style:{borderTop:'1px dashed '+C.border,paddingTop:'0.5rem'}},
             noDebt
