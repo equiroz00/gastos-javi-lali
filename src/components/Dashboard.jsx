@@ -175,7 +175,7 @@ export default function Dashboard(){
 
   var periodExps = (selPeriod && selPeriod!=='Todos')
     ? expenses.filter(function(e){return e.period===selPeriod;})
-    : expenses;
+    : expenses.filter(function(e){return e.period!==PENDING_PER;});
   var totByCur = {};
   periodExps.forEach(function(e){ var c=e.currency||'ARS'; totByCur[c]=(totByCur[c]||0)+safeN(e.amount); });
   var curEntries = Object.entries(totByCur);
