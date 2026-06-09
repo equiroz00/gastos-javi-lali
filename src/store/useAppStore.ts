@@ -218,7 +218,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const state = get();
     const allCats = DEFAULT_CATS.concat(state.customCats);
     const s = sanitize(expense, allCats);
-    set({ expenses: state.expenses.map(e => e.id === s.id ? s : e), editingExpense: null, view: 'dashboard' });
+    set({ expenses: state.expenses.map(e => e.id === s.id ? s : e), editingExpense: null });
     setDoc(expenseDoc(s.id), s);
     state.showToast(s);
     (state as any)._logActivity('edit', s);

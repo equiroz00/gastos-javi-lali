@@ -199,7 +199,7 @@ export default function AddEditExpense(props){
 
   function cancel(){
     if(isEditMode){setEditingExpense(null);}
-    setView('dashboard');
+    else{setView('dashboard');}
   }
 
   // ── Autocomplete dropdown ──────────────────────────────────────────────────
