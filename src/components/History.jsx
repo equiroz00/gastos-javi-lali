@@ -1,5 +1,6 @@
 // ── components/History.jsx ────────────────────────────────────────────────────
 import React, { useState } from 'react';
+import { Search } from 'lucide-react';
 import { C, F, PENDING_PER } from '../constants';
 import { fmt, safeN, calcBal, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
@@ -17,12 +18,12 @@ function PeriodBlock(props){
   return React.createElement('div',null,
     React.createElement('div',{onClick:props.onToggle,style:{display:'flex',justifyContent:'space-between',alignItems:'center',background:headerBg,borderRadius:isOpen?'1rem 1rem 0 0':'1rem',padding:'0.85rem 1rem',boxShadow:'0 2px 8px rgba(0,0,0,0.08)',cursor:'pointer',border:'1px solid '+(isPending?'#f59e0b':(isSelected?C.accent:(isOpen?C.navy:C.border)))}},
       React.createElement('div',null,
-        React.createElement('div',{style:{fontWeight:800,color:textColor,fontSize:'0.9rem'}},period),
+        React.createElement('div',{style:{fontWeight:800,color:textColor,fontSize:'0.9rem'}},isPending?'Cuotas pendientes':period),
         React.createElement('div',{style:{fontSize:'0.7rem',color:subColor,marginTop:'0.1rem'}},exps.length+' gastos · '+fmt(total))
       ),
       React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'0.75rem'}},
         !isPending&&(Math.abs(bal)>=1?React.createElement('div',{style:{textAlign:'right'}},React.createElement('div',{style:{fontSize:'0.7rem',fontWeight:800,color:highlighted?'rgba(255,255,255,0.9)':C.accent}},bal>0?'Lali debe':'Javi debe'),React.createElement('div',{style:{fontSize:'0.7rem',fontWeight:800,color:highlighted?'rgba(255,255,255,0.9)':C.accent}},fmt(Math.abs(bal)))):React.createElement('div',{style:{fontSize:'0.7rem',color:highlighted?'rgba(255,255,255,0.8)':'#2d9e7f',fontWeight:700}},'✓ Al día')),
-        React.createElement('span',{style:{color:isPending?'#92400e':(highlighted?'rgba(255,255,255,0.8)':C.textMuted),fontSize:'0.85rem'}},hasSelection?(isSelected?'☑':'☐'):(isOpen?'▲':'▼'))
+        React.createElement('span',{style:{color:isPending?'#92400e':(highlighted?'rgba(255,255,255,0.8)':C.textMuted),fontSize:'0.85rem'}},hasSelection?(isSelected?'✓':'○'):(isOpen?'▲':'▼'))
       )
     ),
     highlighted?React.createElement('div',{style:{background:C.surface,borderRadius:'0 0 1rem 1rem',boxShadow:'0 2px 8px rgba(0,0,0,0.08)',overflow:'hidden',border:'1px solid '+C.border,borderTop:'none'}},
@@ -67,7 +68,7 @@ export default function History(){
 
   return React.createElement('div',{style:{padding:'1rem',paddingBottom:'2rem'}},
     React.createElement('h2',{style:{fontWeight:900,fontSize:'1.2rem',color:C.navy,marginBottom:'0.75rem'}},'Historial'),
-    React.createElement('input',{value:search,onChange:function(e){setSearch(e.target.value);setSelectedPeriods([]);},placeholder:'🔍 Buscar período, gasto, fecha o monto...',style:{width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.5rem 0.75rem',fontSize:'0.82rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,boxSizing:'border-box',marginBottom:'0.6rem'}}),
+    React.createElement('input',{value:search,onChange:function(e){setSearch(e.target.value);setSelectedPeriods([]);},placeholder:'Buscar período, gasto, fecha o monto...',style:{width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.5rem 0.75rem',fontSize:'0.82rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,boxSizing:'border-box',marginBottom:'0.6rem'}}),
     showExpMatches?React.createElement('div',{style:{marginBottom:'0.75rem'}},
       React.createElement('div',{style:{fontWeight:700,fontSize:'0.75rem',color:C.textMuted,marginBottom:'0.35rem'}},expenseMatches.length+' gasto'+(expenseMatches.length!==1?'s':'')+' encontrado'+(expenseMatches.length!==1?'s':'')),
       React.createElement(Card,{style:{padding:0,overflow:'hidden'}},
@@ -82,7 +83,7 @@ export default function History(){
       hasSelection?React.createElement('button',{onClick:function(){setSelectedPeriods([]);},style:{background:'transparent',border:'1px solid '+C.accent,borderRadius:'999px',padding:'0.2rem 0.65rem',fontSize:'0.7rem',color:C.accent,cursor:'pointer',fontFamily:F,fontWeight:700,marginTop:'0.3rem'}},'✕ Limpiar selección'):null
     ):null,
     filteredPeriods.length===0&&!showExpMatches
-      ?React.createElement(Card,{style:{textAlign:'center',padding:'3rem',color:C.textMuted}},React.createElement('div',{style:{fontSize:'2.5rem',marginBottom:'0.5rem'}},'🔍'),'No se encontraron resultados')
+      ?React.createElement(Card,{style:{textAlign:'center',padding:'3rem',color:C.textMuted}},React.createElement('div',{style:{display:'flex',justifyContent:'center',marginBottom:'0.5rem'}},React.createElement(Search,{size:32,strokeWidth:1.6,color:C.textMuted})),'No se encontraron resultados')
       :filteredPeriods.length>0?React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'0.75rem',maxHeight:allSorted.length>3?'65vh':undefined,overflowY:allSorted.length>3?'auto':undefined}},
           displayPeriods.map(function(period){
             return React.createElement(PeriodBlock,{key:period,period:period,exps:sortByDate(grouped[period]||[]),isOpen:!!openMap[period],isSelected:selectedPeriods.indexOf(period)>=0,isPending:period===PENDING_PER,hasSelection:hasSelection,onToggle:function(){if(hasSelection)toggleSelect(period);else toggleOpen(period);},onDelete:requestDelete,onEdit:setEditingExpense});

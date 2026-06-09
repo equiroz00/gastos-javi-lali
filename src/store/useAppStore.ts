@@ -159,7 +159,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   showToast: expense => {
     const t = {
-      emoji: catEm(expense.category),
+      category: expense.category || '',
       description: expense.description || 'Gasto guardado',
       amount: fmt(safeN(expense.amount), expense.currency || 'ARS'),
     };

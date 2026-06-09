@@ -1,21 +1,22 @@
 // ── components/ExpenseList.jsx ────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Clock } from 'lucide-react';
 import { C, F, MONO, PENDING_PER } from '../constants.js';
 import { fmt, safeN, catEm, catLb } from '../lib/helpers.js';
+import { CatIcon } from './ui.jsx';
 
 function ExpenseRow(props){
   var e=props.expense,cur=e.currency||'ARS';
   var open=props.open||false;
   return React.createElement('div',{style:{borderBottom:'1px solid '+C.beige}},
     React.createElement('div',{onClick:props.onToggle,style:{display:'flex',alignItems:'center',gap:'0.75rem',padding:'0.65rem 1rem',cursor:'pointer',background:open?C.bg:C.surface}},
-      React.createElement('div',{style:{fontSize:'1.3rem',flexShrink:0,width:'1.8rem',textAlign:'center'}},catEm(e.category)),
+      React.createElement('div',{style:{flexShrink:0,width:'2.1rem',height:'2.1rem',borderRadius:'0.6rem',background:C.bg,border:'1px solid '+C.border,display:'flex',alignItems:'center',justifyContent:'center'}},React.createElement(CatIcon,{category:e.category,size:18,color:C.navy})),
       React.createElement('div',{style:{flex:1,minWidth:0}},
         React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'0.3rem',flexWrap:'wrap'}},
           React.createElement('span',{style:{fontWeight:700,color:C.navy,fontSize:'0.88rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'140px'}},e.description||'Sin descripción'),
           cur!=='ARS'?React.createElement('span',{style:{fontSize:'0.58rem',background:C.navy,color:C.white,borderRadius:'999px',padding:'0.1rem 0.3rem',fontWeight:800,flexShrink:0}},cur):null,
-          e.fromPlan?React.createElement('span',{style:{fontSize:'0.58rem',background:C.accent,color:C.white,borderRadius:'999px',padding:'0.1rem 0.3rem',fontWeight:800,flexShrink:0}},'📅 '+e.installmentNum+'/'+e.numInstallments):null,
-          e.period===PENDING_PER?React.createElement('span',{style:{fontSize:'0.58rem',background:'#f59e0b',color:C.white,borderRadius:'999px',padding:'0.1rem 0.3rem',fontWeight:800,flexShrink:0}},'⏳'):null
+          e.fromPlan?React.createElement('span',{style:{fontSize:'0.58rem',background:C.accent,color:C.white,borderRadius:'999px',padding:'0.1rem 0.4rem',fontWeight:800,flexShrink:0,display:'inline-flex',alignItems:'center',gap:'0.15rem'}},React.createElement(Clock,{size:9,strokeWidth:2.5}),e.installmentNum+'/'+e.numInstallments):null,
+          e.period===PENDING_PER?React.createElement('span',{style:{fontSize:'0.58rem',background:'#f59e0b',color:C.white,borderRadius:'999px',padding:'0.15rem 0.3rem',fontWeight:800,flexShrink:0,display:'inline-flex',alignItems:'center'}},React.createElement(Clock,{size:9,strokeWidth:2.5})):null
         ),
         React.createElement('div',{style:{fontSize:'0.68rem',color:C.textMuted,marginTop:'0.05rem'}},
           e.date+' · '+catLb(e.category)+' · ',

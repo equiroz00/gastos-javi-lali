@@ -45,7 +45,7 @@ export function catLb(cat?: string): string {
 }
 
 export function normCat(cat: string, cats: string[]): string {
-  if (!cat || typeof cat !== 'string') return '📦 Otro';
+  if (!cat || typeof cat !== 'string') return 'Otro';
   const exact = cats.find(c => c === cat.trim());
   if (exact) return exact;
   const s = cat.replace(/^\p{Emoji}\s*/u, '').trim().toLowerCase();

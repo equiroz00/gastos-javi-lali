@@ -1,10 +1,54 @@
 // ── components/ui.jsx ─────────────────────────────────────────────────────────
 import React, { useState } from 'react';
+import {
+  Home, ShoppingCart, KeyRound, Lightbulb, Bus, Clapperboard, Users, Sparkles,
+  Dumbbell, Pill, Baby, Shirt, UtensilsCrossed, Plane, PawPrint, Gift, GraduationCap,
+  Wallet, Tag, Search, Trash2, X, ArrowRightLeft
+} from 'lucide-react';
 import { C, F, CHART_TYPES } from '../constants';
 import { fmt, safeN, catLb } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
+
+// ── Category → Lucide icon mapping (keyword based, with fallback) ─────────────
+var CAT_ICON_MAP = [
+  [/hogar|casa|limpieza/i, Home],
+  [/aliment|comida|super|mercado|verdul|carnic|almac[eé]n/i, ShoppingCart],
+  [/restaur|comer|caf[eé]|salida.?gastron/i, UtensilsCrossed],
+  [/arriend|alquil|renta|expensa/i, KeyRound],
+  [/servici|luz|agua|gas|electri|internet|cable|tel[eé]fono|wifi/i, Lightbulb],
+  [/transp|nafta|combust|colectivo|sube|taxi|uber|peaje|estacion|auto/i, Bus],
+  [/entreten|cine|pel[ií]cul|juego|stream|netflix|spotify|m[uú]sica/i, Clapperboard],
+  [/amig|social|fiesta|reuni/i, Users],
+  [/cuidado|personal|belleza|peluqu|spa|cosm/i, Sparkles],
+  [/gimnas|gym|deporte|fitness|entrenam/i, Dumbbell],
+  [/farmac|salud|m[eé]dic|medicin|remedio|hospital|obra.?social/i, Pill],
+  [/hijit|hij[oa]|beb[eé]|ni[ñn]|guarder|jard[ií]n/i, Baby],
+  [/ropa|vestir|calzado|zapat|indument/i, Shirt],
+  [/viaj|vacacion|vuelo|hotel/i, Plane],
+  [/mascot|perro|gato|veterin/i, PawPrint],
+  [/regalo|gift|cumple/i, Gift],
+  [/educ|curso|colegio|universidad|estudi|libro/i, GraduationCap],
+  [/ahorro|inversi|cuenta/i, Wallet],
+];
+
+export function catIconFor(category){
+  var label = (catLb(category) || '') + ' ' + (category || '');
+  for (var i=0;i<CAT_ICON_MAP.length;i++){ if(CAT_ICON_MAP[i][0].test(label)) return CAT_ICON_MAP[i][1]; }
+  return Tag;
+}
+
+export function CatIcon(props){
+  var Icon = catIconFor(props.category);
+  return React.createElement(Icon,{size:props.size||18,strokeWidth:props.strokeWidth||2,color:props.color||C.navy,style:props.style});
+}
+
+// ── Javi / Lali marker — colored dot (navy = Javi, accent = Lali) ─────────────
+export function UserDot(props){
+  var isJavi = props.user==='Javi';
+  return React.createElement('span',{style:Object.assign({display:'inline-block',width:'7px',height:'7px',borderRadius:'50%',background:isJavi?C.navy:C.accent,flexShrink:0},props.style||{})});
+}
 
 export function Card(props){
   var style=Object.assign({background:C.surface,borderRadius:'1.1rem',padding:'1rem',boxShadow:'0 2px 8px rgba(0,0,0,0.1)',border:'1px solid '+C.border},props.style||{});
@@ -12,7 +56,7 @@ export function Card(props){
 }
 
 export function SearchBox(props){
-  return React.createElement('input',{value:props.value,onChange:function(e){props.onChange(e.target.value);},placeholder:props.placeholder||'🔍 Buscar...',style:{width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.5rem 0.75rem',fontSize:'0.82rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,boxSizing:'border-box',marginBottom:'0.6rem'}});
+  return React.createElement('input',{value:props.value,onChange:function(e){props.onChange(e.target.value);},placeholder:props.placeholder||'Buscar...',style:{width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.5rem 0.75rem',fontSize:'0.82rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface,boxSizing:'border-box',marginBottom:'0.6rem'}});
 }
 
 export function ScrollFilter(props){
@@ -22,7 +66,7 @@ export function ScrollFilter(props){
       items.map(function(p){
         var isActive=multi?(selected.indexOf(p)>=0):(selected===p);
         return React.createElement('button',{key:p,onClick:function(){props.onSelect(p);},style:{flexShrink:0,padding:'0.35rem 0.75rem',borderRadius:'999px',border:'1px solid',fontSize:'0.75rem',cursor:'pointer',fontWeight:isActive?800:500,fontFamily:F,background:isActive?C.navy:'transparent',borderColor:isActive?C.navy:C.border,color:isActive?C.white:C.navy,whiteSpace:'nowrap'}},
-          multi?(isActive?'☑ ':' ☐ ')+p:p);
+          multi?(isActive?'✓ ':'')+p:p);
       })
     )
   );
@@ -47,10 +91,10 @@ export function Toast(){
   if(!toast) return null;
   return React.createElement('div',{style:{position:'fixed',bottom:'5.5rem',left:'50%',transform:'translateX(-50%)',zIndex:200,maxWidth:'340px',width:'calc(100% - 2rem)',pointerEvents:'none'}},
     React.createElement('div',{style:{background:C.navy,color:C.white,borderRadius:'1rem',padding:'0.75rem 1rem',display:'flex',alignItems:'center',gap:'0.75rem',boxShadow:'0 8px 24px rgba(0,0,0,0.3)',fontFamily:F}},
-      React.createElement('div',{style:{fontSize:'1.4rem',flexShrink:0}},toast.emoji),
+      React.createElement('div',{style:{width:'34px',height:'34px',borderRadius:'10px',background:'rgba(255,255,255,0.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},React.createElement(CatIcon,{category:toast.category,size:18,color:C.white})),
       React.createElement('div',{style:{flex:1,minWidth:0}},
         React.createElement('div',{style:{fontWeight:700,fontSize:'0.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},toast.description),
-        React.createElement('div',{style:{fontSize:'0.75rem',opacity:0.75,marginTop:'0.1rem'}},toast.amount+' · guardado ✓')
+        React.createElement('div',{style:{fontSize:'0.75rem',opacity:0.75,marginTop:'0.1rem'}},toast.amount+' · guardado')
       )
     )
   );
@@ -64,7 +108,7 @@ export function ConfirmDialog(){
   var e=pendingDelete.expense;
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}},
     React.createElement('div',{style:{background:C.surface,borderRadius:'1.25rem',padding:'1.5rem',maxWidth:'340px',width:'100%',boxShadow:'0 8px 32px rgba(0,0,0,0.25)',fontFamily:F}},
-      React.createElement('div',{style:{fontSize:'1.5rem',textAlign:'center',marginBottom:'0.75rem'}},'🗑️'),
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',marginBottom:'0.75rem'}},React.createElement('div',{style:{width:'44px',height:'44px',borderRadius:'12px',background:'#fde8ec',display:'flex',alignItems:'center',justifyContent:'center'}},React.createElement(Trash2,{size:22,strokeWidth:2,color:'#c0314f'}))),
       React.createElement('h3',{style:{fontWeight:900,color:C.navy,fontSize:'1rem',margin:'0 0 0.5rem',textAlign:'center'}},'¿Eliminar este gasto?'),
       React.createElement('div',{style:{background:C.bg,borderRadius:'0.75rem',padding:'0.75rem',marginBottom:'1rem',border:'1px solid '+C.border}},
         React.createElement('div',{style:{fontWeight:700,color:C.navy,fontSize:'0.88rem',marginBottom:'0.25rem'}},e.description||'Sin descripción'),
@@ -108,7 +152,7 @@ export function PaymentModal(){
   var inp={width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface};
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}},
     React.createElement('div',{style:{background:C.surface,borderRadius:'1.25rem',padding:'1.5rem',maxWidth:'340px',width:'100%',boxShadow:'0 8px 32px rgba(0,0,0,0.25)',fontFamily:F}},
-      React.createElement('h3',{style:{fontWeight:900,color:C.navy,fontSize:'1rem',margin:'0 0 0.25rem'}},'💸 Registrar pago'),
+      React.createElement('h3',{style:{display:'flex',alignItems:'center',gap:'0.4rem',fontWeight:900,color:C.navy,fontSize:'1rem',margin:'0 0 0.25rem'}},React.createElement(ArrowRightLeft,{size:17,strokeWidth:2.3,color:C.accent}),'Registrar pago'),
       React.createElement('p',{style:{fontSize:'0.8rem',color:C.textMuted,margin:'0 0 1rem'}},
         React.createElement('span',{style:{fontWeight:800,color:netBal>0?C.accent:C.navy}},debtor),' le paga a ',
         React.createElement('span',{style:{fontWeight:800,color:netBal>0?C.navy:C.accent}},creditor)

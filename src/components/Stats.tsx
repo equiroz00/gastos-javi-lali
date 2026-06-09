@@ -1,6 +1,7 @@
 // ── components/Stats.tsx ──────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Trophy, CreditCard, Layers } from 'lucide-react';
+import { CatIcon } from './ui.jsx';
 
 function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = React.useState(() => window.innerWidth >= 768);
@@ -34,7 +35,7 @@ function TablaCategoria({ data, cur }: { data: CatRow[]; cur: Currency }) {
       {data.map((c, i) => (
         <div key={c.label} style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.5rem' }}>
           <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:PALETTE[i % PALETTE.length], flexShrink:0 }} />
-          <span style={{ flex:1, fontSize:'0.78rem', color:C.navy, fontWeight:600 }}>{c.emoji} {c.label}</span>
+          <span style={{ flex:1, fontSize:'0.78rem', color:C.navy, fontWeight:600, display:'flex', alignItems:'center', gap:'0.35rem' }}><CatIcon category={c.label} size={14} color={C.navy} />{c.label}</span>
           <span style={{ fontSize:'0.78rem', color:C.navy, fontWeight:700 }}>{fmtS(c.value, cur)}</span>
           <span style={{ fontSize:'0.7rem', color:C.textMuted, width:'2.5rem', textAlign:'right' }}>{c.pct}%</span>
         </div>
@@ -169,8 +170,8 @@ function ProyeccionCard({ filtered, period, cur, configPeriods }: {
 
   return (
     <Card>
-      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
-        🔮 Proyección al cierre
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
+        <TrendingUp size={15} strokeWidth={2.2} color={C.accent} />Proyección al cierre
       </h3>
       <div style={{ display:'flex', gap:'0.5rem', marginBottom:'0.75rem' }}>
         <div style={{ flex:1, background:C.bg, borderRadius:'0.75rem', padding:'0.6rem', border:'1px solid '+C.border }}>
@@ -351,8 +352,8 @@ function TopGastos({ filtered, cur }: { filtered: Expense[]; cur: Currency }) {
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.2rem' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', minWidth:0 }}>
                 <span style={{ fontSize:'0.7rem', fontWeight:800, color:C.textMuted, flexShrink:0, width:'1rem' }}>#{i+1}</span>
-                <span style={{ fontSize:'0.8rem', color:C.navy, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {catEm(e.category)} {e.description}
+                <span style={{ display:'flex', alignItems:'center', gap:'0.35rem', fontSize:'0.8rem', color:C.navy, fontWeight:700, overflow:'hidden', minWidth:0 }}>
+                  <CatIcon category={e.category} size={14} color={C.navy} style={{ flexShrink:0 }} /><span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.description}</span>
                 </span>
               </div>
               <span style={{ fontSize:'0.8rem', fontWeight:800, color:C.navy, flexShrink:0, marginLeft:'0.5rem' }}>
@@ -535,7 +536,7 @@ export default function Stats() {
             const grad = name === 'Javi' ? C.gradJavi : C.gradLali;
             return (
               <div key={name} style={{ flex:1, background:grad, borderRadius:'0.85rem', padding:'0.6rem', textAlign:'center', color:C.white }}>
-                <div style={{ fontSize:'1.2rem' }}>{name === 'Javi' ? '👨' : '👩'}</div>
+                <div style={{ fontSize:'1.2rem' }}>{name === 'Javi' ? '' : ''}</div>
                 <div style={{ fontWeight:800, fontSize:'0.9rem' }}>{fmtS(paid, cur)}</div>
                 <div style={{ fontSize:'0.7rem', opacity:0.85 }}>{total > 0 ? Math.round(paid / total * 100) : 0}%</div>
               </div>
@@ -559,7 +560,7 @@ export default function Stats() {
       <Card>
         <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}><Layers size={15} strokeWidth={2.2} color={C.accent} />Gasto por categoría</h3>
         <ChartSelector value={catChart} onChange={setCatChart} />
-        <div style={{ minHeight:240 }}>
+        <div style={{ height:280, overflowY:'auto' }}>
           <CategoryChart data={catData} type={catChart} cur={cur} />
         </div>
       </Card>
@@ -571,7 +572,7 @@ export default function Stats() {
       <Card>
         <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}><CreditCard size={15} strokeWidth={2.2} color={C.accent} />Métodos de pago</h3>
         <ChartSelector value={pmChart} onChange={setPmChart} />
-        <div style={{ minHeight:240 }}>
+        <div style={{ height:280, overflowY:'auto' }}>
           <PMChart data={pmData} type={pmChart} cur={cur} />
         </div>
       </Card>

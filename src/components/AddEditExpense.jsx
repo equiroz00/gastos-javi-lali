@@ -1,7 +1,9 @@
 // ── components/AddEditExpense.jsx ─────────────────────────────────────────────
 import React, { useState } from 'react';
+import { Plus, X, Pencil, AlertTriangle } from 'lucide-react';
 import { C, F, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
 import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, catEm } from '../lib/helpers.js';
+import { CatIcon } from './ui.jsx';
 import useAppStore from '../store/useAppStore';
 import { SegBtn } from './ui.jsx';
 import SplitModal from './SplitModal.jsx';
@@ -102,7 +104,7 @@ export default function AddEditExpense(props){
   var javiPct = totalAmt>0?Math.round(javiAmt/totalAmt*100):50;
 
   // Split button summary label
-  var splitSummary = (form.paidBy==='Javi'?'👨':'👩')+' '+form.paidBy+' · '+javiPct+'% / '+(100-javiPct)+'%';
+  var splitSummary = (form.paidBy==='Javi'?'':'')+' '+form.paidBy+' · '+javiPct+'% / '+(100-javiPct)+'%';
 
   var inpStyle = function(extra){ return Object.assign({width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface},extra||{}); };
   var selStyle = {width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',background:C.surface,boxSizing:'border-box',fontFamily:F,color:C.navy};
@@ -110,7 +112,7 @@ export default function AddEditExpense(props){
 
   function addNewCat(){
     if(!newCatName.trim())return;
-    var cat=(newCatEmoji||'📌')+' '+newCatName.trim();
+    var cat=newCatName.trim();
     saveCustomCats(customCats.concat([cat]));
     set('category',cat);setNewCatEmoji('');setNewCatName('');setShowNewCat(false);
   }
@@ -211,7 +213,7 @@ export default function AddEditExpense(props){
     },
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'0.4rem 0.75rem',borderBottom:'1px solid '+C.border,background:C.bg}},
         React.createElement('span',{style:{fontSize:'0.68rem',color:C.textMuted,fontWeight:700}},'Gastos anteriores similares'),
-        React.createElement('button',{onClick:function(){setAcSuggestions([]);},style:{background:'none',border:'none',cursor:'pointer',color:C.textMuted,fontSize:'0.85rem',lineHeight:1,padding:'0.1rem 0.2rem'}},'✕')
+        React.createElement('button',{onClick:function(){setAcSuggestions([]);},style:{background:'none',border:'none',cursor:'pointer',color:C.textMuted,lineHeight:1,padding:'0.1rem 0.2rem',display:'flex',alignItems:'center'}},React.createElement(X,{size:15,strokeWidth:2}))
       ),
       acSuggestions.map(function(exp){
         return React.createElement('button',{
@@ -219,11 +221,11 @@ export default function AddEditExpense(props){
           onMouseDown:function(e){e.preventDefault();onAcSelect(exp);},
           style:{width:'100%',display:'flex',alignItems:'center',gap:'0.6rem',padding:'0.55rem 0.75rem',background:'none',border:'none',borderBottom:'1px solid '+C.border,cursor:'pointer',textAlign:'left',fontFamily:F}
         },
-          React.createElement('div',{style:{fontSize:'1.1rem',flexShrink:0}},catEm(exp.category)),
+          React.createElement(CatIcon,{category:exp.category,size:16,color:C.navy,style:{flexShrink:0}}),
           React.createElement('div',{style:{flex:1,minWidth:0}},
             React.createElement('div',{style:{fontSize:'0.82rem',fontWeight:700,color:C.navy,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},exp.description),
             React.createElement('div',{style:{fontSize:'0.68rem',color:C.textMuted,marginTop:'0.05rem'}},
-              exp.date+' · '+fmt(safeN(exp.amount),exp.currency||'ARS')+' · '+(exp.paidBy==='Javi'?'👨':'👩')+' '+exp.paidBy
+              exp.date+' · '+fmt(safeN(exp.amount),exp.currency||'ARS')+' · '+(exp.paidBy==='Javi'?'':'')+' '+exp.paidBy
             )
           )
         );
@@ -260,12 +262,12 @@ export default function AddEditExpense(props){
     React.createElement('div',{style:{padding:'0.5rem 0.85rem',fontSize:'0.72rem',fontWeight:700,color:C.textMuted,borderBottom:'1px solid '+C.border}},queue.length+' gasto'+(queue.length!==1?'s':'')+' en cola'),
     queue.map(function(item,i){
       return React.createElement('div',{key:item.id,style:{display:'flex',alignItems:'center',gap:'0.5rem',padding:'0.5rem 0.85rem',borderBottom:i<queue.length-1?'1px solid '+C.border:'none'}},
-        React.createElement('div',{style:{fontSize:'1rem'}},catEm(item.category)),
+        React.createElement(CatIcon,{category:item.category,size:15,color:C.navy}),
         React.createElement('div',{style:{flex:1,minWidth:0}},
           React.createElement('div',{style:{fontWeight:700,fontSize:'0.82rem',color:C.navy,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},item.description),
           React.createElement('div',{style:{fontSize:'0.68rem',color:C.textMuted}},fmt(safeN(item.amount),item.currency||'ARS'))
         ),
-        React.createElement('button',{onClick:function(){setQueue(function(q){return q.filter(function(_,j){return j!==i;});});},style:{background:'none',border:'none',color:'#c0314f',cursor:'pointer',fontSize:'0.9rem',flexShrink:0}},'✕')
+        React.createElement('button',{onClick:function(){setQueue(function(q){return q.filter(function(_,j){return j!==i;});});},style:{background:'none',border:'none',color:'#c0314f',cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center'}},React.createElement(X,{size:15,strokeWidth:2}))
       );
     })
   ):null;
@@ -281,11 +283,11 @@ export default function AddEditExpense(props){
     errors.amount?React.createElement('p',{style:{color:'#c0314f',fontSize:'0.7rem',margin:'0.15rem 0 0'}},'⚠ '+errors.amount):null,
     // ── Duplicate warning ──
     dupWarning?React.createElement('div',{style:{marginTop:'0.5rem',background:'#fef9c3',border:'1px solid #fde047',borderRadius:'0.75rem',padding:'0.6rem 0.85rem',display:'flex',gap:'0.5rem',alignItems:'flex-start'}},
-      React.createElement('span',{style:{fontSize:'1rem',flexShrink:0}},'⚠️'),
+      React.createElement(AlertTriangle,{size:16,strokeWidth:2,color:'#b45309',style:{flexShrink:0}}),
       React.createElement('div',null,
         React.createElement('div',{style:{fontSize:'0.78rem',fontWeight:800,color:'#854d0e'}},'Posible gasto duplicado'),
         React.createElement('div',{style:{fontSize:'0.72rem',color:'#92400e',marginTop:'0.15rem'}},
-          '"'+dupWarning.description+'" · '+dupWarning.date+' · '+(dupWarning.paidBy==='Javi'?'👨':'👩')+' '+dupWarning.paidBy
+          '"'+dupWarning.description+'" · '+dupWarning.date+' · '+(dupWarning.paidBy==='Javi'?'':'')+' '+dupWarning.paidBy
         ),
         React.createElement('button',{onClick:function(){setDupWarning(null);},style:{marginTop:'0.3rem',background:'none',border:'none',fontSize:'0.68rem',color:'#92400e',cursor:'pointer',padding:0,fontWeight:700,fontFamily:F}},'Ignorar y continuar →')
       )
@@ -303,19 +305,19 @@ export default function AddEditExpense(props){
     // ── Split preview ──
     showSplit?React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginTop:'0.4rem',padding:'0.5rem 0.6rem',background:C.bg,borderRadius:'0.65rem',border:'1px solid '+C.border}},
       React.createElement('div',{style:{flex:1,textAlign:'center'}},
-        React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'👨 Javi'),
+        React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'Javi'),
         React.createElement('div',{style:{fontWeight:800,color:C.navy,fontSize:'0.85rem'}},fmt(javiAmt,cur))
       ),
       React.createElement('div',{style:{width:'1px',background:C.border}}),
       React.createElement('div',{style:{flex:1,textAlign:'center'}},
-        React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'👩 Lali'),
+        React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'Lali'),
         React.createElement('div',{style:{fontWeight:800,color:C.accent,fontSize:'0.85rem'}},fmt(laliAmt,cur))
       )
     ):null,
     queueSection,
     React.createElement('button',{onClick:submit,style:{width:'100%',padding:'1rem',background:C.gradMain,color:C.white,border:'none',borderRadius:'1rem',fontWeight:900,fontSize:'1rem',cursor:'pointer',fontFamily:F,boxShadow:'0 4px 12px rgba(0,0,0,0.15)',marginTop:'1rem'}},btnLabel),
     React.createElement('button',{onClick:enqueue,style:{width:'100%',padding:'0.75rem',background:'transparent',border:'1px dashed '+C.accent,borderRadius:'1rem',color:C.accent,fontWeight:700,fontSize:'0.88rem',cursor:'pointer',fontFamily:F,marginTop:'0.5rem'}},'+ Agregar otro gasto'),
-    React.createElement('button',{onClick:goToStep2,style:{width:'100%',padding:'0.75rem',background:'transparent',border:'1px solid '+C.border,borderRadius:'1rem',color:C.navy,fontWeight:700,fontSize:'0.88rem',cursor:'pointer',fontFamily:F,marginTop:'0.5rem'}},'Más detalles ▶'),
+    React.createElement('button',{onClick:goToStep2,style:{width:'100%',padding:'0.75rem',background:'transparent',border:'1px solid '+C.border,borderRadius:'1rem',color:C.navy,fontWeight:700,fontSize:'0.88rem',cursor:'pointer',fontFamily:F,marginTop:'0.5rem'}},'Más detalles '),
     React.createElement('button',{onClick:cancel,style:{width:'100%',padding:'0.6rem',background:'none',border:'none',color:C.textMuted,fontSize:'0.85rem',cursor:'pointer',fontFamily:F,marginTop:'0.1rem'}},'Cancelar')
   );
 
@@ -337,17 +339,16 @@ export default function AddEditExpense(props){
             React.createElement('div',{style:{fontWeight:700,color:C.navy,fontSize:'0.88rem'}},form.description||'Sin descripción'),
             React.createElement('div',{style:{fontSize:'0.72rem',color:C.textMuted,marginTop:'0.1rem'}},form.date+(form.amount?' · '+fmt(totalAmt,cur):''))
           ),
-          React.createElement('button',{onClick:function(){setStep(1);},style:{background:'transparent',border:'1px solid '+C.border,borderRadius:'0.6rem',padding:'0.2rem 0.6rem',fontSize:'0.7rem',color:C.textMuted,cursor:'pointer',fontFamily:F,fontWeight:700,flexShrink:0,marginLeft:'0.5rem'}},'✏️ Editar')
+          React.createElement('button',{onClick:function(){setStep(1);},style:{background:'transparent',border:'1px solid '+C.border,borderRadius:'0.6rem',padding:'0.2rem 0.6rem',fontSize:'0.7rem',color:C.textMuted,cursor:'pointer',fontFamily:F,fontWeight:700,flexShrink:0,marginLeft:'0.5rem',display:'inline-flex',alignItems:'center',gap:'0.25rem'}},React.createElement(Pencil,{size:11,strokeWidth:2.2}),'Editar')
         ),
     Lbl('Categoría'),
     React.createElement('select',{value:form.category,onChange:function(e){set('category',e.target.value);},style:selStyle},allCats.map(function(c){return React.createElement('option',{key:c,value:c},c);})),
     !showNewCat
-      ?React.createElement('button',{onClick:function(){setShowNewCat(true);},style:{marginTop:'0.5rem',background:'transparent',border:'1px dashed '+C.accent,borderRadius:'0.65rem',color:C.accent,fontSize:'0.72rem',fontWeight:700,cursor:'pointer',padding:'0.35rem 0.75rem',fontFamily:F,display:'block'}},'➕ Nueva categoría')
+      ?React.createElement('button',{onClick:function(){setShowNewCat(true);},style:{marginTop:'0.5rem',background:'transparent',border:'1px dashed '+C.accent,borderRadius:'0.65rem',color:C.accent,fontSize:'0.72rem',fontWeight:700,cursor:'pointer',padding:'0.35rem 0.75rem',fontFamily:F,display:'flex',alignItems:'center',gap:'0.3rem'}},React.createElement(Plus,{size:13,strokeWidth:2.5}),'Nueva categoría')
       :React.createElement('div',{style:{marginTop:'0.5rem',background:C.bg,borderRadius:'0.75rem',padding:'0.6rem',display:'flex',gap:'0.4rem',alignItems:'center',border:'1px solid '+C.border}},
-          React.createElement('input',{value:newCatEmoji,onChange:function(e){setNewCatEmoji(e.target.value);},placeholder:'🏷️',style:{width:'2.5rem',border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.85rem',textAlign:'center',outline:'none',fontFamily:F}}),
-          React.createElement('input',{value:newCatName,onChange:function(e){setNewCatName(e.target.value);},placeholder:'Nombre...',style:{flex:1,border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.82rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface}}),
+          React.createElement('input',{value:newCatName,onChange:function(e){setNewCatName(e.target.value);},placeholder:'Nombre de la categoría...',style:{flex:1,border:'1px solid '+C.border,borderRadius:'0.5rem',padding:'0.4rem',fontSize:'0.82rem',outline:'none',fontFamily:F,color:C.navy,background:C.surface}}),
           React.createElement('button',{onClick:addNewCat,style:{background:C.accent,color:C.white,border:'none',borderRadius:'0.5rem',padding:'0.4rem 0.6rem',fontSize:'0.78rem',fontWeight:700,cursor:'pointer',fontFamily:F}},'OK'),
-          React.createElement('button',{onClick:function(){setShowNewCat(false);},style:{background:'none',border:'none',color:C.textMuted,cursor:'pointer',fontSize:'0.9rem'}},'✕')),
+          React.createElement('button',{onClick:function(){setShowNewCat(false);},style:{background:'none',border:'none',color:C.textMuted,cursor:'pointer',display:'flex',alignItems:'center'}},React.createElement(X,{size:16,strokeWidth:2}))),
     Lbl('Medio de pago'),
     React.createElement('select',{value:form.paymentMethod,onChange:function(e){set('paymentMethod',e.target.value);},style:selStyle},PAY_METHODS.map(function(m){return React.createElement('option',{key:m},m);})),
     Lbl('Banco / Billetera'),
@@ -363,15 +364,15 @@ export default function AddEditExpense(props){
     }),
     splitButton,
     showSplit?React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginTop:'0.4rem',padding:'0.5rem 0.6rem',background:C.bg,borderRadius:'0.65rem',border:'1px solid '+C.border}},
-      React.createElement('div',{style:{flex:1,textAlign:'center'}},React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'👨 Javi'),React.createElement('div',{style:{fontWeight:800,color:C.navy,fontSize:'0.85rem'}},fmt(javiAmt,cur))),
+      React.createElement('div',{style:{flex:1,textAlign:'center'}},React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'Javi'),React.createElement('div',{style:{fontWeight:800,color:C.navy,fontSize:'0.85rem'}},fmt(javiAmt,cur))),
       React.createElement('div',{style:{width:'1px',background:C.border}}),
-      React.createElement('div',{style:{flex:1,textAlign:'center'}},React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'👩 Lali'),React.createElement('div',{style:{fontWeight:800,color:C.accent,fontSize:'0.85rem'}},fmt(laliAmt,cur)))
+      React.createElement('div',{style:{flex:1,textAlign:'center'}},React.createElement('div',{style:{fontSize:'0.65rem',color:C.textMuted}},'Lali'),React.createElement('div',{style:{fontWeight:800,color:C.accent,fontSize:'0.85rem'}},fmt(laliAmt,cur)))
     ):null,
     !isEditMode?React.createElement(React.Fragment,null,
       Lbl('¿Pago en cuotas?'),
       React.createElement('div',{style:{display:'flex',gap:'0.5rem'}},
-        React.createElement(SegBtn,{active:!useCuotas,color:C.navy,onClick:function(){setUseCuotas(false);setIsRetro(false);}},'💵 Pago único'),
-        React.createElement(SegBtn,{active:useCuotas,color:C.accent,onClick:function(){setUseCuotas(true);}},'📅 En cuotas')
+        React.createElement(SegBtn,{active:!useCuotas,color:C.navy,onClick:function(){setUseCuotas(false);setIsRetro(false);}},'Pago único'),
+        React.createElement(SegBtn,{active:useCuotas,color:C.accent,onClick:function(){setUseCuotas(true);}},'En cuotas')
       ),
       useCuotas?React.createElement('div',{style:{background:C.bg,borderRadius:'1rem',padding:'0.85rem',marginTop:'0.5rem',border:'1px solid '+C.border}},
         React.createElement('div',{style:{fontSize:'0.78rem',color:C.navy,fontWeight:700,marginBottom:'0.5rem'}},'Cantidad de cuotas totales'),
@@ -381,8 +382,8 @@ export default function AddEditExpense(props){
         ),
         React.createElement('div',{style:{borderTop:'1px solid '+C.border,paddingTop:'0.6rem',marginTop:'0.35rem'}},
           React.createElement('div',{style:{display:'flex',gap:'0.5rem',marginBottom:isRetro?'0.6rem':0}},
-            React.createElement(SegBtn,{active:!isRetro,color:C.navy,onClick:function(){setIsRetro(false);}},'🆕 Compra nueva'),
-            React.createElement(SegBtn,{active:isRetro,color:'#b45309',onClick:function(){setIsRetro(true);}},'🕐 Cuotas del pasado')
+            React.createElement(SegBtn,{active:!isRetro,color:C.navy,onClick:function(){setIsRetro(false);}},'Compra nueva'),
+            React.createElement(SegBtn,{active:isRetro,color:'#b45309',onClick:function(){setIsRetro(true);}},'Cuotas del pasado')
           ),
           isRetro?React.createElement('div',{style:{background:C.surface,borderRadius:'0.75rem',padding:'0.6rem',border:'1px solid '+C.border,display:'flex',flexDirection:'column',gap:'0.45rem'}},
             React.createElement('div',{style:{fontSize:'0.75rem',color:'#92400e',fontWeight:700}},'Indicá cuántas cuotas ya se pagaron y a partir de qué período continúan.'),
@@ -420,7 +421,7 @@ export default function AddEditExpense(props){
       onConfirm: onSplitConfirm,
       onCancel: function(){setShowSplitModal(false);}
     }):null,
-    React.createElement('h2',{style:{fontWeight:900,fontSize:'1.2rem',color:C.navy,marginBottom:'0.5rem'}},isEditMode?'✏️ Editar gasto':'Nuevo gasto'),
+    React.createElement('h2',{style:{display:'flex',alignItems:'center',gap:'0.4rem',fontWeight:900,fontSize:'1.2rem',color:C.navy,marginBottom:'0.5rem'}},isEditMode?React.createElement(Pencil,{size:18,strokeWidth:2.3,color:C.accent}):null,isEditMode?'Editar gasto':'Nuevo gasto'),
     step===1?step1:step2
   );
 }
