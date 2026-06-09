@@ -1,6 +1,7 @@
 // ── components/Settings.tsx ───────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { C, F, THEMES, FONTS } from '../constants';
+import { Palette, SlidersHorizontal, Download, CalendarDays } from 'lucide-react';
+import { C, F, THEMES, FONTS, coerceTheme, coerceFont } from '../constants';
 import useAppStore from '../store/useAppStore';
 import { Card } from './ui.jsx';
 
@@ -78,9 +79,9 @@ export default function Settings() {
     const t = (THEMES as any)[themeKey];
     if (!t) return null;
     return (
-      <span style={{ display:'inline-flex', gap:'3px', marginRight:'0.5rem', verticalAlign:'middle' }}>
+      <span style={{ display:'inline-flex', gap:'3px', flexShrink:0 }}>
         {[t.navy, t.accent, t.bg].map((col: string, i: number) => (
-          <span key={i} style={{ width:'9px', height:'9px', borderRadius:'50%', background:col, border:'1px solid rgba(0,0,0,0.12)', display:'inline-block' }} />
+          <span key={i} style={{ width:'11px', height:'11px', borderRadius:'50%', background:col, border:'1px solid rgba(0,0,0,0.12)', display:'inline-block' }} />
         ))}
       </span>
     );
@@ -88,17 +89,19 @@ export default function Settings() {
 
   // ── Shared blocks ───────────────────────────────────────────────────────────
   const appearanceBanner = (
-    <div style={{ background:C.bg, borderRadius:'0.65rem', padding:'0.5rem 0.85rem', border:'1px solid '+C.border }}>
+    <div style={{ background:C.bg, borderRadius:'0.65rem', padding:'0.5rem 0.85rem', border:'1px solid '+C.border, display:'flex', alignItems:'center', gap:'0.5rem' }}>
+      <Palette size={15} strokeWidth={2} color={C.accent} style={{ flexShrink:0 }} />
       <p style={{ fontSize:'0.72rem', color:C.textMuted, margin:0, fontWeight:600 }}>
-        🎨 Apariencia de <strong style={{ color:C.navy }}>{currentUser}</strong> — solo visible para vos
+        Apariencia de <strong style={{ color:C.navy }}>{currentUser}</strong> — solo visible para vos
       </p>
     </div>
   );
 
   const sharedBanner = (
-    <div style={{ background:C.bg, borderRadius:'0.65rem', padding:'0.5rem 0.85rem', border:'1px solid '+C.border }}>
+    <div style={{ background:C.bg, borderRadius:'0.65rem', padding:'0.5rem 0.85rem', border:'1px solid '+C.border, display:'flex', alignItems:'center', gap:'0.5rem' }}>
+      <SlidersHorizontal size={15} strokeWidth={2} color={C.accent} style={{ flexShrink:0 }} />
       <p style={{ fontSize:'0.72rem', color:C.textMuted, margin:0, fontWeight:600 }}>
-        ⚙️ Configuración compartida — se aplica para Javi y Lali
+        Configuración compartida — se aplica para Javi y Lali
       </p>
     </div>
   );
@@ -107,28 +110,12 @@ export default function Settings() {
   const themeCard = (
     <Card>
       <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.95rem' }}>Tema</h3>
-      <div style={{ position:'relative' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+        <ThemeDots themeKey={coerceTheme(userTheme || 'default')} />
         <select
-          value={userTheme || 'default'}
+          value={coerceTheme(userTheme || 'default')}
           onChange={e => saveUserPreferences(e.target.value, userFont)}
-          style={selStyle}
-        >
-          {Object.entries(THEMES).map(([key, t]: [string, any]) => (
-            <option key={key} value={key}>{t.label}</option>
-          ))}
-        </select>
-        {/* Preview dots overlaid left of the select */}
-        <span style={{ position:'absolute', left:'0.75rem', top:'50%', transform:'translateY(-50%)', pointerEvents:'none', display:'flex', gap:'3px' }}>
-          <ThemeDots themeKey={userTheme || 'default'} />
-        </span>
-        <span style={{ position:'absolute', left:'2.2rem', top:'50%', transform:'translateY(-50%)', pointerEvents:'none', fontSize:'0.85rem', fontWeight:600, color:C.navy, fontFamily:F }}>
-          {(THEMES as any)[userTheme || 'default']?.label || ''}
-        </span>
-        {/* Invisible select on top for interaction */}
-        <select
-          value={userTheme || 'default'}
-          onChange={e => saveUserPreferences(e.target.value, userFont)}
-          style={{ ...selStyle, position:'absolute', inset:0, opacity:0, cursor:'pointer' }}
+          style={{ ...selStyle, flex:1 }}
         >
           {Object.entries(THEMES).map(([key, t]: [string, any]) => (
             <option key={key} value={key}>{t.label}</option>
@@ -143,9 +130,9 @@ export default function Settings() {
     <Card>
       <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.95rem' }}>Tipografía</h3>
       <select
-        value={userFont || 'Nunito'}
+        value={coerceFont(userFont || 'Nunito')}
         onChange={e => saveUserPreferences(userTheme, e.target.value)}
-        style={{ ...selStyle, fontFamily:(FONTS as any)[userFont || 'Nunito']?.css || 'Nunito, sans-serif' }}
+        style={{ ...selStyle, fontFamily:(FONTS as any)[coerceFont(userFont || 'Nunito')]?.css || 'Nunito, sans-serif' }}
       >
         {Object.entries(FONTS).map(([key, fd]: [string, any]) => (
           <option key={key} value={key} style={{ fontFamily:fd.css }}>{fd.label}</option>
@@ -157,7 +144,7 @@ export default function Settings() {
   // ── CSV card ────────────────────────────────────────────────────────────────
   const csvCard = (
     <Card>
-      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.4rem', fontSize:'0.95rem' }}>📊 Exportar gastos a CSV</h3>
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.4rem', fontSize:'0.95rem' }}><Download size={16} strokeWidth={2.2} color={C.accent} />Exportar gastos a CSV</h3>
       <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.5rem' }}>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:'0.72rem', color:C.textMuted, marginBottom:'0.2rem', fontWeight:700 }}>Desde</div>
@@ -180,7 +167,7 @@ export default function Settings() {
   // ── Períodos card ───────────────────────────────────────────────────────────
   const periodsCard = (
     <Card>
-      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.95rem' }}>📅 Períodos de cierre</h3>
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.95rem' }}><CalendarDays size={16} strokeWidth={2.2} color={C.accent} />Períodos de cierre</h3>
       <div style={{ background:C.bg, borderRadius:'0.85rem', padding:'0.75rem', marginBottom:'0.75rem', border:'1px solid '+C.border }}>
         <p style={{ fontSize:'0.75rem', color:C.textMuted, marginBottom:'0.4rem', fontWeight:700 }}>Agregar período:</p>
         <input style={{ ...inp, marginBottom:'0.4rem' }} value={np.name} onChange={e => { setNp(p => ({ ...p, name:e.target.value })); setPeriodError(''); }} placeholder="Ej: Mar-Abr 2026" />

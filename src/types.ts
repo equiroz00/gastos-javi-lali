@@ -145,8 +145,8 @@ export interface ExpenseForm {
   customCurrency?: string;
 }
 
-export type ThemeKey = 'default' | 'amanecer' | 'bosque' | 'oceano' | 'moca' | 'noche' | 'carbon' | 'selva' | 'madera' | 'pergamino';
-export type FontKey  = 'Nunito' | 'Montserrat' | 'Quicksand' | 'Jost' | 'Syne' | 'Exo2' | 'Monda' | 'Forum' | 'Alice' | 'EBGaramond' | 'JuliusSansOne' | 'ZenDots' | 'Oswald';
+export type ThemeKey = 'default' | 'oscuro';
+export type FontKey  = 'Nunito' | 'PlusJakarta' | 'Jost';
 
 export interface ThemeConfig {
   label: string; emoji: string; bg: string; surface: string;

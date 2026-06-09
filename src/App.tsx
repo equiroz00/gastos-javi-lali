@@ -1,6 +1,6 @@
 // ── src/App.tsx ───────────────────────────────────────────────────────────────
 import React, { useEffect } from 'react';
-import { Loader2, Home, Plus, BarChart2, ClipboardList, Settings2, LogOut } from 'lucide-react';
+import { Loader2, Home, Plus, BarChart2, ClipboardList, Settings2, LogOut, Wallet } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
@@ -85,7 +85,7 @@ export default function App() {
   useEffect(() => {
     const fd = FONTS[(userFont || 'Nunito') as keyof typeof FONTS] || FONTS.Nunito;
     const l = document.createElement('link');
-    l.href = `https://fonts.googleapis.com/css2?family=${fd.url}&display=swap`;
+    l.href = `https://fonts.googleapis.com/css2?family=${fd.url}&family=JetBrains+Mono:wght@500;600;700&display=swap`;
     l.rel = 'stylesheet';
     document.head.appendChild(l);
     document.body.style.fontFamily = fd.css;
@@ -184,19 +184,24 @@ export default function App() {
 
   // ── Shared header ──────────────────────────────────────────────────────────
   const Header = (
-    <div style={{ background:C.gradMain, padding:'0.75rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 12px rgba(0,0,0,0.2)' }}>
-      <div>
-        <div style={{ fontWeight:900, fontSize:'1.5rem', color:C.white, lineHeight:1.1, fontFamily:F }}>💑 Javi & Lali</div>
-        <div style={{ fontSize:'0.75rem', color:'rgba(255,255,255,0.8)', fontFamily:F, marginTop:'0.1rem' }}>{getGreeting(currentUser)}</div>
+    <div style={{ background:C.surface, padding:'0.8rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10, borderBottom:'1px solid '+C.border }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
+        <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:C.accent, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <Wallet size={19} strokeWidth={2.2} color={C.white} />
+        </div>
+        <div>
+          <div style={{ fontWeight:800, fontSize:'1.05rem', color:C.navy, lineHeight:1.1, fontFamily:F, letterSpacing:'-0.01em' }}>Javi &amp; Lali</div>
+          <div style={{ fontSize:'0.72rem', color:C.textMuted, fontFamily:F, marginTop:'0.05rem' }}>{getGreeting(currentUser)}</div>
+        </div>
       </div>
       <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
         <NotificationPanel />
         <button
           onClick={() => useAppStore.getState().handleSignOut()}
-          style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:'0.6rem', padding:'0.4rem 0.6rem', color:C.white, cursor:'pointer', display:'flex', alignItems:'center', gap:'0.35rem' }}
+          style={{ background:'transparent', border:'1px solid '+C.border, borderRadius:'0.6rem', padding:'0.4rem 0.6rem', color:C.textMuted, cursor:'pointer', display:'flex', alignItems:'center', gap:'0.35rem' }}
         >
           <LogOut size={15} strokeWidth={2} />
-          <span style={{ fontSize:'0.75rem', fontWeight:700, fontFamily:F }}>Salir</span>
+          <span style={{ fontSize:'0.75rem', fontWeight:600, fontFamily:F }}>Salir</span>
         </button>
       </div>
     </div>

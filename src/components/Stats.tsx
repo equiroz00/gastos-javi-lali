@@ -1,5 +1,6 @@
 // ── components/Stats.tsx ──────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
+import { BarChart3, TrendingUp, Trophy, CreditCard, Layers } from 'lucide-react';
 
 function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = React.useState(() => window.innerWidth >= 768);
@@ -12,10 +13,10 @@ function useIsDesktop(): boolean {
 }
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PieChart, Pie, Cell,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, PieChart, Pie, Cell,
   AreaChart, Area,
 } from 'recharts';
-import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS } from '../constants';
+import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO } from '../constants';
 import { fmtS, fmt, safeN, catEm, catLb, normCat, calcBal, lastPayment, pctChange, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter, ChartSelector } from './ui.jsx';
@@ -75,11 +76,12 @@ function CategoryChart({ data, type, cur }: { data: CatRow[]; type: string; cur:
     </ResponsiveContainer>
   );
   if (type === 'Radar') return (
-    <ResponsiveContainer width="100%" height={220}>
-      <RadarChart data={data.map(d => ({ subject: d.label, value: d.value }))}>
+    <ResponsiveContainer width="100%" height={240}>
+      <RadarChart data={data.map(d => ({ subject: d.label, value: d.value }))} outerRadius="68%">
         <PolarGrid stroke={C.beige} />
-        <PolarAngleAxis dataKey="subject" tick={{ fontSize:9, fontFamily:F, fill:C.navy }} />
-        <Radar dataKey="value" stroke={C.navy} fill={C.accent} fillOpacity={0.35} />
+        <PolarAngleAxis dataKey="subject" tick={{ fontSize:8, fontFamily:F, fill:C.navy }} />
+        <PolarRadiusAxis tick={false} axisLine={false} />
+        <Radar dataKey="value" stroke={C.navy} strokeWidth={2} fill={C.accent} fillOpacity={0.45} dot={{ fill:C.navy, r:3 }} isAnimationActive={false} />
         <Tooltip {...tt} />
       </RadarChart>
     </ResponsiveContainer>
@@ -115,13 +117,14 @@ function PMChart({ data, type, cur }: { data: PMRow[]; type: string; cur: Curren
     </ResponsiveContainer>
   );
   if (type === 'Radar') {
-    const rd = data.map(d => ({ subject: d.name.split(' ').pop() || d.name, value: d.value }));
+    const rd = data.map(d => ({ subject: d.name, value: d.value }));
     return (
-      <ResponsiveContainer width="100%" height={220}>
-        <RadarChart data={rd}>
+      <ResponsiveContainer width="100%" height={240}>
+        <RadarChart data={rd} outerRadius="68%">
           <PolarGrid stroke={C.beige} />
-          <PolarAngleAxis dataKey="subject" tick={{ fontSize:9, fontFamily:F, fill:C.navy }} />
-          <Radar dataKey="value" stroke={C.accent} fill={C.accent} fillOpacity={0.35} />
+          <PolarAngleAxis dataKey="subject" tick={{ fontSize:8, fontFamily:F, fill:C.navy }} />
+          <PolarRadiusAxis tick={false} axisLine={false} />
+          <Radar dataKey="value" stroke={C.navy} strokeWidth={2} fill={C.accent} fillOpacity={0.45} dot={{ fill:C.navy, r:3 }} isAnimationActive={false} />
           <Tooltip {...tt} />
         </RadarChart>
       </ResponsiveContainer>
@@ -225,8 +228,8 @@ function CatComparacion({ filtered, prevExps, allCatsFull, cur, total }: {
 
   return (
     <Card>
-      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
-        📊 Categorías vs período anterior
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
+        <BarChart3 size={15} strokeWidth={2.2} color={C.accent} />Categorías vs período anterior
       </h3>
       {rows.map(r => {
         const up   = r.pct !== null && r.pct > 0;
@@ -292,8 +295,8 @@ function EvolucionArea({ allExpenses, allCatsFull, configPeriods, cur }: {
 
   return (
     <Card>
-      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
-        📈 Evolución por categoría
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
+        <TrendingUp size={15} strokeWidth={2.2} color={C.accent} />Evolución por categoría
       </h3>
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={data} margin={{ top:5, right:5, bottom:25, left:0 }}>
@@ -337,8 +340,8 @@ function TopGastos({ filtered, cur }: { filtered: Expense[]; cur: Currency }) {
 
   return (
     <Card>
-      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
-        🏆 Top 5 gastos del período
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
+        <Trophy size={15} strokeWidth={2.2} color={C.accent} />Top 5 gastos del período
       </h3>
       {top.map((e, i) => {
         const amt = safeN(e.amount);
@@ -414,11 +417,11 @@ export default function Stats() {
 
   if (!filtered.length) return (
     <div style={{ padding:'1rem' }}>
-      <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:'0.75rem' }}>📊 Estadísticas</h2>
+      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:'0.75rem' }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
       <ScrollFilter items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />
       {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={c => setCur(c as Currency)} />}
       <Card style={{ textAlign:'center', padding:'3rem', color:C.textMuted }}>
-        <div style={{ fontSize:'2.5rem', marginBottom:'0.5rem' }}>📊</div>
+        <div style={{ display:'flex', justifyContent:'center', marginBottom:'0.5rem' }}><BarChart3 size={36} strokeWidth={1.6} color={C.textMuted} /></div>
         No hay datos para este período/moneda
       </Card>
     </div>
@@ -475,7 +478,7 @@ export default function Stats() {
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.6rem' }}>
         <Card style={{ padding:'0.75rem', background:C.gradMain }}>
           <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>TOTAL {cur}</div>
-          <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem' }}>{fmtS(total, cur)}</div>
+          <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem', fontFamily:MONO }}>{fmtS(total, cur)}</div>
           {amtPct !== null && (
             <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', marginTop:'0.2rem' }}>
               <span style={{ fontSize:'0.75rem', color: amtPct >= 0 ? '#a8f0d5' : '#fca5a5', fontWeight:800 }}>{amtPct >= 0 ? '▲' : '▼'} {Math.abs(amtPct)}%</span>
@@ -485,7 +488,7 @@ export default function Stats() {
         </Card>
         <Card style={{ padding:'0.75rem', background:C.gradMain }}>
           <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>Nº GASTOS</div>
-          <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem' }}>{count}</div>
+          <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem', fontFamily:MONO }}>{count}</div>
           {cntPct !== null && prevPeriodData && (
             <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', marginTop:'0.2rem' }}>
               <span style={{ fontSize:'0.75rem', color: cntPct >= 0 ? '#a8f0d5' : '#fca5a5', fontWeight:800 }}>{cntPct >= 0 ? '▲' : '▼'} {Math.abs(cntPct)}%</span>
@@ -503,9 +506,9 @@ export default function Stats() {
         <Card style={{ padding:'0.75rem', background: Math.abs(bal) < 1 ? 'linear-gradient(135deg,#2d9e7f,#1db88c)' : C.gradMain }}>
           <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>BALANCE</div>
           {Math.abs(bal) < 1
-            ? <div style={{ fontWeight:900, color:C.white, fontSize:'1rem', marginTop:'0.2rem' }}>¡Al día! 🎉</div>
+            ? <div style={{ fontWeight:900, color:C.white, fontSize:'1rem', marginTop:'0.2rem' }}>¡Al día!</div>
             : <>
-                <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.2rem' }}>{fmtS(bal, cur)}</div>
+                <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.2rem', fontFamily:MONO }}>{fmtS(bal, cur)}</div>
                 <div style={{ fontSize:'0.68rem', color:'rgba(255,255,255,0.8)' }}>{bal > 0 ? 'Lali debe' : 'Javi debe'}</div>
               </>
           }
@@ -513,7 +516,7 @@ export default function Stats() {
         {lp && (
           <Card style={{ padding:'0.75rem', background:'linear-gradient(135deg,#2d9e7f,#1db88c)' }}>
             <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>ÚLTIMO PAGO</div>
-            <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem' }}>{fmtS(safeN(lp.amount), lp.currency || 'ARS')}</div>
+            <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem', fontFamily:MONO }}>{fmtS(safeN(lp.amount), lp.currency || 'ARS')}</div>
             <div style={{ fontSize:'0.68rem', color:'rgba(255,255,255,0.8)' }}>{lp.from} → {lp.to}</div>
             <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.65)' }}>{lp.date}</div>
           </Card>
@@ -525,7 +528,7 @@ export default function Stats() {
   const whoPayedCard = (
     <WrapAvoid>
       <Card>
-        <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>💳 ¿Quién pagó más?</h3>
+        <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}><CreditCard size={15} strokeWidth={2.2} color={C.accent} />¿Quién pagó más?</h3>
         <div style={{ display:'flex', gap:'0.6rem', marginBottom:'0.6rem' }}>
           {(['Javi', 'Lali'] as const).map((name) => {
             const paid = name === 'Javi' ? javiPaid : laliPaid;
@@ -554,9 +557,11 @@ export default function Stats() {
   const catCard = (
     <WrapAvoid>
       <Card>
-        <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}>🗂 Gasto por categoría</h3>
+        <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}><Layers size={15} strokeWidth={2.2} color={C.accent} />Gasto por categoría</h3>
         <ChartSelector value={catChart} onChange={setCatChart} />
-        <CategoryChart data={catData} type={catChart} cur={cur} />
+        <div style={{ minHeight:240 }}>
+          <CategoryChart data={catData} type={catChart} cur={cur} />
+        </div>
       </Card>
     </WrapAvoid>
   );
@@ -564,9 +569,11 @@ export default function Stats() {
   const pmCard = (
     <WrapAvoid>
       <Card>
-        <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}>💳 Métodos de pago</h3>
+        <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}><CreditCard size={15} strokeWidth={2.2} color={C.accent} />Métodos de pago</h3>
         <ChartSelector value={pmChart} onChange={setPmChart} />
-        <PMChart data={pmData} type={pmChart} cur={cur} />
+        <div style={{ minHeight:240 }}>
+          <PMChart data={pmData} type={pmChart} cur={cur} />
+        </div>
       </Card>
     </WrapAvoid>
   );
@@ -576,7 +583,7 @@ export default function Stats() {
       <EvolucionArea allExpenses={expenses} allCatsFull={allCatsFull} configPeriods={configPeriods} cur={cur} />
       {period === 'Todos' && perData.length > 1 && (
         <Card style={{ marginTop:'0.75rem' }}>
-          <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>📊 Evolución Javi vs Lali</h3>
+          <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}><BarChart3 size={15} strokeWidth={2.2} color={C.accent} />Evolución Javi vs Lali</h3>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={perData} margin={{ top:5, right:5, bottom:30, left:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.beige} />
@@ -611,7 +618,7 @@ export default function Stats() {
   if (isDesktop) {
     return (
       <div style={{ padding:'1.25rem', paddingBottom:'2rem' }}>
-        <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:'0 0 0.75rem' }}>📊 Estadísticas</h2>
+        <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:'0 0 0.75rem' }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
         {filters}
         <div style={{ columns:3, columnGap:'1rem', marginTop:'0.75rem' }}>
           {summaryCards}
@@ -631,7 +638,7 @@ export default function Stats() {
   // ── MOBILE — single column (unchanged) ─────────────────────────────────────
   return (
     <div style={{ padding:'1rem', paddingBottom:'2rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-      <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}>📊 Estadísticas</h2>
+      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
       {filters}
       {summaryCards}
       {balanceCard}

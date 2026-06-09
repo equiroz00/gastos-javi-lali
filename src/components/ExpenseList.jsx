@@ -1,7 +1,7 @@
 // ── components/ExpenseList.jsx ────────────────────────────────────────────────
 import React, { useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
-import { C, F, PENDING_PER } from '../constants.js';
+import { C, F, MONO, PENDING_PER } from '../constants.js';
 import { fmt, safeN, catEm, catLb } from '../lib/helpers.js';
 
 function ExpenseRow(props){
@@ -23,8 +23,8 @@ function ExpenseRow(props){
         )
       ),
       React.createElement('div',{style:{textAlign:'right',flexShrink:0}},
-        React.createElement('div',{style:{fontWeight:800,color:C.navy,fontSize:'0.9rem'}},fmt(safeN(e.amount),cur)),
-        React.createElement('div',{style:{fontSize:'0.62rem',color:C.textMuted}},'J:'+fmt(safeN(e.javiAmount),cur)+' / L:'+fmt(safeN(e.laliAmount),cur))
+        React.createElement('div',{style:{fontWeight:800,color:C.navy,fontSize:'0.9rem',fontFamily:MONO}},fmt(safeN(e.amount),cur)),
+        React.createElement('div',{style:{fontSize:'0.62rem',color:C.textMuted,fontFamily:MONO}},'J:'+fmt(safeN(e.javiAmount),cur)+' / L:'+fmt(safeN(e.laliAmount),cur))
       )
     ),
     open&&!e.fromPlan?React.createElement('div',{style:{display:'flex',gap:'0.5rem',padding:'0.45rem 1rem',background:C.bg,borderTop:'1px solid '+C.border}},
