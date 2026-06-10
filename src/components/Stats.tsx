@@ -1,17 +1,8 @@
 // ── components/Stats.tsx ──────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BarChart3, TrendingUp, Trophy, CreditCard, Layers } from 'lucide-react';
-import { CatIcon } from './ui.jsx';
-
-function useIsDesktop(): boolean {
-  const [isDesktop, setIsDesktop] = React.useState(() => window.innerWidth >= 768);
-  useEffect(() => {
-    const h = () => setIsDesktop(window.innerWidth >= 768);
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
-  }, []);
-  return isDesktop;
-}
+import { CatIcon } from './ui';
+import { useIsDesktop } from '../lib/useIsDesktop';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, PieChart, Pie, Cell,
@@ -20,7 +11,7 @@ import {
 import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO } from '../constants';
 import { fmtS, fmt, safeN, catEm, catLb, normCat, calcBal, lastPayment, pctChange, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
-import { Card, ScrollFilter, ChartSelector } from './ui.jsx';
+import { Card, ScrollFilter, ChartSelector } from './ui';
 import type { Expense, Currency } from '../types';
 
 // ── Types ──────────────────────────────────────────────────────────────────────

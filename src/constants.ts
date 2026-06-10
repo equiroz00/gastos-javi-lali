@@ -1,9 +1,13 @@
 // ── src/constants.ts ──────────────────────────────────────────────────────────
 import type { ThemeConfig, FontConfig, ThemeKey, FontKey } from './types';
 
+// onNavy = color de texto/íconos cuando el FONDO es `navy`. En el tema claro
+// navy es azul → texto blanco; en el oscuro navy es casi blanco (#F4F4F5) →
+// texto oscuro. Usar siempre onNavy (no `white`) sobre fondos navy, si no las
+// burbujas seleccionadas quedan blanco sobre blanco en el tema oscuro.
 export const THEMES: Record<ThemeKey, ThemeConfig> = {
-  default: { label:'Original', emoji:'💜', bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#E4DAD2', textMuted:'#8a7a85', border:'#E2D8CF', white:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)' },
-  oscuro:  { label:'Oscuro',   emoji:'🌑', bg:'#0F1115', surface:'#191C22', navy:'#F4F4F5', accent:'#10B981', beige:'#23272F', textMuted:'#8B909B', border:'#262A32', white:'#FFFFFF', gradMain:'linear-gradient(135deg,#1A1D24,#23272F)', gradJavi:'linear-gradient(135deg,#10B981,#0E9F6E)', gradLali:'linear-gradient(135deg,#A78BFA,#8B5CF6)' },
+  default: { label:'Original', emoji:'💜', bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#E4DAD2', textMuted:'#8a7a85', border:'#E2D8CF', white:'#FFFFFF', onNavy:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)' },
+  oscuro:  { label:'Oscuro',   emoji:'🌑', bg:'#0F1115', surface:'#191C22', navy:'#F4F4F5', accent:'#10B981', beige:'#23272F', textMuted:'#8B909B', border:'#262A32', white:'#FFFFFF', onNavy:'#0F1115', gradMain:'linear-gradient(135deg,#1A1D24,#23272F)', gradJavi:'linear-gradient(135deg,#10B981,#0E9F6E)', gradLali:'linear-gradient(135deg,#A78BFA,#8B5CF6)' },
 };
 
 export const FONTS: Record<FontKey, FontConfig> = {

@@ -102,7 +102,7 @@ export default function SplitModal({ amount, currency, paidBy: initPaidBy, javiA
                 style={{ flex:1, padding:'0.6rem', borderRadius:'0.75rem', border:'2px solid', cursor:'pointer', fontFamily:F, fontWeight:700, fontSize:'0.85rem', transition:'all 0.15s',
                   background: paidBy === u ? (u === 'Javi' ? C.navy : C.accent) : 'transparent',
                   borderColor: paidBy === u ? (u === 'Javi' ? C.navy : C.accent) : C.border,
-                  color: paidBy === u ? C.white : C.navy,
+                  color: paidBy === u ? (u === 'Javi' ? C.onNavy : C.white) : C.navy,
                 }}>
                 {u === 'Javi' ? '👨 ' : '👩 '}{u}
               </button>
@@ -118,7 +118,7 @@ export default function SplitModal({ amount, currency, paidBy: initPaidBy, javiA
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' }}>
             <div style={{ textAlign:'center', minWidth:'60px' }}>
               <div style={{ background:C.navy, borderRadius:'50%', width:'36px', height:'36px', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 0.25rem' }}>
-                <User size={18} color={C.white} strokeWidth={1.8} />
+                <User size={18} color={C.onNavy} strokeWidth={1.8} />
               </div>
               <div style={{ fontSize:'0.72rem', fontWeight:700, color:C.navy }}>Javi</div>
               <div style={{ fontSize:'1rem', fontWeight:900, color:C.navy }}>{javiPct}%</div>
@@ -129,8 +129,8 @@ export default function SplitModal({ amount, currency, paidBy: initPaidBy, javiA
             <div style={{ flex:1, margin:'0 1rem' }}>
               <style>{`
                 .split-slider { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px; outline:none; cursor:pointer; }
-                .split-slider::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:white; border:3px solid #174871; box-shadow:0 2px 6px rgba(0,0,0,0.2); cursor:pointer; }
-                .split-slider::-moz-range-thumb { width:22px; height:22px; border-radius:50%; background:white; border:3px solid #174871; cursor:pointer; }
+                .split-slider::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:white; border:3px solid ${C.navy}; box-shadow:0 2px 6px rgba(0,0,0,0.2); cursor:pointer; }
+                .split-slider::-moz-range-thumb { width:22px; height:22px; border-radius:50%; background:white; border:3px solid ${C.navy}; cursor:pointer; }
               `}</style>
               <input
                 type="range" min={0} max={100} value={javiPct}
@@ -158,7 +158,7 @@ export default function SplitModal({ amount, currency, paidBy: initPaidBy, javiA
                 <button key={String(label)} onClick={() => { setManualMode(false); setJaviPct(Number(j)); }}
                   style={{ padding:'0.25rem 0.65rem', fontSize:'0.7rem', borderRadius:'999px', border:'1px solid', cursor:'pointer', fontFamily:F,
                     background: active ? C.navy : 'transparent', borderColor: active ? C.navy : C.border,
-                    color: active ? C.white : C.navy, fontWeight: active ? 800 : 500 }}>
+                    color: active ? C.onNavy : C.navy, fontWeight: active ? 800 : 500 }}>
                   {String(label)}
                 </button>
               );

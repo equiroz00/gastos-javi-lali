@@ -151,7 +151,8 @@ export type FontKey  = 'Nunito' | 'PlusJakarta' | 'Jost';
 export interface ThemeConfig {
   label: string; emoji: string; bg: string; surface: string;
   navy: string; accent: string; beige: string; textMuted: string;
-  border: string; white: string; gradMain: string; gradJavi: string; gradLali: string;
+  border: string; white: string; onNavy: string;
+  gradMain: string; gradJavi: string; gradLali: string;
 }
 
 export interface FontConfig {

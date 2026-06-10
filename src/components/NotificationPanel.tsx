@@ -66,12 +66,12 @@ export default function NotificationPanel() {
       {/* Bell button */}
       <button
         onClick={handleOpen}
-        style={{ position:'relative', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:'0.6rem', padding:'0.4rem 0.6rem', color:C.white, cursor:'pointer', display:'flex', alignItems:'center' }}
+        style={{ position:'relative', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.6rem', padding:'0.4rem 0.6rem', color:C.textMuted, cursor:'pointer', display:'flex', alignItems:'center' }}
         aria-label="Notificaciones"
       >
         <Bell size={18} strokeWidth={1.8} />
         {hasUnread && (
-          <span style={{ position:'absolute', top:'4px', right:'4px', width:'8px', height:'8px', background:'#EF4444', borderRadius:'50%', border:'2px solid rgba(255,255,255,0.9)' }} />
+          <span style={{ position:'absolute', top:'4px', right:'4px', width:'8px', height:'8px', background:'#EF4444', borderRadius:'50%', border:'2px solid '+C.surface }} />
         )}
       </button>
 

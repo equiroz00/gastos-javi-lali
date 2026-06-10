@@ -3,17 +3,8 @@ import React, { useState } from 'react';
 import { Palette, SlidersHorizontal, Download, CalendarDays } from 'lucide-react';
 import { C, F, THEMES, FONTS, coerceTheme, coerceFont } from '../constants';
 import useAppStore from '../store/useAppStore';
-import { Card } from './ui.jsx';
-
-function useIsDesktop(): boolean {
-  const [isDesktop, setIsDesktop] = React.useState(() => window.innerWidth >= 768);
-  React.useEffect(() => {
-    const handler = () => setIsDesktop(window.innerWidth >= 768);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  return isDesktop;
-}
+import { Card } from './ui';
+import { useIsDesktop } from '../lib/useIsDesktop';
 
 export default function Settings() {
   const isDesktop           = useIsDesktop();
@@ -176,7 +167,7 @@ export default function Settings() {
           <input type="date" style={{ ...inp, flex:1 } as any} value={np.end}   onChange={e => { setNp(p => ({ ...p, end:e.target.value }));   setPeriodError(''); }} />
         </div>
         {periodError && <p style={{ color:'#c0314f', fontSize:'0.75rem', margin:'0 0 0.4rem', fontWeight:600 }}>⚠ {periodError}</p>}
-        <button onClick={addPeriod} style={{ width:'100%', padding:'0.5rem', background:C.navy, color:C.white, border:'none', borderRadius:'0.6rem', fontWeight:700, fontSize:'0.85rem', cursor:'pointer', fontFamily:F }}>
+        <button onClick={addPeriod} style={{ width:'100%', padding:'0.5rem', background:C.navy, color:C.onNavy, border:'none', borderRadius:'0.6rem', fontWeight:700, fontSize:'0.85rem', cursor:'pointer', fontFamily:F }}>
           + Agregar período
         </button>
       </div>

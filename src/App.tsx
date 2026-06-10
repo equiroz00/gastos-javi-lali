@@ -12,17 +12,18 @@ import {
   runMigrationIfNeeded, pruneActivityLog, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc, activityLogCol,
 } from './store/useAppStore.js';
-import LoginScreen       from './components/LoginScreen.jsx';
-import Dashboard         from './components/Dashboard.jsx';
-import AddEditExpense    from './components/AddEditExpense.jsx';
-import History           from './components/History.jsx';
-import SettingsScreen    from './components/Settings.jsx';
+import LoginScreen       from './components/LoginScreen';
+import Dashboard         from './components/Dashboard';
+import AddEditExpense    from './components/AddEditExpense';
+import History           from './components/History';
+import SettingsScreen    from './components/Settings';
+import { useIsDesktop }  from './lib/useIsDesktop';
 
 // Stats carga recharts (~400 kB): se trae bajo demanda al abrir la pestaña,
 // así la carga inicial de la app es mucho más liviana.
-const Stats = React.lazy(() => import('./components/Stats.jsx'));
-import NotificationPanel from './components/NotificationPanel.jsx';
-import { Toast, ConfirmDialog, PaymentModal } from './components/ui.jsx';
+const Stats = React.lazy(() => import('./components/Stats'));
+import NotificationPanel from './components/NotificationPanel';
+import { Toast, ConfirmDialog, PaymentModal } from './components/ui';
 
 let _unsubs: Array<() => void> = [];
 let _unsubAuth: (() => void) | null = null;
@@ -46,16 +47,6 @@ const TABS: Tab[] = [
   { id:'history',   icon:<ClipboardList size={20} strokeWidth={1.8} />, label:'Historial' },
   { id:'settings',  icon:<Settings2     size={20} strokeWidth={1.8} />, label:'Config'    },
 ];
-
-function useIsDesktop(): boolean {
-  const [isDesktop, setIsDesktop] = React.useState(() => window.innerWidth >= 768);
-  React.useEffect(() => {
-    const handler = () => setIsDesktop(window.innerWidth >= 768);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  return isDesktop;
-}
 
 export default function App() {
   const isDesktop      = useIsDesktop();
