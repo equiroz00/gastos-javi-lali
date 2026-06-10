@@ -1,7 +1,7 @@
 // ── firebase.js ───────────────────────────────────────────────────────────────
 import { initializeApp } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -30,7 +30,12 @@ if (recaptchaSiteKey) {
     isTokenAutoRefreshEnabled: true,
   });
 }
-export const db       = getFirestore(app);
+// Persistencia offline (IndexedDB): la app abre con los datos en caché aunque
+// no haya conexión, y las escrituras hechas offline se sincronizan al volver.
+// El multi-tab manager permite tener la app abierta en varias pestañas a la vez.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 export const auth     = getAuth(app);
 export const provider = new GoogleAuthProvider();
 

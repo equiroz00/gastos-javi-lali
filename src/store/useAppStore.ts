@@ -1,7 +1,7 @@
 // ── src/store/useAppStore.ts ──────────────────────────────────────────────────
 import { create } from 'zustand';
 import { db, auth } from '../firebase.js';
-import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import {
   getPeriod, generatePlanExpenses, reassignPlanExpenses,
@@ -44,6 +44,21 @@ export function runMigrationIfNeeded(onDone: () => void): void {
     batch.delete(legacyRef);
     batch.commit().then(onDone).catch(onDone);
   }).catch(onDone);
+}
+
+// ── Poda del log de actividad ─────────────────────────────────────────────────
+// El log crece con cada operación y nunca se leía más allá de 50 entradas.
+// Una vez por sesión borramos todo lo que exceda las últimas `keep` entradas
+// para que la colección no crezca indefinidamente.
+export function pruneActivityLog(keep: number = 100): void {
+  getDocs(query(activityLogCol(), orderBy('timestamp', 'desc')))
+    .then(snap => {
+      if (snap.docs.length <= keep) return;
+      const batch = writeBatch(db);
+      snap.docs.slice(keep).forEach(d => batch.delete(d.ref));
+      batch.commit().catch(e => console.error('Firestore [pruneActivityLog]:', e));
+    })
+    .catch(e => console.error('Firestore [pruneActivityLog]:', e));
 }
 
 // ── Error en escrituras ───────────────────────────────────────────────────────

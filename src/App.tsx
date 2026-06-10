@@ -9,15 +9,18 @@ import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
 import {
-  runMigrationIfNeeded, settingsDoc,
+  runMigrationIfNeeded, pruneActivityLog, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc, activityLogCol,
 } from './store/useAppStore.js';
 import LoginScreen       from './components/LoginScreen.jsx';
 import Dashboard         from './components/Dashboard.jsx';
 import AddEditExpense    from './components/AddEditExpense.jsx';
 import History           from './components/History.jsx';
-import Stats             from './components/Stats.jsx';
 import SettingsScreen    from './components/Settings.jsx';
+
+// Stats carga recharts (~400 kB): se trae bajo demanda al abrir la pestaña,
+// así la carga inicial de la app es mucho más liviana.
+const Stats = React.lazy(() => import('./components/Stats.jsx'));
 import NotificationPanel from './components/NotificationPanel.jsx';
 import { Toast, ConfirmDialog, PaymentModal } from './components/ui.jsx';
 
@@ -108,6 +111,7 @@ export default function App() {
       setAuthDenied(false); setCurrentUser(name);
 
       runMigrationIfNeeded(() => {
+        pruneActivityLog();
         _unsubs.forEach(u => u()); _unsubs = [];
         const fired = { exp:false, plans:false, pay:false, cfg:false, prefs:false, log:false };
         const checkDone = () => {
@@ -213,11 +217,18 @@ export default function App() {
     </div>
   ) : null;
 
+  const statsFallback = (
+    <div style={{ display:'flex', justifyContent:'center', padding:'3rem' }}>
+      <Loader2 size={28} color={C.textMuted} strokeWidth={1.5} style={{ animation:'spin 1s linear infinite' }} />
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+
   const Content = (
     <>
       {view === 'dashboard' && <Dashboard />}
       {view === 'add'       && <AddEditExpense />}
-      {view === 'stats'     && <Stats />}
+      {view === 'stats'     && <React.Suspense fallback={statsFallback}><Stats /></React.Suspense>}
       {view === 'history'   && <History />}
       {view === 'settings'  && <SettingsScreen />}
     </>
