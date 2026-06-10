@@ -47,7 +47,7 @@ export function coerceFont(key: string): string {
 
 export function applyTheme(themeKey: string, fontKey: string): void {
   const t = THEMES[coerceTheme(themeKey) as ThemeKey] || THEMES.default;
-  (Object.keys(t) as (keyof ThemeConfig)[]).forEach(k => { (C as Record<string, string>)[k] = t[k]; });
+  (Object.keys(t) as (keyof ThemeConfig)[]).forEach(k => { C[k] = t[k]; });
   const fd = FONTS[coerceFont(fontKey) as FontKey] || FONTS.Nunito;
   F = fd.css;
 }

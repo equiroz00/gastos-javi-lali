@@ -70,7 +70,7 @@ export interface Settings {
 }
 
 export interface ToastData {
-  emoji: string;
+  category: string;
   description: string;
   amount: string;
 }

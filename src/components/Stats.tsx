@@ -302,7 +302,7 @@ function EvolucionArea({ allExpenses, allCatsFull, configPeriods, cur }: {
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={data} margin={{ top:5, right:5, bottom:25, left:0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.beige} />
-          <XAxis dataKey="period" tick={{ fontSize:8, angle:-30, textAnchor:'end', fontFamily:F, fill:C.textMuted }} interval={0} />
+          <XAxis dataKey="period" tick={{ fontSize:8, angle:-30, textAnchor:'end', fontFamily:F, fill:C.textMuted } as never} interval={0} />
           <YAxis tickFormatter={(v) => fmtS(v, cur)} tick={{ fontSize:8, fontFamily:F, fill:C.textMuted }} width={42} />
           <Tooltip {...tt} />
           {top5.map((cat, i) => (
@@ -420,7 +420,7 @@ export default function Stats() {
     <div style={{ padding:'1rem' }}>
       <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:'0.75rem' }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
       <ScrollFilter items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />
-      {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={c => setCur(c as Currency)} />}
+      {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={(c: string) => setCur(c as Currency)} />}
       <Card style={{ textAlign:'center', padding:'3rem', color:C.textMuted }}>
         <div style={{ display:'flex', justifyContent:'center', marginBottom:'0.5rem' }}><BarChart3 size={36} strokeWidth={1.6} color={C.textMuted} /></div>
         No hay datos para este período/moneda
@@ -588,7 +588,7 @@ export default function Stats() {
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={perData} margin={{ top:5, right:5, bottom:30, left:0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.beige} />
-              <XAxis dataKey="period" tick={{ fontSize:9, angle:-35, textAnchor:'end', fontFamily:F, fill:C.textMuted }} interval={0} />
+              <XAxis dataKey="period" tick={{ fontSize:9, angle:-35, textAnchor:'end', fontFamily:F, fill:C.textMuted } as never} interval={0} />
               <YAxis tickFormatter={(v) => fmtS(v, cur)} tick={{ fontSize:9, fontFamily:F, fill:C.textMuted }} width={45} />
               <Tooltip {...tt} />
               <Bar dataKey="javi" name="Javi" fill={C.navy} stackId="a" />
@@ -611,7 +611,7 @@ export default function Stats() {
   const filters = (
     <>
       <ScrollFilter items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />
-      {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={c => setCur(c as Currency)} />}
+      {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={(c: string) => setCur(c as Currency)} />}
     </>
   );
 

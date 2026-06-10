@@ -6,7 +6,7 @@ import {
   Wallet, Tag, Search, Trash2, X, ArrowRightLeft
 } from 'lucide-react';
 import { C, F, CHART_TYPES } from '../constants';
-import { fmt, safeN, catLb } from '../lib/helpers';
+import { fmt, safeN, catLb, todayStr, genId } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
@@ -135,7 +135,7 @@ export function PaymentModal(){
   var debtor=netBal>0?'Lali':'Javi';
   var creditor=netBal>0?'Javi':'Lali';
   var amtState=useState('');var amt=amtState[0];var setAmt=amtState[1];
-  var dateState=useState(new Date().toISOString().split('T')[0]);var date=dateState[0];var setDate=dateState[1];
+  var dateState=useState(todayStr());var date=dateState[0];var setDate=dateState[1];
   var errState=useState('');var err=errState[0];var setErr=errState[1];
   // Sync amount when modal opens/changes
   React.useEffect(function(){
@@ -147,7 +147,7 @@ export function PaymentModal(){
   if(!payModal) return null;
   function submit(){
     if(!amt||parseFloat(amt)<=0){setErr('Ingresá un monto válido.');return;}
-    confirmPayment({id:'pay_'+Date.now(),date:date,amount:parseFloat(amt),currency:currency,from:debtor,to:creditor,period:payModal.period||undefined,registeredAt:new Date().toISOString()});
+    confirmPayment({id:genId('pay'),date:date,amount:parseFloat(amt),currency:currency,from:debtor,to:creditor,period:payModal.period||undefined,registeredAt:new Date().toISOString()});
   }
   var inp={width:'100%',border:'1px solid '+C.border,borderRadius:'0.75rem',padding:'0.75rem',fontSize:'0.9rem',outline:'none',boxSizing:'border-box',fontFamily:F,color:C.navy,background:C.surface};
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:'1.5rem'}},

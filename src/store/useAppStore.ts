@@ -5,7 +5,7 @@ import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc } from 'firebase
 import { signOut } from 'firebase/auth';
 import {
   getPeriod, generatePlanExpenses, reassignPlanExpenses,
-  sanitize, calcAmts, safeN, catEm, fmt,
+  sanitize, calcAmts, safeN, catEm, fmt, genId,
 } from '../lib/helpers.js';
 import { DEFAULT_CATS } from '../constants.js';
 import type {
@@ -44,6 +44,16 @@ export function runMigrationIfNeeded(onDone: () => void): void {
     batch.delete(legacyRef);
     batch.commit().then(onDone).catch(onDone);
   }).catch(onDone);
+}
+
+// ── Error en escrituras ───────────────────────────────────────────────────────
+// Todas las escrituras a Firestore son optimistas (el estado local se actualiza
+// primero). Si la nube rechaza la operación, avisamos en lugar de fallar mudos.
+function reportWriteError(op: string) {
+  return (err: unknown) => {
+    console.error('Firestore [' + op + ']:', err);
+    useAppStore.getState().showMsg('⚠ No se pudo sincronizar con la nube. Revisá tu conexión e intentá de nuevo.');
+  };
 }
 
 // ── Activity log type ─────────────────────────────────────────────────────────
@@ -135,7 +145,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const state = get();
     set({ userTheme: theme, userFont: font });
     if (state.currentUser) {
-      setDoc(userPrefDoc(state.currentUser), { theme, font }, { merge: true });
+      setDoc(userPrefDoc(state.currentUser), { theme, font }, { merge: true })
+        .catch(reportWriteError('saveUserPreferences'));
     }
   },
 
@@ -147,7 +158,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const state = get();
     set({ lastReadTs: now });
     if (state.currentUser) {
-      setDoc(userPrefDoc(state.currentUser), { lastReadTs: now }, { merge: true });
+      setDoc(userPrefDoc(state.currentUser), { lastReadTs: now }, { merge: true })
+        .catch(reportWriteError('markAllRead'));
     }
   },
 
@@ -179,7 +191,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const state = get();
     if (!state.currentUser) return;
     const entry: ActivityEntry = {
-      id: 'log_' + Date.now(),
+      id: genId('log'),
       action,
       description: expense.description || '',
       amount: safeN(expense.amount),
@@ -187,16 +199,17 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       doneBy: state.currentUser,
       timestamp: new Date().toISOString(),
     };
-    setDoc(activityLogDoc(entry.id), entry);
+    // El log es secundario — si falla no molestamos al usuario, solo consola.
+    setDoc(activityLogDoc(entry.id), entry).catch(e => console.error('Firestore [activityLog]:', e));
   },
 
   // Expense actions
   handleAdd: expense => {
     const state = get();
     const allCats = DEFAULT_CATS.concat(state.customCats);
-    const s = sanitize({ ...expense, id: Date.now().toString() }, allCats);
+    const s = sanitize({ ...expense, id: genId() }, allCats);
     set({ expenses: [s, ...state.expenses], view: 'dashboard' });
-    setDoc(expenseDoc(s.id), s);
+    setDoc(expenseDoc(s.id), s).catch(reportWriteError('handleAdd'));
     state.showToast(s);
     (state as any)._logActivity('add', s);
   },
@@ -207,7 +220,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const sanitized = exps.map(e => sanitize(e, allCats));
     const batch = writeBatch(db);
     sanitized.forEach(s => batch.set(expenseDoc(s.id), s));
-    batch.commit();
+    batch.commit().catch(reportWriteError('handleAddMultiple'));
     set({ expenses: [...sanitized, ...state.expenses], view: 'dashboard' });
     const last = sanitized[sanitized.length - 1];
     state.showToast(last);
@@ -219,7 +232,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const allCats = DEFAULT_CATS.concat(state.customCats);
     const s = sanitize(expense, allCats);
     set({ expenses: state.expenses.map(e => e.id === s.id ? s : e), editingExpense: null });
-    setDoc(expenseDoc(s.id), s);
+    setDoc(expenseDoc(s.id), s).catch(reportWriteError('handleEdit'));
     state.showToast(s);
     (state as any)._logActivity('edit', s);
   },
@@ -231,7 +244,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     if (!state.pendingDelete) return;
     const { id, expense } = state.pendingDelete;
     set({ expenses: state.expenses.filter(e => e.id !== id), pendingDelete: null });
-    deleteDoc(expenseDoc(id));
+    deleteDoc(expenseDoc(id)).catch(reportWriteError('confirmDelete'));
     (state as any)._logActivity('delete', expense);
   },
 
@@ -243,7 +256,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const amts = calcAmts(installmentAmount, formData.responsible);
     const startPeriod = manualStartPeriod || getPeriod(formData.date, state.settings.periods);
     const plan: Plan = {
-      id: 'plan_' + Date.now(),
+      id: genId('plan'),
       description: formData.description,
       totalAmount: safeN(formData.amount),
       installmentAmount,
@@ -265,7 +278,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const batch = writeBatch(db);
     batch.set(planDoc(plan.id), plan);
     installments.forEach(inst => batch.set(expenseDoc(inst.id), inst));
-    batch.commit();
+    batch.commit().catch(reportWriteError('handleAddPlan'));
     set({ plans: [...state.plans, plan], expenses: [...installments, ...state.expenses], view: 'dashboard' });
   },
 
@@ -275,7 +288,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const batch = writeBatch(db);
     batch.delete(planDoc(planId));
     planExps.forEach(e => batch.delete(expenseDoc(e.id)));
-    batch.commit();
+    batch.commit().catch(reportWriteError('handleCancelPlan'));
     set({ plans: state.plans.filter(p => p.id !== planId), expenses: state.expenses.filter(e => e.planId !== planId) });
   },
 
@@ -285,14 +298,14 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   confirmPayment: paymentData => {
     const state = get();
     set({ payments: [...state.payments, paymentData], payModal: null });
-    setDoc(paymentDoc(paymentData.id), paymentData);
+    setDoc(paymentDoc(paymentData.id), paymentData).catch(reportWriteError('confirmPayment'));
     state.showMsg('✓ Pago registrado correctamente.');
   },
 
   deletePayment: id => {
     const state = get();
     set({ payments: state.payments.filter(p => p.id !== id) });
-    deleteDoc(paymentDoc(id));
+    deleteDoc(paymentDoc(id)).catch(reportWriteError('deletePayment'));
     state.showMsg('✓ Pago eliminado.');
   },
 
@@ -300,7 +313,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   saveCustomCats: cats => {
     const state = get();
     set({ customCats: cats });
-    setDoc(settingsDoc(), { ...state.settings, customCats: cats });
+    setDoc(settingsDoc(), { ...state.settings, customCats: cats })
+      .catch(reportWriteError('saveCustomCats'));
   },
 
   saveSettings: s => {
@@ -310,11 +324,16 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       period: (!e.fromPlan && e.date) ? getPeriod(e.date, s.periods) : (e.period || 'Sin período'),
     }));
     if (s.periods?.length) updated = reassignPlanExpenses(updated, s.periods, state.plans);
-    updated.forEach((e, i) => {
-      if (e.period !== state.expenses[i]?.period) setDoc(expenseDoc(e.id), e);
-    });
+    // Escribir en batch (no doc por doc) — Firestore limita 500 ops por batch.
+    const changed = updated.filter((e, i) => e.period !== state.expenses[i]?.period);
+    for (let i = 0; i < changed.length; i += 450) {
+      const batch = writeBatch(db);
+      changed.slice(i, i + 450).forEach(e => batch.set(expenseDoc(e.id), e));
+      batch.commit().catch(reportWriteError('saveSettings/expenses'));
+    }
     set({ expenses: updated, settings: s });
-    setDoc(settingsDoc(), { ...s, customCats: state.customCats });
+    setDoc(settingsDoc(), { ...s, customCats: state.customCats })
+      .catch(reportWriteError('saveSettings'));
   },
 
   // CSV Export

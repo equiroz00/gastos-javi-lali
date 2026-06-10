@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Plus, X, Pencil, AlertTriangle } from 'lucide-react';
 import { C, F, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, catEm } from '../lib/helpers.js';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, catEm, genId } from '../lib/helpers.js';
 import { CatIcon } from './ui.jsx';
 import useAppStore from '../store/useAppStore';
 import { SegBtn } from './ui.jsx';
@@ -165,7 +165,7 @@ export default function AddEditExpense(props){
     if(!form.amount||parseFloat(form.amount)<=0)e.amount='Monto inválido';
     if(Object.keys(e).length){setErrors(e);return;}
     var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;
-    var item=sanitize(Object.assign({},form,{id:Date.now().toString(),amount:totalAmt,javiAmount:javiAmt,laliAmount:laliAmt,currency:finalCur,period:getPeriod(form.date,periods),createdBy:currentUser,createdAt:new Date().toISOString()}),allCats);
+    var item=sanitize(Object.assign({},form,{id:genId(),amount:totalAmt,javiAmount:javiAmt,laliAmount:laliAmt,currency:finalCur,period:getPeriod(form.date,periods),createdBy:currentUser,createdAt:new Date().toISOString()}),allCats);
     setQueue(function(q){return q.concat([item]);});
     setForm(function(f){return Object.assign({},f,{description:'',amount:'',javiAmount:0,laliAmount:0});});
     setErrors({});
@@ -188,14 +188,14 @@ export default function AddEditExpense(props){
     if(Object.keys(e).length){setErrors(e);return;}
     var finalCur=form.currency==='Otra'?(form.customCurrency||'ARS'):form.currency;
     var base=Object.assign({},form,{
-      id:isEditMode?(initialData&&initialData.id)||Date.now().toString():Date.now().toString(),
+      id:isEditMode?(initialData&&initialData.id)||genId():genId(),
       amount:totalAmt, javiAmount:javiAmt, laliAmount:laliAmt,
       currency:finalCur, period:getPeriod(form.date,periods)
     });
     if(!isEditMode){base.createdBy=currentUser;base.createdAt=new Date().toISOString();}
     if(isEditMode){ handleEdit(base); }
     else if(useCuotas&&finalCuotas>1){ handleAddPlan(base,finalCuotas,isRetro?paidNum:0,isRetro?retroStartPer:null); }
-    else if(queue.length>0){ handleAddMultiple(queue.concat([sanitize(Object.assign({},base,{id:Date.now().toString()}),allCats)])); }
+    else if(queue.length>0){ handleAddMultiple(queue.concat([sanitize(Object.assign({},base,{id:genId()}),allCats)])); }
     else { handleAdd(base); }
   }
 

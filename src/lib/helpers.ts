@@ -3,8 +3,22 @@ import { CUR_SYM, PENDING_PER } from '../constants';
 import type { Expense, Plan, Payment, Period, Currency, Responsible, UserName } from '../types';
 
 // ── Formatting ────────────────────────────────────────────────────────────────
+// Fecha local del dispositivo (no UTC): toISOString() devolvía la fecha de
+// mañana entre las 21:00 y medianoche en Argentina (UTC-3).
 export function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
+  const d = new Date();
+  return d.getFullYear() + '-'
+    + String(d.getMonth() + 1).padStart(2, '0') + '-'
+    + String(d.getDate()).padStart(2, '0');
+}
+
+// ID único — Date.now() podía colisionar entre dos dispositivos y setDoc
+// sobrescribiría el documento del otro sin aviso.
+export function genId(prefix?: string): string {
+  const uuid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  return prefix ? prefix + '_' + uuid : uuid;
 }
 
 // Round to 2 decimal places — used across all monetary calculations
@@ -117,12 +131,20 @@ export function generatePlanExpenses(plan: Plan, periods: Period[]): Expense[] {
     const cuotaNum = paid + i + 1;
     const targetIdx = startIdx + i;
     const period = (startIdx >= 0 && targetIdx < periods.length) ? periods[targetIdx].name : PENDING_PER;
+    // La última cuota absorbe la diferencia de redondeo para que la suma de
+    // cuotas iguale exactamente el total del plan.
+    const isLast = cuotaNum === plan.numInstallments;
+    const amount = isLast
+      ? round2(plan.totalAmount - plan.installmentAmount * (plan.numInstallments - 1))
+      : plan.installmentAmount;
+    const amts = isLast ? calcAmts(amount, plan.responsible)
+                        : { javiAmount: plan.javiAmount, laliAmount: plan.laliAmount };
     result.push({
       id: plan.id + '-' + cuotaNum,
       description: plan.description + ' (cuota ' + cuotaNum + '/' + plan.numInstallments + ')',
-      amount: plan.installmentAmount,
-      javiAmount: plan.javiAmount,
-      laliAmount: plan.laliAmount,
+      amount: amount,
+      javiAmount: amts.javiAmount,
+      laliAmount: amts.laliAmount,
       currency: plan.currency,
       paidBy: plan.paidBy,
       responsible: plan.responsible,
@@ -156,10 +178,11 @@ export function reassignPlanExpenses(exps: Expense[], periods: Period[], plans: 
 }
 
 // ── Sanitize ──────────────────────────────────────────────────────────────────
-export function sanitize(e: Partial<Expense> & Record<string, unknown>, cats: string[]): Expense {
+export function sanitize(e: Partial<Expense>, cats: string[]): Expense {
   const date = (typeof e.date === 'string' && e.date.match(/^\d{4}-\d{2}-\d{2}/))
     ? e.date.substring(0, 10) : (e.date as string || todayStr());
-  const paidBy: UserName = (e.paidBy === 'Javi' || e.paidBy === 'Edinson') ? 'Javi' : 'Lali';
+  // 'Edinson' es un valor legacy de datos viejos, fuera del tipo UserName actual
+  const paidBy: UserName = (e.paidBy === 'Javi' || String(e.paidBy) === 'Edinson') ? 'Javi' : 'Lali';
   const responsible: Responsible = (['Javi', 'Lali', 'Ambos'] as Responsible[]).includes(e.responsible as Responsible)
     ? (e.responsible as Responsible) : 'Ambos';
   return {

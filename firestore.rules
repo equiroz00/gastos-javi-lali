@@ -2,18 +2,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Único documento de datos de la app ────────────────────────────────────
-    // Solo los UIDs registrados en USER_MAP (Javi y Lali) pueden leer y escribir.
-    // Nadie más — ni siquiera usuarios autenticados con otras cuentas Google.
-    match /appdata/main {
-      allow read, write: if request.auth != null
-                         && request.auth.uid in [
-                              'h0FlnAU3wabBCTztmPXdLyFW6R42',   // ← reemplazá con el UID real de Javi
-                              'JjDJiAjLmVSc0WODsfvULRLT59s2'    // ← reemplazá con el UID real de Lali
-                            ];
+    // ── Acceso exclusivo para Javi y Lali ─────────────────────────────────────
+    // Estos UIDs deben coincidir con USER_MAP en src/constants.ts.
+    // Nadie más tiene acceso — ni siquiera usuarios autenticados con otras
+    // cuentas de Google.
+    function isCouple() {
+      return request.auth != null
+        && request.auth.uid in [
+             'h0FlnAU3wabBCTztmPXdLyFW6R42',   // Javi
+             'JjDJiAjLmVSc0WODsfvULRLT59s2'    // Lali
+           ];
     }
 
-    // Bloquear cualquier otro documento o colección
+    // ── Colecciones de la app ─────────────────────────────────────────────────
+    match /expenses/{id}        { allow read, write: if isCouple(); }
+    match /plans/{id}           { allow read, write: if isCouple(); }
+    match /payments/{id}        { allow read, write: if isCouple(); }
+    match /settings/{id}        { allow read, write: if isCouple(); }
+    match /userPreferences/{id} { allow read, write: if isCouple(); }
+    match /activityLog/{id}     { allow read, write: if isCouple(); }
+
+    // Documento legacy — runMigrationIfNeeded() lo lee y borra si aún existe.
+    // Se puede eliminar este bloque cuando se retire la migración del código.
+    match /appdata/main         { allow read, write: if isCouple(); }
+
+    // ── Bloquear cualquier otro documento o colección ─────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }

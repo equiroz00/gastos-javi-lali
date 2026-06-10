@@ -1,5 +1,6 @@
 // ── firebase.js ───────────────────────────────────────────────────────────────
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
@@ -12,7 +13,23 @@ const firebaseConfig = {
   appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app      = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
+
+// ── App Check (reCAPTCHA v3) ──────────────────────────────────────────────────
+// Solo se activa si VITE_RECAPTCHA_SITE_KEY está configurada (en .env local y
+// en las variables de entorno del hosting). En desarrollo usa un debug token:
+// la primera vez aparece en la consola del navegador y hay que registrarlo en
+// Firebase Console → App Check → (menú ⋮ de la app) → Manage debug tokens.
+const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+if (recaptchaSiteKey) {
+  if (import.meta.env.DEV) {
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 export const db       = getFirestore(app);
 export const auth     = getAuth(app);
 export const provider = new GoogleAuthProvider();
