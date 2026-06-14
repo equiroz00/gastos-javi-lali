@@ -19,6 +19,24 @@ export const FONTS: Record<FontKey, FontConfig> = {
 // Monospaced font for monetary figures — loaded always, used regardless of body font
 export const MONO = "'JetBrains Mono',ui-monospace,monospace";
 
+// ── Sistema de layout ─────────────────────────────────────────────────────────
+// Escala de espaciado (múltiplos de 4px). Usar SIEMPRE estos valores para
+// paddings, gaps y márgenes — nada de números sueltos "a ojo".
+//   xs 4 · sm 8 · md 12 · lg 16 · xl 24 · xxl 32
+export const SP = {
+  xs:  '0.25rem',
+  sm:  '0.5rem',
+  md:  '0.75rem',
+  lg:  '1rem',
+  xl:  '1.5rem',
+  xxl: '2rem',
+} as const;
+
+// Ancho máximo del contenido en escritorio. Un único valor de referencia: el
+// shell lo centra con margin:0 auto y cada pantalla NO vuelve a fijar su propio
+// max-width (si no se contradicen entre sí).
+export const MAXW = '1040px';
+
 export const PALETTE: string[]      = ['#174871','#A77693','#4a9d8f','#d4875a','#7b5fa0','#c4965a','#5a8fa0','#a05a6e','#4a7a5a','#9a7040'];
 export const DEFAULT_CATS: string[] = ['🏠 Hogar','🍕 Alimentación','🔑 Arriendo','💡 Servicios Públicos','🚌 Transporte','🎬 Entretenimiento','👥 Amigos','💆 Cuidado Personal','💪 Gimnasio','💊 Farmacia','👶 Hijito','👕 Ropa'];
 export const PAY_METHODS: string[]  = ['Efectivo','TC Visa Laura','TC Master Card Laura','TC Visa Extensión','TC Master Card Extensión','Dinero en Cuenta','TC Visa Javi','TC Amex Javi','TC Amex Laura'];
