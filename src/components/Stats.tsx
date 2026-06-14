@@ -8,7 +8,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, PieChart, Pie, Cell,
   AreaChart, Area,
 } from 'recharts';
-import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO } from '../constants';
+import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP } from '../constants';
 import { fmtS, fmt, safeN, catEm, catLb, normCat, calcBal, lastPayment, pctChange, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter, ChartSelector } from './ui';
@@ -18,6 +18,22 @@ import type { Expense, Currency } from '../types';
 interface CatRow  { label: string; emoji: string; value: number; pct: number; }
 interface PMRow   { name: string; value: number; pct: number; }
 interface PerRow  { period: string; javi: number; lali: number; [key: string]: number | string; }
+
+// ── Masonry determinista ────────────────────────────────────────────────────────
+// CSS `columns` balancea la altura pero no puede partir una tarjeta alta, así que
+// deja huecos cuando las alturas son muy dispares. Acá repartimos en orden: cada
+// tarjeta va a la columna más corta hasta el momento (según un peso ≈ su altura).
+// Resultado: columnas parejas, sin huecos, respetando el orden de importancia.
+interface MasonryItem { node: React.ReactNode; weight: number; }
+function distributeColumns(items: MasonryItem[], nCols: number): React.ReactNode[][] {
+  const cols = Array.from({ length: nCols }, () => ({ h: 0, nodes: [] as React.ReactNode[] }));
+  items.forEach(({ node, weight }) => {
+    const target = cols.reduce((min, c) => (c.h < min.h ? c : min), cols[0]);
+    target.nodes.push(node);
+    target.h += weight;
+  });
+  return cols.map(c => c.nodes);
+}
 
 // ── Small chart helpers ────────────────────────────────────────────────────────
 function TablaCategoria({ data, cur }: { data: CatRow[]; cur: Currency }) {
@@ -608,28 +624,38 @@ export default function Stats() {
 
   // ── DESKTOP — 3-column CSS masonry ─────────────────────────────────────────
   if (isDesktop) {
+    // Pesos ≈ altura relativa de cada tarjeta, para repartir parejo en 3 columnas.
+    const showProy = period !== 'Todos';
+    const items: MasonryItem[] = [
+      { node: summaryCards, weight: 1 },
+      { node: balanceCard,  weight: 1 },
+      ...(showProy ? [{ node: <WrapAvoid><ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} /></WrapAvoid>, weight: 2 }] : []),
+      { node: whoPayedCard, weight: 2 },
+      ...(prevExps.length > 0 ? [{ node: <WrapAvoid><CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} total={total} /></WrapAvoid>, weight: 3 }] : []),
+      { node: catCard, weight: 5 },
+      { node: pmCard,  weight: 5 },
+      { node: <WrapAvoid><TopGastos filtered={filtered} cur={cur} /></WrapAvoid>, weight: 3 },
+    ];
+    const cols = distributeColumns(items, 3);
     return (
-      <div style={{ padding:'1.25rem', paddingBottom:'2rem' }}>
-        <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:'0 0 0.75rem' }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+      <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
+        <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:'0 0 '+SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
         {filters}
-        <div style={{ columns:3, columnGap:'1rem', marginTop:'0.75rem' }}>
-          {summaryCards}
-          {balanceCard}
-          <WrapAvoid><ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} /></WrapAvoid>
-          {whoPayedCard}
-          {prevExps.length > 0 && <WrapAvoid><CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} total={total} /></WrapAvoid>}
-          {catCard}
-          {pmCard}
-          <WrapAvoid><TopGastos filtered={filtered} cur={cur} /></WrapAvoid>
+        <div style={{ display:'flex', gap:SP.lg, alignItems:'flex-start', marginTop:SP.md }}>
+          {cols.map((nodes, i) => (
+            <div key={i} style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column' }}>
+              {nodes.map((node, j) => <React.Fragment key={j}>{node}</React.Fragment>)}
+            </div>
+          ))}
         </div>
-        <div style={{ marginTop:'0.75rem' }}>{fullWidthCards}</div>
+        <div style={{ marginTop:SP.md }}>{fullWidthCards}</div>
       </div>
     );
   }
 
   // ── MOBILE — single column (unchanged) ─────────────────────────────────────
   return (
-    <div style={{ padding:'1rem', paddingBottom:'2rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+    <div style={{ padding:SP.lg, paddingBottom:SP.xxl, display:'flex', flexDirection:'column', gap:SP.md }}>
       <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
       {filters}
       {summaryCards}

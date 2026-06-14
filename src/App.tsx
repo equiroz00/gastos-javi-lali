@@ -4,7 +4,7 @@ import { Loader2, Home, Plus, BarChart2, ClipboardList, Settings2, LogOut, Walle
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
-import { C, F, USER_MAP, applyTheme, FONTS } from './constants.js';
+import { C, F, USER_MAP, applyTheme, FONTS, MAXW, SP } from './constants.js';
 import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
@@ -258,10 +258,13 @@ export default function App() {
               );
             })}
           </div>
-          {/* Main content */}
-          <div style={{ flex:1, overflowY:'auto', paddingTop:'0.75rem', paddingBottom:'2rem', maxWidth:'900px' }}>
-            {SyncBar}
-            {Content}
+          {/* Main content — el scroll ocupa todo el ancho; un wrapper interno
+              centra el contenido con un max-width único (MAXW) */}
+          <div style={{ flex:1, overflowY:'auto', paddingTop:SP.md, paddingBottom:SP.xxl }}>
+            <div style={{ maxWidth:MAXW, margin:'0 auto' }}>
+              {SyncBar}
+              {Content}
+            </div>
           </div>
         </div>
       </div>

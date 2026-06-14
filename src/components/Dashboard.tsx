@@ -1,7 +1,7 @@
 // ── components/Dashboard.tsx ──────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2 } from 'lucide-react';
-import { C, F, MONO, PENDING_PER } from '../constants';
+import { C, F, MONO, PENDING_PER, SP } from '../constants';
 import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
@@ -329,8 +329,8 @@ export default function Dashboard() {
   // ── DESKTOP layout ─────────────────────────────────────────────────────────
   if (isDesktop) {
     return (
-      <div style={{ padding:'1.25rem', display:'flex', flexDirection:'column', gap:'1rem', maxWidth:'1100px' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1.1fr 1.3fr', gap:'1rem', alignItems:'start' }}>
+      <div style={{ padding:SP.lg, display:'flex', flexDirection:'column', gap:SP.lg }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
           <div>{headerBlock}</div>
           {weekSection}
         </div>
@@ -338,7 +338,7 @@ export default function Dashboard() {
           {plans.length > 0 ? (
             <ActivePlans />
           ) : (
-            <Card style={{ padding:'1.5rem', textAlign:'center', color:C.textMuted, fontSize:'0.82rem', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.5rem' }}>
+            <Card style={{ padding:SP.xl, textAlign:'center', color:C.textMuted, fontSize:'0.82rem', display:'flex', alignItems:'center', justifyContent:'center', gap:SP.sm }}>
               <CreditCard size={20} strokeWidth={2} color={C.textMuted} />
               <span style={{ fontWeight:700 }}>Sin cuotas activas</span>
             </Card>
@@ -350,7 +350,7 @@ export default function Dashboard() {
 
   // ── MOBILE — Esta semana ANTES de Cuotas activas ──────────────────────────
   return (
-    <div style={{ padding:'1rem', display:'flex', flexDirection:'column', gap:'0.85rem' }}>
+    <div style={{ padding:SP.lg, display:'flex', flexDirection:'column', gap:SP.lg }}>
       {headerBlock}
       {weekSection}
       <ActivePlans />
