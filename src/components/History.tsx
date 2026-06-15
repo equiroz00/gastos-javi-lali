@@ -79,9 +79,23 @@ export default function History() {
   const [search, setSearch]                   = useState('');
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [openMap, setOpenMap]                 = useState<Record<string, boolean>>({});
+  const [catFilter, setCatFilter]             = useState('Todas');
+  const [sortOrder, setSortOrder]             = useState<'date' | 'amount-desc' | 'amount-asc'>('date');
+
+  // Opciones de categoría a partir de los gastos existentes
+  const catOptions = ['Todas', ...Array.from(new Set(expenses.map(e => e.category).filter(Boolean)))];
+  // Filtro por categoría aplicado antes de agrupar por período
+  const baseExpenses = catFilter === 'Todas' ? expenses : expenses.filter(e => e.category === catFilter);
+
+  // Orden de los gastos dentro de cada bloque / resultados de búsqueda
+  function applySort(list: Expense[]): Expense[] {
+    if (sortOrder === 'amount-desc') return [...list].sort((a, b) => safeN(b.amount) - safeN(a.amount));
+    if (sortOrder === 'amount-asc')  return [...list].sort((a, b) => safeN(a.amount) - safeN(b.amount));
+    return sortByDate(list);
+  }
 
   const grouped: Record<string, Expense[]> = {};
-  expenses.forEach(e => {
+  baseExpenses.forEach(e => {
     const p = e.period || 'Sin período';
     if (!grouped[p]) grouped[p] = [];
     grouped[p].push(e);
@@ -93,7 +107,7 @@ export default function History() {
 
   const expenseMatches: Expense[] = [];
   if (searchLower) {
-    expenses.forEach(e => {
+    baseExpenses.forEach(e => {
       const descMatch = (e.description || '').toLowerCase().indexOf(searchLower) >= 0;
       const dateMatch = (e.date || '').indexOf(searchLower) >= 0;
       const amtMatch  = String(Math.round(safeN(e.amount))).indexOf(searchLower) >= 0;
@@ -123,6 +137,31 @@ export default function History() {
         style={{ width:'100%', border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.5rem 0.75rem', fontSize:'0.82rem', outline:'none', fontFamily:F, color:C.navy, background:C.surface, boxSizing:'border-box', marginBottom:'0.6rem' }}
       />
 
+      {/* Filtro por categoría + orden */}
+      <div style={{ display:'flex', gap:'0.5rem', marginBottom:'0.6rem', flexWrap:'wrap', alignItems:'center' }}>
+        <select
+          value={catFilter}
+          onChange={e => { setCatFilter(e.target.value); setSelectedPeriods([]); }}
+          style={{ flex:'1 1 160px', minWidth:0, border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.45rem 0.7rem', fontSize:'0.8rem', fontWeight:600, outline:'none', cursor:'pointer', fontFamily:F, color:C.navy, background:C.surface }}
+        >
+          {catOptions.map(c => <option key={c} value={c}>{c === 'Todas' ? 'Todas las categorías' : c}</option>)}
+        </select>
+        <div style={{ display:'flex', gap:'0.3rem' }}>
+          {([['date', 'Fecha'], ['amount-desc', 'Mayor $'], ['amount-asc', 'Menor $']] as const).map(([val, label]) => {
+            const active = sortOrder === val;
+            return (
+              <button
+                key={val}
+                onClick={() => setSortOrder(val)}
+                style={{ padding:'0.4rem 0.7rem', fontSize:'0.75rem', borderRadius:'999px', border:'1px solid', cursor:'pointer', fontFamily:F, fontWeight:active ? 800 : 500, background:active ? C.navy : 'transparent', borderColor:active ? C.navy : C.border, color:active ? C.onNavy : C.navy, whiteSpace:'nowrap' }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {showExpMatches && (
         <div style={{ marginBottom:'0.75rem' }}>
           <div style={{ fontWeight:700, fontSize:'0.75rem', color:C.textMuted, marginBottom:'0.35rem' }}>
@@ -130,7 +169,7 @@ export default function History() {
           </div>
           <Card style={{ padding:0, overflow:'hidden' }}>
             <div style={{ maxHeight:'320px', overflowY:'auto' }}>
-              <ExpenseList expenses={sortByDate(expenseMatches)} onDelete={requestDelete} onEdit={setEditingExpense} />
+              <ExpenseList expenses={applySort(expenseMatches)} onDelete={requestDelete} onEdit={setEditingExpense} />
             </div>
           </Card>
         </div>
@@ -163,7 +202,7 @@ export default function History() {
             <PeriodBlock
               key={period}
               period={period}
-              exps={sortByDate(grouped[period] || [])}
+              exps={applySort(grouped[period] || [])}
               isOpen={!!openMap[period]}
               isSelected={selectedPeriods.indexOf(period) >= 0}
               isPending={period === PENDING_PER}

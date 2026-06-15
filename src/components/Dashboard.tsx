@@ -2,12 +2,20 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2 } from 'lucide-react';
 import { C, F, MONO, PENDING_PER, SP } from '../constants';
-import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart } from '../lib/helpers';
+import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { Card } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense, Payment, Period, Currency } from '../types';
+
+// ── Moneda primaria de un conjunto de gastos (la de mayor total) ────────────────
+function primaryCurrency(exps: Expense[]): Currency {
+  const byCur: Record<string, number> = {};
+  exps.forEach(e => { const c = e.currency || 'ARS'; byCur[c] = (byCur[c] || 0) + safeN(e.amount); });
+  const curs = Object.keys(byCur).sort((a, b) => byCur[b] - byCur[a]);
+  return curs[0] || 'ARS';
+}
 
 // ── ActivePlans ────────────────────────────────────────────────────────────────
 function ActivePlans() {
@@ -71,6 +79,67 @@ function ActivePlans() {
   );
 }
 
+// ── ¿Quién pagó más? — movida desde Stats al Inicio ─────────────────────────────
+// Calcula sobre los gastos del período en la moneda primaria.
+function WhoPaidMore({ periodExps, cur }: { periodExps: Expense[]; cur: Currency }) {
+  const curExps  = periodExps.filter(e => (e.currency || 'ARS') === cur);
+  const total    = curExps.reduce((s, e) => s + safeN(e.amount), 0);
+  const javiPaid = curExps.filter(e => e.paidBy === 'Javi').reduce((s, e) => s + safeN(e.amount), 0);
+  const laliPaid = curExps.filter(e => e.paidBy === 'Lali').reduce((s, e) => s + safeN(e.amount), 0);
+  const javiResp = curExps.reduce((s, e) => s + safeN(e.javiAmount), 0);
+  const laliResp = curExps.reduce((s, e) => s + safeN(e.laliAmount), 0);
+
+  return (
+    <Card>
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
+        <CreditCard size={15} strokeWidth={2.2} color={C.accent} />¿Quién pagó más?
+      </h3>
+      <div style={{ display:'flex', gap:'0.6rem', marginBottom:'0.6rem' }}>
+        {(['Javi', 'Lali'] as const).map(name => {
+          const paid = name === 'Javi' ? javiPaid : laliPaid;
+          const grad = name === 'Javi' ? C.gradJavi : C.gradLali;
+          return (
+            <div key={name} style={{ flex:1, background:grad, borderRadius:'0.85rem', padding:'0.6rem', textAlign:'center', color:C.white }}>
+              <div style={{ fontWeight:800, fontSize:'0.9rem', fontFamily:MONO }}>{fmtS(paid, cur)}</div>
+              <div style={{ fontSize:'0.7rem', opacity:0.85 }}>{total > 0 ? Math.round(paid / total * 100) : 0}%</div>
+              <div style={{ fontSize:'0.62rem', opacity:0.8, marginTop:'0.1rem', fontWeight:700 }}>{name}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display:'flex', gap:'0.6rem' }}>
+        {([['Javi', C.navy, javiResp], ['Lali', C.accent, laliResp]] as const).map(([name, color, val]) => (
+          <div key={name} style={{ flex:1, background:C.bg, borderRadius:'0.75rem', padding:'0.5rem', textAlign:'center', border:'1px solid '+C.border }}>
+            <div style={{ fontSize:'0.65rem', color:C.textMuted }}>Resp. {name}</div>
+            <div style={{ fontWeight:800, color:String(color), fontSize:'0.85rem', fontFamily:MONO }}>{fmtS(Number(val), cur)}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ── Último pago — movida desde Stats al Inicio ──────────────────────────────────
+function LastPaymentCard({ payments, cur }: { payments: Payment[]; cur: Currency }) {
+  const lp = lastPayment(payments, cur);
+  if (!lp) {
+    return (
+      <Card style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', gap:'0.4rem', minHeight:'110px', color:C.textMuted }}>
+        <ArrowRightLeft size={20} strokeWidth={2} color={C.textMuted} />
+        <span style={{ fontSize:'0.8rem', fontWeight:700 }}>Sin pagos registrados</span>
+      </Card>
+    );
+  }
+  return (
+    <Card style={{ background:'linear-gradient(135deg,#2d9e7f,#1db88c)' }}>
+      <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.75)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>Último pago</div>
+      <div style={{ fontWeight:900, color:C.white, fontSize:'1.3rem', marginTop:'0.2rem', fontFamily:MONO }}>{fmt(safeN(lp.amount), lp.currency || 'ARS')}</div>
+      <div style={{ fontSize:'0.72rem', color:'rgba(255,255,255,0.85)', marginTop:'0.15rem' }}>{lp.from} → {lp.to}</div>
+      <div style={{ fontSize:'0.68rem', color:'rgba(255,255,255,0.65)' }}>{lp.date}</div>
+    </Card>
+  );
+}
+
 // ── UnifiedHeader — Balance + Período + Total en un solo bloque ─────────────────
 interface UnifiedHeaderProps {
   periods: Period[];
@@ -78,6 +147,7 @@ interface UnifiedHeaderProps {
   setSelPeriod: (p: string) => void;
   periodExps: Expense[];
   payments: Payment[];
+  allExpenses: Expense[];
 }
 
 interface BalData {
@@ -87,7 +157,7 @@ interface BalData {
   payAdj: Payment[]; total: number;
 }
 
-function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [], payments: allPayments = [] }: UnifiedHeaderProps) {
+function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [], payments: allPayments = [], allExpenses = [] }: UnifiedHeaderProps) {
   const openPaymentModal = useAppStore(s => s.openPaymentModal);
   const deletePayment    = useAppStore(s => s.deletePayment);
   const [expanded, setExpanded] = useState(false);
@@ -150,6 +220,23 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
 
   const primary = curs[0];
   const pd = balData(primary);
+
+  // ── Indicador de incremento/descenso vs período anterior (como en Stats) ─────
+  // Compara el total de la moneda primaria con el del período anterior configurado.
+  let amtPct: number | null = null;
+  if (selPeriod !== 'Todos') {
+    const idx = periods.findIndex(p => p.name === selPeriod);
+    if (idx > 0) {
+      const prevName = periods[idx - 1].name;
+      const prevTotal = allExpenses
+        .filter(e => e.period === prevName && (e.currency || 'ARS') === primary)
+        .reduce((s, e) => s + safeN(e.amount), 0);
+      amtPct = pctChange(pd.total, prevTotal);
+    }
+  }
+  // Gastar más = rojo (▲), gastar menos = verde (▼).
+  const pctColor = amtPct === null ? C.textMuted : amtPct > 0 ? '#dc2626' : amtPct < 0 ? '#16a34a' : C.textMuted;
+  const pctArrow = amtPct === null ? '' : amtPct > 0 ? '▲' : amtPct < 0 ? '▼' : '–';
 
   // ── Fila de balance secundaria (otras monedas) ──────────────────────────────
   function secondaryRow(c: string) {
@@ -214,13 +301,18 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
 
   return (
     <Card style={{ padding:'1rem 1.1rem' }}>
-      {/* Top row: período + count + total */}
+      {/* Top row: período + count + total + variación */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.85rem', flexWrap:'wrap', gap:'0.4rem' }}>
         {periodSelector}
-        <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.72rem', color:C.textMuted, fontWeight:600 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.72rem', color:C.textMuted, fontWeight:600 }}>
           <span>{count} gastos</span>
           <span style={{ opacity:0.4 }}>·</span>
           <span>Total <span style={{ fontFamily:MONO, fontWeight:700, color:C.navy }}>{fmtS(pd.total, primary)}</span></span>
+          {amtPct !== null && (
+            <span style={{ display:'inline-flex', alignItems:'center', gap:'0.15rem', color:pctColor, fontWeight:800 }}>
+              {pctArrow} {Math.abs(amtPct)}%
+            </span>
+          )}
         </div>
       </div>
 
@@ -297,11 +389,14 @@ export default function Dashboard() {
   const weekStart = getWeekStart();
   const weekExps = sortByDate(expenses.filter(e => e.date && new Date(e.date + 'T12:00:00') >= weekStart && e.period !== PENDING_PER));
 
-  // ── Sections defined once, reused in both layouts ────────────────────────────
+  const primaryCur = primaryCurrency(periodExps);
 
+  // ── Sections defined once, reused in both layouts ────────────────────────────
   const headerBlock = (
-    <UnifiedHeader periods={periods} selPeriod={selPeriod} setSelPeriod={setSelPeriod} periodExps={periodExps} payments={payments} />
+    <UnifiedHeader periods={periods} selPeriod={selPeriod} setSelPeriod={setSelPeriod} periodExps={periodExps} payments={payments} allExpenses={expenses} />
   );
+  const whoPaidBlock  = <WhoPaidMore periodExps={periodExps} cur={primaryCur} />;
+  const lastPayBlock  = <LastPaymentCard payments={payments} cur={primaryCur} />;
 
   const weekSection = (
     <div>
@@ -326,32 +421,38 @@ export default function Dashboard() {
     </div>
   );
 
-  // ── DESKTOP layout ─────────────────────────────────────────────────────────
+  const plansSection = plans.length > 0 ? (
+    <ActivePlans />
+  ) : (
+    <Card style={{ padding:SP.xl, textAlign:'center', color:C.textMuted, fontSize:'0.82rem', display:'flex', alignItems:'center', justifyContent:'center', gap:SP.sm }}>
+      <CreditCard size={20} strokeWidth={2} color={C.textMuted} />
+      <span style={{ fontWeight:700 }}>Sin cuotas activas</span>
+    </Card>
+  );
+
+  // ── DESKTOP layout — arriba 3 columnas, abajo 2 columnas ─────────────────────
   if (isDesktop) {
     return (
       <div style={{ padding:SP.lg, display:'flex', flexDirection:'column', gap:SP.lg }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1.15fr 1fr 1fr', gap:SP.lg, alignItems:'start' }}>
           <div>{headerBlock}</div>
-          {weekSection}
+          {whoPaidBlock}
+          {lastPayBlock}
         </div>
-        <div>
-          {plans.length > 0 ? (
-            <ActivePlans />
-          ) : (
-            <Card style={{ padding:SP.xl, textAlign:'center', color:C.textMuted, fontSize:'0.82rem', display:'flex', alignItems:'center', justifyContent:'center', gap:SP.sm }}>
-              <CreditCard size={20} strokeWidth={2} color={C.textMuted} />
-              <span style={{ fontWeight:700 }}>Sin cuotas activas</span>
-            </Card>
-          )}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+          {weekSection}
+          {plansSection}
         </div>
       </div>
     );
   }
 
-  // ── MOBILE — Esta semana ANTES de Cuotas activas ──────────────────────────
+  // ── MOBILE — una columna: balance, quién pagó, último pago, semana, cuotas ───
   return (
     <div style={{ padding:SP.lg, display:'flex', flexDirection:'column', gap:SP.lg }}>
       {headerBlock}
+      {whoPaidBlock}
+      {lastPayBlock}
       {weekSection}
       <ActivePlans />
     </div>

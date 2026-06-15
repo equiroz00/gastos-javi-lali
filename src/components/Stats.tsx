@@ -9,7 +9,7 @@ import {
   AreaChart, Area,
 } from 'recharts';
 import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP } from '../constants';
-import { fmtS, fmt, safeN, catEm, catLb, normCat, calcBal, lastPayment, pctChange, sortByDate } from '../lib/helpers';
+import { fmtS, fmt, safeN, catEm, catLb, normCat, pctChange, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter, ChartSelector } from './ui';
 import type { Expense, Currency } from '../types';
@@ -18,22 +18,6 @@ import type { Expense, Currency } from '../types';
 interface CatRow  { label: string; emoji: string; value: number; pct: number; }
 interface PMRow   { name: string; value: number; pct: number; }
 interface PerRow  { period: string; javi: number; lali: number; [key: string]: number | string; }
-
-// ── Masonry determinista ────────────────────────────────────────────────────────
-// CSS `columns` balancea la altura pero no puede partir una tarjeta alta, así que
-// deja huecos cuando las alturas son muy dispares. Acá repartimos en orden: cada
-// tarjeta va a la columna más corta hasta el momento (según un peso ≈ su altura).
-// Resultado: columnas parejas, sin huecos, respetando el orden de importancia.
-interface MasonryItem { node: React.ReactNode; weight: number; }
-function distributeColumns(items: MasonryItem[], nCols: number): React.ReactNode[][] {
-  const cols = Array.from({ length: nCols }, () => ({ h: 0, nodes: [] as React.ReactNode[] }));
-  items.forEach(({ node, weight }) => {
-    const target = cols.reduce((min, c) => (c.h < min.h ? c : min), cols[0]);
-    target.nodes.push(node);
-    target.h += weight;
-  });
-  return cols.map(c => c.nodes);
-}
 
 // ── Small chart helpers ────────────────────────────────────────────────────────
 function TablaCategoria({ data, cur }: { data: CatRow[]; cur: Currency }) {
@@ -205,9 +189,8 @@ function ProyeccionCard({ filtered, period, cur, configPeriods }: {
 }
 
 // ── Category comparison vs previous period ─────────────────────────────────────
-function CatComparacion({ filtered, prevExps, allCatsFull, cur, total }: {
-  filtered: Expense[]; prevExps: Expense[]; allCatsFull: string[];
-  cur: Currency; total: number;
+function CatComparacion({ filtered, prevExps, allCatsFull, cur }: {
+  filtered: Expense[]; prevExps: Expense[]; allCatsFull: string[]; cur: Currency;
 }) {
   if (!prevExps.length) return null;
 
@@ -242,7 +225,6 @@ function CatComparacion({ filtered, prevExps, allCatsFull, cur, total }: {
       {rows.map(r => {
         const up   = r.pct !== null && r.pct > 0;
         const down = r.pct !== null && r.pct < 0;
-        const same = r.pct === 0;
         const arrow = up ? '▲' : down ? '▼' : '–';
         const arrowColor = up ? '#dc2626' : down ? '#16a34a' : C.textMuted;
         return (
@@ -381,11 +363,12 @@ function TopGastos({ filtered, cur }: { filtered: Expense[]; cur: Currency }) {
 }
 
 // ── Main Stats component ───────────────────────────────────────────────────────
+// Las burbujas de Total / Nº gastos / Balance / Último pago / ¿Quién pagó más?
+// viven ahora en la pestaña Inicio. Stats se queda solo con lo analítico.
 export default function Stats() {
   const isDesktop  = useIsDesktop();
   const expenses   = useAppStore(s => s.expenses);
   const settings   = useAppStore(s => s.settings);
-  const payments   = useAppStore(s => s.payments);
   const customCats = useAppStore(s => s.customCats);
 
   const allCatsFull = [...DEFAULT_CATS, ...(customCats || [])];
@@ -406,28 +389,27 @@ export default function Stats() {
   const byPer    = period === 'Todos' ? expenses : expenses.filter(e => e.period === period);
   const filtered = byPer.filter(e => (e.currency || 'ARS') === cur && e.period !== PENDING_PER);
 
-  // Previous period data
+  // Gastos del período anterior (para "Categorías vs período anterior")
   let prevExps: Expense[] = [];
-  let prevPeriodData: { total: number; count: number } | null = null;
   if (period !== 'Todos') {
     const idx = configPeriods.findIndex(p => p.name === period);
     if (idx > 0) {
       const prevName = configPeriods[idx - 1].name;
       prevExps = expenses.filter(e => e.period === prevName && (e.currency || 'ARS') === cur && e.period !== PENDING_PER);
-      prevPeriodData = {
-        total: prevExps.reduce((s, e) => s + safeN(e.amount), 0),
-        count: prevExps.length,
-      };
     }
   }
 
-  const lp = lastPayment(payments, cur);
-
-  if (!filtered.length) return (
-    <div style={{ padding:'1rem' }}>
-      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:'0.75rem' }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+  const filters = (
+    <>
       <ScrollFilter items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />
       {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={(c: string) => setCur(c as Currency)} />}
+    </>
+  );
+
+  if (!filtered.length) return (
+    <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
+      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+      {filters}
       <Card style={{ textAlign:'center', padding:'3rem', color:C.textMuted }}>
         <div style={{ display:'flex', justifyContent:'center', marginBottom:'0.5rem' }}><BarChart3 size={36} strokeWidth={1.6} color={C.textMuted} /></div>
         No hay datos para este período/moneda
@@ -435,16 +417,7 @@ export default function Stats() {
     </div>
   );
 
-  const total     = filtered.reduce((s, e) => s + safeN(e.amount), 0);
-  const count     = filtered.length;
-  const javiTotal = filtered.reduce((s, e) => s + safeN(e.javiAmount), 0);
-  const laliTotal = filtered.reduce((s, e) => s + safeN(e.laliAmount), 0);
-  const bal       = calcBal(filtered);
-  const javiPaid  = filtered.filter(e => e.paidBy === 'Javi').reduce((s, e) => s + safeN(e.amount), 0);
-  const laliPaid  = filtered.filter(e => e.paidBy === 'Lali').reduce((s, e) => s + safeN(e.amount), 0);
-
-  const amtPct = prevPeriodData ? pctChange(total, prevPeriodData.total) : null;
-  const cntPct = prevPeriodData ? pctChange(count, prevPeriodData.count) : null;
+  const total = filtered.reduce((s, e) => s + safeN(e.amount), 0);
 
   // Category data
   const byCat: Record<string, CatRow> = {};
@@ -476,90 +449,11 @@ export default function Stats() {
 
   const tt = { formatter: (v: number) => fmtS(v, cur), contentStyle: { fontFamily:F, fontSize:'0.78rem', borderRadius:'0.6rem', border:'1px solid '+C.border, background:C.surface } };
 
-  // ── Shared card blocks (defined once, used in both layouts) ─────────────────
-  const WrapAvoid = ({ children, mb = '1rem' }: { children: React.ReactNode; mb?: string }) => (
-    <div style={{ breakInside:'avoid' as any, marginBottom:mb }}>{children}</div>
-  );
-
-  const summaryCards = (
-    <WrapAvoid>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.6rem' }}>
-        <Card style={{ padding:'0.75rem', background:C.gradMain }}>
-          <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>TOTAL {cur}</div>
-          <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem', fontFamily:MONO }}>{fmtS(total, cur)}</div>
-          {amtPct !== null && (
-            <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', marginTop:'0.2rem' }}>
-              <span style={{ fontSize:'0.75rem', color: amtPct >= 0 ? '#a8f0d5' : '#fca5a5', fontWeight:800 }}>{amtPct >= 0 ? '▲' : '▼'} {Math.abs(amtPct)}%</span>
-              <span style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.6)' }}>vs anterior</span>
-            </div>
-          )}
-        </Card>
-        <Card style={{ padding:'0.75rem', background:C.gradMain }}>
-          <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>Nº GASTOS</div>
-          <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem', fontFamily:MONO }}>{count}</div>
-          {cntPct !== null && prevPeriodData && (
-            <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', marginTop:'0.2rem' }}>
-              <span style={{ fontSize:'0.75rem', color: cntPct >= 0 ? '#a8f0d5' : '#fca5a5', fontWeight:800 }}>{cntPct >= 0 ? '▲' : '▼'} {Math.abs(cntPct)}%</span>
-              <span style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.6)' }}>vs anterior ({prevPeriodData.count})</span>
-            </div>
-          )}
-        </Card>
-      </div>
-    </WrapAvoid>
-  );
-
-  const balanceCard = (
-    <WrapAvoid>
-      <div style={{ display:'grid', gridTemplateColumns: lp ? '1fr 1fr' : '1fr', gap:'0.6rem' }}>
-        <Card style={{ padding:'0.75rem', background: Math.abs(bal) < 1 ? 'linear-gradient(135deg,#2d9e7f,#1db88c)' : C.gradMain }}>
-          <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>BALANCE</div>
-          {Math.abs(bal) < 1
-            ? <div style={{ fontWeight:900, color:C.white, fontSize:'1rem', marginTop:'0.2rem' }}>¡Al día!</div>
-            : <>
-                <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.2rem', fontFamily:MONO }}>{fmtS(bal, cur)}</div>
-                <div style={{ fontSize:'0.68rem', color:'rgba(255,255,255,0.8)' }}>{bal > 0 ? 'Lali debe' : 'Javi debe'}</div>
-              </>
-          }
-        </Card>
-        {lp && (
-          <Card style={{ padding:'0.75rem', background:'linear-gradient(135deg,#2d9e7f,#1db88c)' }}>
-            <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.7)', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em' }}>ÚLTIMO PAGO</div>
-            <div style={{ fontWeight:900, color:C.white, fontSize:'1.1rem', marginTop:'0.1rem', fontFamily:MONO }}>{fmtS(safeN(lp.amount), lp.currency || 'ARS')}</div>
-            <div style={{ fontSize:'0.68rem', color:'rgba(255,255,255,0.8)' }}>{lp.from} → {lp.to}</div>
-            <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.65)' }}>{lp.date}</div>
-          </Card>
-        )}
-      </div>
-    </WrapAvoid>
-  );
-
-  const whoPayedCard = (
-    <WrapAvoid>
-      <Card>
-        <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}><CreditCard size={15} strokeWidth={2.2} color={C.accent} />¿Quién pagó más?</h3>
-        <div style={{ display:'flex', gap:'0.6rem', marginBottom:'0.6rem' }}>
-          {(['Javi', 'Lali'] as const).map((name) => {
-            const paid = name === 'Javi' ? javiPaid : laliPaid;
-            const grad = name === 'Javi' ? C.gradJavi : C.gradLali;
-            return (
-              <div key={name} style={{ flex:1, background:grad, borderRadius:'0.85rem', padding:'0.6rem', textAlign:'center', color:C.white }}>
-                <div style={{ fontSize:'1.2rem' }}>{name === 'Javi' ? '' : ''}</div>
-                <div style={{ fontWeight:800, fontSize:'0.9rem' }}>{fmtS(paid, cur)}</div>
-                <div style={{ fontSize:'0.7rem', opacity:0.85 }}>{total > 0 ? Math.round(paid / total * 100) : 0}%</div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ display:'flex', gap:'0.6rem' }}>
-          {[['Javi', C.navy, javiTotal], ['Lali', C.accent, laliTotal]].map(([name, color, val]) => (
-            <div key={String(name)} style={{ flex:1, background:C.bg, borderRadius:'0.75rem', padding:'0.5rem', textAlign:'center', border:'1px solid '+C.border }}>
-              <div style={{ fontSize:'0.65rem', color:C.textMuted }}>Resp. {name}</div>
-              <div style={{ fontWeight:800, color:String(color), fontSize:'0.85rem' }}>{fmtS(Number(val), cur)}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </WrapAvoid>
+  // ── Bloques reutilizables ───────────────────────────────────────────────────
+  // marginBottom para separar tarjetas apiladas dentro de una columna (escritorio)
+  // y entre sí (móvil). Se evita partir tarjetas en saltos de columna.
+  const WrapAvoid = ({ children }: { children: React.ReactNode }) => (
+    <div style={{ breakInside:'avoid' as any, marginBottom:SP.lg }}>{children}</div>
   );
 
   const catCard = (
@@ -586,87 +480,115 @@ export default function Stats() {
     </WrapAvoid>
   );
 
-  const fullWidthCards = (
-    <>
-      <EvolucionArea allExpenses={expenses} allCatsFull={allCatsFull} configPeriods={configPeriods} cur={cur} />
-      {period === 'Todos' && perData.length > 1 && (
-        <Card style={{ marginTop:'0.75rem' }}>
-          <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}><BarChart3 size={15} strokeWidth={2.2} color={C.accent} />Evolución Javi vs Lali</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={perData} margin={{ top:5, right:5, bottom:30, left:0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.beige} />
-              <XAxis dataKey="period" tick={{ fontSize:9, angle:-35, textAnchor:'end', fontFamily:F, fill:C.textMuted } as never} interval={0} />
-              <YAxis tickFormatter={(v) => fmtS(v, cur)} tick={{ fontSize:9, fontFamily:F, fill:C.textMuted }} width={45} />
-              <Tooltip {...tt} />
-              <Bar dataKey="javi" name="Javi" fill={C.navy} stackId="a" />
-              <Bar dataKey="lali" name="Lali" fill={C.accent} stackId="a" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <div style={{ display:'flex', gap:'1rem', justifyContent:'center', marginTop:'0.5rem' }}>
-            {[['Javi', C.navy], ['Lali', C.accent]].map(([name, color]) => (
-              <div key={String(name)} style={{ display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.75rem', color:C.navy }}>
-                <div style={{ width:'10px', height:'10px', borderRadius:'2px', background:String(color) }} />
-                {name}
-              </div>
-            ))}
+  const topGastosNode      = <WrapAvoid><TopGastos filtered={filtered} cur={cur} /></WrapAvoid>;
+  const proyeccionNode     = <WrapAvoid><ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} /></WrapAvoid>;
+  const catComparacionNode = <WrapAvoid><CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} /></WrapAvoid>;
+  const evolucionArea      = <EvolucionArea allExpenses={expenses} allCatsFull={allCatsFull} configPeriods={configPeriods} cur={cur} />;
+
+  const evolucionJaviLaliNode = (period === 'Todos' && perData.length > 1) ? (
+    <Card>
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}><BarChart3 size={15} strokeWidth={2.2} color={C.accent} />Evolución Javi vs Lali</h3>
+      <ResponsiveContainer width="100%" height={180}>
+        <BarChart data={perData} margin={{ top:5, right:5, bottom:30, left:0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={C.beige} />
+          <XAxis dataKey="period" tick={{ fontSize:9, angle:-35, textAnchor:'end', fontFamily:F, fill:C.textMuted } as never} interval={0} />
+          <YAxis tickFormatter={(v) => fmtS(v, cur)} tick={{ fontSize:9, fontFamily:F, fill:C.textMuted }} width={45} />
+          <Tooltip {...tt} />
+          <Bar dataKey="javi" name="Javi" fill={C.navy} stackId="a" />
+          <Bar dataKey="lali" name="Lali" fill={C.accent} stackId="a" radius={[4,4,0,0]} />
+        </BarChart>
+      </ResponsiveContainer>
+      <div style={{ display:'flex', gap:'1rem', justifyContent:'center', marginTop:'0.5rem' }}>
+        {[['Javi', C.navy], ['Lali', C.accent]].map(([name, color]) => (
+          <div key={String(name)} style={{ display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.75rem', color:C.navy }}>
+            <div style={{ width:'10px', height:'10px', borderRadius:'2px', background:String(color) }} />
+            {name}
           </div>
-        </Card>
-      )}
-    </>
-  );
+        ))}
+      </div>
+    </Card>
+  ) : null;
 
-  const filters = (
-    <>
-      <ScrollFilter items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />
-      {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={(c: string) => setCur(c as Currency)} />}
-    </>
-  );
+  // Condiciones de presencia para armar el layout sin huecos vacíos
+  const periodCfg = configPeriods.find(p => p.name === period);
+  const showProy = period !== 'Todos' && !!periodCfg && new Date() <= new Date(periodCfg.end + 'T23:59:59');
+  const showEvolArea = configPeriods.length >= 2;
+  const canCompare = prevExps.length > 0;
 
-  // ── DESKTOP — 3-column CSS masonry ─────────────────────────────────────────
+  // ── DESKTOP — layout según el período seleccionado ──────────────────────────
   if (isDesktop) {
-    // Pesos ≈ altura relativa de cada tarjeta, para repartir parejo en 3 columnas.
-    const showProy = period !== 'Todos';
-    const items: MasonryItem[] = [
-      { node: summaryCards, weight: 1 },
-      { node: balanceCard,  weight: 1 },
-      ...(showProy ? [{ node: <WrapAvoid><ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} /></WrapAvoid>, weight: 2 }] : []),
-      { node: whoPayedCard, weight: 2 },
-      ...(prevExps.length > 0 ? [{ node: <WrapAvoid><CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} total={total} /></WrapAvoid>, weight: 3 }] : []),
-      { node: catCard, weight: 5 },
-      { node: pmCard,  weight: 5 },
-      { node: <WrapAvoid><TopGastos filtered={filtered} cur={cur} /></WrapAvoid>, weight: 3 },
-    ];
-    const cols = distributeColumns(items, 3);
+    const colStyle: React.CSSProperties = { flex:1, minWidth:0, display:'flex', flexDirection:'column' };
+    const rowStyle: React.CSSProperties = { display:'flex', gap:SP.lg, alignItems:'flex-start', marginTop:SP.md };
+
+    let topRow: React.ReactNode;
+    let bottomRow: React.ReactNode = null;
+
+    if (period === 'Todos') {
+      // 3 columnas: categoría · métodos de pago · top 5 ; abajo 2 columnas de evolución
+      topRow = (
+        <div style={rowStyle}>
+          <div style={colStyle}>{catCard}</div>
+          <div style={colStyle}>{pmCard}</div>
+          <div style={colStyle}>{topGastosNode}</div>
+        </div>
+      );
+      if (showEvolArea || evolucionJaviLaliNode) {
+        bottomRow = (
+          <div style={rowStyle}>
+            {showEvolArea && <div style={colStyle}>{evolucionArea}</div>}
+            {evolucionJaviLaliNode && <div style={colStyle}>{evolucionJaviLaliNode}</div>}
+          </div>
+        );
+      }
+    } else if (!canCompare) {
+      // primer ciclo (sin período anterior con el cual comparar)
+      topRow = (
+        <div style={rowStyle}>
+          <div style={colStyle}>{catCard}</div>
+          <div style={colStyle}>{pmCard}</div>
+          <div style={colStyle}>{topGastosNode}{showProy && proyeccionNode}</div>
+        </div>
+      );
+      if (showEvolArea) {
+        bottomRow = <div style={rowStyle}><div style={colStyle}>{evolucionArea}</div></div>;
+      }
+    } else {
+      // períodos comparables: comparación al centro, pago/proyección a un lado,
+      // top 5 / categoría al otro
+      topRow = (
+        <div style={rowStyle}>
+          <div style={colStyle}>{pmCard}{showProy && proyeccionNode}</div>
+          <div style={colStyle}>{catComparacionNode}</div>
+          <div style={colStyle}>{topGastosNode}{catCard}</div>
+        </div>
+      );
+      if (showEvolArea) {
+        bottomRow = <div style={rowStyle}><div style={colStyle}>{evolucionArea}</div></div>;
+      }
+    }
+
     return (
       <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
         <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:'0 0 '+SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
         {filters}
-        <div style={{ display:'flex', gap:SP.lg, alignItems:'flex-start', marginTop:SP.md }}>
-          {cols.map((nodes, i) => (
-            <div key={i} style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column' }}>
-              {nodes.map((node, j) => <React.Fragment key={j}>{node}</React.Fragment>)}
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop:SP.md }}>{fullWidthCards}</div>
+        {topRow}
+        {bottomRow}
       </div>
     );
   }
 
-  // ── MOBILE — single column (unchanged) ─────────────────────────────────────
+  // ── MOBILE — una sola columna ──────────────────────────────────────────────
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl, display:'flex', flexDirection:'column', gap:SP.md }}>
       <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
       {filters}
-      {summaryCards}
-      {balanceCard}
       <ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} />
-      {whoPayedCard}
-      {prevExps.length > 0 && <CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} total={total} />}
+      {canCompare && <CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} />}
       {catCard}
       {pmCard}
       <TopGastos filtered={filtered} cur={cur} />
-      {fullWidthCards}
+      {evolucionArea}
+      {evolucionJaviLaliNode}
     </div>
   );
 }
