@@ -92,6 +92,21 @@ export function calcAmts(amt: string | number, resp: Responsible): { javiAmount:
   return { javiAmount: round2(n / 2), laliAmount: round2(n / 2) };
 }
 
+// Divide `total` según el porcentaje de Javi (0–100). Garantiza dos cosas:
+//   1. javiAmount + laliAmount === round2(total) exacto (sin centavos perdidos).
+//   2. En los extremos (0% o 100%) el lado que no paga queda en CERO exacto.
+// Antes el SplitModal hacía Math.round() de un lado y `total - j` del otro sin
+// redondear, lo que dejaba un remanente de centavos (ej: 100% Javi sobre
+// $41.509,08 dejaba $0,08 colgados en Lali).
+export function divideAmount(total: number, javiPct: number): { javiAmount: number; laliAmount: number } {
+  const t = round2(safeN(total));
+  const pct = Math.max(0, Math.min(100, safeN(javiPct)));
+  if (pct >= 100) return { javiAmount: t, laliAmount: 0 };
+  if (pct <= 0)   return { javiAmount: 0, laliAmount: t };
+  const javiAmount = round2(t * pct / 100);
+  return { javiAmount, laliAmount: round2(t - javiAmount) };
+}
+
 export function calcBal(exps: Expense[]): number {
   return exps.reduce((b, e) => e.paidBy === 'Javi' ? b + safeN(e.laliAmount) : b - safeN(e.javiAmount), 0);
 }

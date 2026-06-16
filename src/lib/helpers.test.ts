@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
   round2, safeN, fmt, fmtS, todayStr, genId,
   catEm, catLb, normCat, sortByDate, pctChange, getWeekStart,
-  calcAmts, calcBal, calcNetBal, lastPayment, getPeriod,
+  calcAmts, divideAmount, calcBal, calcNetBal, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, sanitize,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS } from '../constants';
@@ -174,6 +174,36 @@ describe('calcAmts', () => {
   });
   it('acepta string como monto', () => {
     expect(calcAmts('200', 'Ambos')).toEqual({ javiAmount: 100, laliAmount: 100 });
+  });
+});
+
+describe('divideAmount', () => {
+  it('100% Javi deja a Lali en CERO exacto, incluso con centavos (bug reportado)', () => {
+    // $41.509,08 al 100% Javi dejaba $0,08 colgados en Lali
+    const r = divideAmount(41509.08, 100);
+    expect(r).toEqual({ javiAmount: 41509.08, laliAmount: 0 });
+    expect(r.javiAmount + r.laliAmount).toBe(41509.08);
+  });
+  it('0% Javi deja a Javi en CERO exacto y todo a Lali', () => {
+    expect(divideAmount(41509.08, 0)).toEqual({ javiAmount: 0, laliAmount: 41509.08 });
+  });
+  it('50/50 reparte y suma exacto (a 2 decimales)', () => {
+    const r = divideAmount(100.01, 50);
+    expect(r.javiAmount).toBe(50.01);
+    expect(r.laliAmount).toBe(50);
+    expect(round2(r.javiAmount + r.laliAmount)).toBe(100.01);
+  });
+  it('porcentaje arbitrario: las partes siempre suman el total', () => {
+    for (const pct of [10, 33, 67, 99]) {
+      const r = divideAmount(12345.67, pct);
+      expect(round2(r.javiAmount + r.laliAmount)).toBe(12345.67);
+      expect(r.javiAmount).toBeGreaterThanOrEqual(0);
+      expect(r.laliAmount).toBeGreaterThanOrEqual(0);
+    }
+  });
+  it('porcentajes fuera de rango se recortan a 0–100', () => {
+    expect(divideAmount(100, 150)).toEqual({ javiAmount: 100, laliAmount: 0 });
+    expect(divideAmount(100, -20)).toEqual({ javiAmount: 0, laliAmount: 100 });
   });
 });
 

@@ -100,6 +100,7 @@ interface AppActions {
   markAllRead:    () => void;
   setView:             (v: string)                    => void;
   setEditingExpense:   (e: Expense | null)            => void;
+  setEditingPlan:      (p: Plan | null)               => void;
   setPendingDelete:    (d: AppState['pendingDelete']) => void;
   setPayModal:         (m: AppState['payModal'])      => void;
   showToast:           (expense: Expense)             => void;
@@ -111,6 +112,7 @@ interface AppActions {
   requestDelete:       (id: string, expense: Expense) => void;
   confirmDelete:       () => void;
   handleAddPlan:       (formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
+  handleEditPlan:      (planId: string, formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
   handleCancelPlan:    (planId: string) => void;
   openPaymentModal:    (currency: Currency, netBal: number, period?: string) => void;
   confirmPayment:      (paymentData: Payment) => void;
@@ -136,6 +138,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   lastReadTs:     '',
   view:           'dashboard',
   editingExpense: null,
+  editingPlan:    null,
   pendingDelete:  null,
   payModal:       null,
   toast:          null,
@@ -181,6 +184,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   // UI
   setView:           v => set({ view: v }),
   setEditingExpense: e => set({ editingExpense: e }),
+  setEditingPlan:    p => set({ editingPlan: p }),
   setPendingDelete:  d => set({ pendingDelete: d }),
   setPayModal:       m => set({ payModal: m }),
 
@@ -295,6 +299,54 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     installments.forEach(inst => batch.set(expenseDoc(inst.id), inst));
     batch.commit().catch(reportWriteError('handleAddPlan'));
     set({ plans: [...state.plans, plan], expenses: [...installments, ...state.expenses], view: 'dashboard' });
+  },
+
+  // Edita el plan "madre" y regenera sus cuotas. Mantiene el mismo id de plan.
+  // No se editan cuotas individuales: se reconstruyen desde el plan actualizado.
+  handleEditPlan: (planId, formData, numInstallments, paidInstallments, manualStartPeriod) => {
+    const state = get();
+    const existing = state.plans.find(p => p.id === planId);
+    const paid = paidInstallments || 0;
+    const installmentAmount = Math.round(safeN(formData.amount) / numInstallments);
+    const amts = calcAmts(installmentAmount, formData.responsible);
+    const startPeriod = manualStartPeriod || getPeriod(formData.date, state.settings.periods);
+    const plan: Plan = {
+      id: planId,
+      description: formData.description,
+      totalAmount: safeN(formData.amount),
+      installmentAmount,
+      numInstallments,
+      paidInstallments: paid,
+      startPeriod,
+      startDate: formData.date,
+      currency: formData.currency as Currency,
+      paidBy: formData.paidBy,
+      responsible: formData.responsible,
+      paymentMethod: formData.paymentMethod,
+      bank: formData.bank,
+      category: formData.category,
+      javiAmount: amts.javiAmount,
+      laliAmount: amts.laliAmount,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+    };
+    const oldExps = state.expenses.filter(e => e.planId === planId);
+    const installments = generatePlanExpenses(plan, state.settings.periods);
+    const newIds = new Set(installments.map(i => i.id));
+    const batch = writeBatch(db);
+    // Borrar solo las cuotas viejas que ya no existen (las que se mantienen se
+    // sobrescriben con set — evita escribir dos veces el mismo doc en el batch).
+    oldExps.filter(e => !newIds.has(e.id)).forEach(e => batch.delete(expenseDoc(e.id)));
+    batch.set(planDoc(plan.id), plan);
+    installments.forEach(inst => batch.set(expenseDoc(inst.id), inst));
+    batch.commit().catch(reportWriteError('handleEditPlan'));
+    const otherExps = state.expenses.filter(e => e.planId !== planId);
+    set({
+      plans: state.plans.map(p => p.id === planId ? plan : p),
+      expenses: [...installments, ...otherExps],
+      editingPlan: null,
+      view: 'dashboard',
+    });
+    state.showMsg('✓ Plan actualizado.');
   },
 
   handleCancelPlan: planId => {

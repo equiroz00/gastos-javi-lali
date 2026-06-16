@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, User } from 'lucide-react';
 import { C, F } from '../constants';
-import { fmt, safeN } from '../lib/helpers';
+import { fmt, safeN, round2, divideAmount } from '../lib/helpers';
 
 interface SplitModalProps {
   amount: number;
@@ -15,42 +15,42 @@ interface SplitModalProps {
 }
 
 export default function SplitModal({ amount, currency, paidBy: initPaidBy, javiAmount: initJavi, laliAmount: initLali, onConfirm, onCancel }: SplitModalProps) {
-  const total = safeN(amount);
+  const total = round2(safeN(amount));
 
   // Derive initial percentage from existing amounts
   const initPct = total > 0 ? Math.round((initJavi / total) * 100) : 50;
 
   const [paidBy, setPaidBy]     = useState(initPaidBy || 'Javi');
   const [javiPct, setJaviPct]   = useState(initPct);
-  const [javiAmt, setJaviAmt]   = useState(String(Math.round(initJavi)));
-  const [laliAmt, setLaliAmt]   = useState(String(Math.round(initLali)));
+  const [javiAmt, setJaviAmt]   = useState(String(round2(initJavi)));
+  const [laliAmt, setLaliAmt]   = useState(String(round2(initLali)));
   const [manualMode, setManualMode] = useState(false);
 
-  // Sync slider → amounts
+  // Sync slider → amounts. divideAmount garantiza suma exacta y cero exacto
+  // en los extremos (sin centavos remanentes).
   useEffect(() => {
     if (!manualMode) {
-      const j = Math.round(total * javiPct / 100);
-      const l = total - j;
-      setJaviAmt(String(j));
-      setLaliAmt(String(l));
+      const { javiAmount, laliAmount } = divideAmount(total, javiPct);
+      setJaviAmt(String(javiAmount));
+      setLaliAmt(String(laliAmount));
     }
   }, [javiPct, total, manualMode]);
 
   function onJaviAmtChange(val: string) {
     setManualMode(true);
     setJaviAmt(val);
-    const j = safeN(val);
-    const l = Math.max(0, total - j);
-    setLaliAmt(String(Math.round(l)));
+    const j = round2(safeN(val));
+    const l = round2(Math.max(0, total - j));
+    setLaliAmt(String(l));
     if (total > 0) setJaviPct(Math.round((j / total) * 100));
   }
 
   function onLaliAmtChange(val: string) {
     setManualMode(true);
     setLaliAmt(val);
-    const l = safeN(val);
-    const j = Math.max(0, total - l);
-    setJaviAmt(String(Math.round(j)));
+    const l = round2(safeN(val));
+    const j = round2(Math.max(0, total - l));
+    setJaviAmt(String(j));
     if (total > 0) setJaviPct(Math.round((j / total) * 100));
   }
 
@@ -60,11 +60,13 @@ export default function SplitModal({ amount, currency, paidBy: initPaidBy, javiA
   }
 
   function handleConfirm() {
-    const j = safeN(javiAmt);
-    const l = safeN(laliAmt);
-    // Derive responsible label
-    const responsible = j === total ? 'Javi' : l === total ? 'Lali' : 'Ambos';
-    onConfirm(paidBy, j, l, responsible);
+    const j = round2(safeN(javiAmt));
+    const l = round2(safeN(laliAmt));
+    // Tolerancia de 1 centavo para detectar los extremos pese a decimales.
+    if (Math.abs(j - total) < 0.01) { onConfirm(paidBy, total, 0, 'Javi'); return; }
+    if (Math.abs(l - total) < 0.01) { onConfirm(paidBy, 0, total, 'Lali'); return; }
+    // División mixta: el lado Lali absorbe el remanente para sumar exacto.
+    onConfirm(paidBy, j, round2(total - j), 'Ambos');
   }
 
   const laliPct = 100 - javiPct;

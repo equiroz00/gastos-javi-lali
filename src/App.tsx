@@ -55,6 +55,7 @@ export default function App() {
   const loading        = useAppStore(s => s.loading);
   const view           = useAppStore(s => s.view);
   const editingExpense = useAppStore(s => s.editingExpense);
+  const editingPlan    = useAppStore(s => s.editingPlan);
   const syncMsg        = useAppStore(s => s.syncMsg);
   const userTheme      = useAppStore(s => s.userTheme);
   const userFont       = useAppStore(s => s.userFont);
@@ -174,6 +175,13 @@ export default function App() {
   if (editingExpense) return (
     <div style={{ minHeight:'100vh', background:C.bg, maxWidth: isDesktop ? '600px' : '480px', margin:'0 auto', fontFamily:F, overflowY:'auto' }}>
       <AddEditExpense isEditMode initialData={{ ...editingExpense, amount: String(editingExpense.amount) }} />
+    </div>
+  );
+
+  // ── Edit plan mode (edita el gasto "madre", regenera las cuotas) ───────────
+  if (editingPlan) return (
+    <div style={{ minHeight:'100vh', background:C.bg, maxWidth: isDesktop ? '600px' : '480px', margin:'0 auto', fontFamily:F, overflowY:'auto' }}>
+      <AddEditExpense editingPlan={editingPlan} />
     </div>
   );
 

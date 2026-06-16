@@ -6,7 +6,7 @@ import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId } from '../l
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
 import SplitModal from './SplitModal';
-import type { Expense, UserName, Responsible } from '../types';
+import type { Expense, UserName, Responsible, Plan } from '../types';
 
 // Estado del formulario: como Expense pero con amount editable como string.
 interface FormState {
@@ -31,9 +31,10 @@ interface FormState {
 interface AddEditExpenseProps {
   isEditMode?: boolean;
   initialData?: FormState | null;
+  editingPlan?: Plan | null;
 }
 
-export default function AddEditExpense({ isEditMode = false, initialData = null }: AddEditExpenseProps) {
+export default function AddEditExpense({ isEditMode = false, initialData = null, editingPlan = null }: AddEditExpenseProps) {
   const currentUser       = useAppStore(s => s.currentUser);
   const settings          = useAppStore(s => s.settings);
   const customCats        = useAppStore(s => s.customCats);
@@ -43,9 +44,12 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
   const handleAddMultiple = useAppStore(s => s.handleAddMultiple);
   const handleEdit        = useAppStore(s => s.handleEdit);
   const handleAddPlan     = useAppStore(s => s.handleAddPlan);
+  const handleEditPlan    = useAppStore(s => s.handleEditPlan);
   const setView           = useAppStore(s => s.setView);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
+  const setEditingPlan    = useAppStore(s => s.setEditingPlan);
 
+  const isPlanEdit = !!editingPlan;
   const allCats = DEFAULT_CATS.concat(customCats);
 
   function blankForm(): FormState {
@@ -56,18 +60,32 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
     };
   }
 
-  const [form, setForm]                   = useState<FormState>(initialData || blankForm());
+  // Prefill del formulario al editar un plan "madre"
+  function planToForm(p: Plan): FormState {
+    const isBase = BASE_CURS.indexOf(p.currency) >= 0;
+    return {
+      id: p.id, date: p.startDate, description: p.description, amount: String(p.totalAmount),
+      category: p.category, paymentMethod: p.paymentMethod, bank: p.bank, paidBy: p.paidBy,
+      responsible: p.responsible, currency: isBase ? p.currency : 'Otra',
+      customCurrency: isBase ? '' : String(p.currency), javiAmount: 0, laliAmount: 0, notes: '',
+    };
+  }
+
+  const planHasPaid  = !!(editingPlan && editingPlan.paidInstallments > 0);
+  const planIsCustom = !!(editingPlan && CUOTA_OPTS.indexOf(editingPlan.numInstallments) < 0);
+
+  const [form, setForm]                   = useState<FormState>(editingPlan ? planToForm(editingPlan) : (initialData || blankForm()));
   const [errors, setErrors]               = useState<Record<string, string>>({});
   const [step, setStep]                   = useState(isEditMode ? 2 : 1);
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [showNewCat, setShowNewCat]       = useState(false);
   const [newCatName, setNewCatName]       = useState('');
-  const [useCuotas, setUseCuotas]         = useState(false);
-  const [numCuotas, setNumCuotas]         = useState(12);
-  const [customCuotas, setCustomCuotas]   = useState('');
-  const [isRetro, setIsRetro]             = useState(false);
-  const [retroPaid, setRetroPaid]         = useState('');
-  const [retroStartPer, setRetroStartPer] = useState('');
+  const [useCuotas, setUseCuotas]         = useState(isPlanEdit);
+  const [numCuotas, setNumCuotas]         = useState(editingPlan && !planIsCustom ? editingPlan.numInstallments : 12);
+  const [customCuotas, setCustomCuotas]   = useState(editingPlan && planIsCustom ? String(editingPlan.numInstallments) : '');
+  const [isRetro, setIsRetro]             = useState(planHasPaid);
+  const [retroPaid, setRetroPaid]         = useState(planHasPaid ? String(editingPlan!.paidInstallments) : '');
+  const [retroStartPer, setRetroStartPer] = useState(planHasPaid ? editingPlan!.startPeriod : '');
   const [queue, setQueue]                 = useState<Expense[]>([]);
   const [dupWarning, setDupWarning]       = useState<Expense | null>(null);
 
@@ -117,6 +135,8 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
   const installmentAmt = showSplit && useCuotas ? Math.round(totalAmt / finalCuotas) : 0;
   const btnLabel       = isEditMode
     ? 'Guardar cambios ✓'
+    : isPlanEdit
+      ? 'Guardar cambios del plan ✓'
     : useCuotas
       ? 'Registrar ' + remaining + ' cuota' + (remaining !== 1 ? 's' : '') + ' ✓'
       : queue.length > 0
@@ -241,11 +261,12 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
     if (useCuotas && isRetro && !retroStartPer) e.retroStartPer = 'Seleccioná el período inicial.';
     if (Object.keys(e).length) { setErrors(e); return; }
     const base = buildBase(isEditMode ? ((initialData && initialData.id) || genId()) : genId());
-    if (!isEditMode) {
+    if (!isEditMode && !isPlanEdit) {
       base.createdBy = currentUser || undefined;
       base.createdAt = new Date().toISOString();
     }
-    if (isEditMode) { handleEdit(base); }
+    if (isPlanEdit) { handleEditPlan(editingPlan!.id, base, finalCuotas, isRetro ? paidNum : 0, isRetro ? retroStartPer : null); }
+    else if (isEditMode) { handleEdit(base); }
     else if (useCuotas && finalCuotas > 1) { handleAddPlan(base, finalCuotas, isRetro ? paidNum : 0, isRetro ? retroStartPer : null); }
     else if (queue.length > 0) { handleAddMultiple([...queue, sanitize({ ...base, id: genId() }, allCats)]); }
     else { handleAdd(base); }
@@ -253,6 +274,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
 
   function cancel() {
     if (isEditMode) setEditingExpense(null);
+    else if (isPlanEdit) setEditingPlan(null);
     else setView('dashboard');
   }
 
@@ -350,7 +372,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
   // ── Paso 1 ────────────────────────────────────────────────────────────────
   const step1 = (
     <div>
-      <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'1rem' }}>Paso 1 de 2 — Lo esencial</div>
+      <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'1rem' }}>{isPlanEdit ? 'Editar plan — Lo esencial' : 'Paso 1 de 2 — Lo esencial'}</div>
       <Lbl>Descripción</Lbl>
       {descField(true)}
       {errors.description && <p style={{ color:'#c0314f', fontSize:'0.7rem', margin:'0.15rem 0 0' }}>⚠ {errors.description}</p>}
@@ -415,8 +437,10 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
       {queueSection}
 
       <button onClick={submit} style={{ width:'100%', padding:'1rem', background:C.gradMain, color:C.white, border:'none', borderRadius:'1rem', fontWeight:900, fontSize:'1rem', cursor:'pointer', fontFamily:F, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', marginTop:'1rem' }}>{btnLabel}</button>
-      <button onClick={enqueue} style={{ width:'100%', padding:'0.75rem', background:'transparent', border:'1px dashed '+C.accent, borderRadius:'1rem', color:C.accent, fontWeight:700, fontSize:'0.88rem', cursor:'pointer', fontFamily:F, marginTop:'0.5rem' }}>+ Agregar otro gasto</button>
-      <button onClick={goToStep2} style={{ width:'100%', padding:'0.75rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'1rem', color:C.navy, fontWeight:700, fontSize:'0.88rem', cursor:'pointer', fontFamily:F, marginTop:'0.5rem' }}>Más detalles</button>
+      {!isPlanEdit && (
+        <button onClick={enqueue} style={{ width:'100%', padding:'0.75rem', background:'transparent', border:'1px dashed '+C.accent, borderRadius:'1rem', color:C.accent, fontWeight:700, fontSize:'0.88rem', cursor:'pointer', fontFamily:F, marginTop:'0.5rem' }}>+ Agregar otro gasto</button>
+      )}
+      <button onClick={goToStep2} style={{ width:'100%', padding:'0.75rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'1rem', color:C.navy, fontWeight:700, fontSize:'0.88rem', cursor:'pointer', fontFamily:F, marginTop:'0.5rem' }}>{isPlanEdit ? 'Configurar cuotas y detalles' : 'Más detalles'}</button>
       <button onClick={cancel} style={{ width:'100%', padding:'0.6rem', background:'none', border:'none', color:C.textMuted, fontSize:'0.85rem', cursor:'pointer', fontFamily:F, marginTop:'0.1rem' }}>Cancelar</button>
     </div>
   );
@@ -425,7 +449,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
   const step2 = (
     <div>
       <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'0.75rem' }}>
-        {isEditMode ? 'Editar gasto' : 'Paso 2 de 2 — Detalles'}
+        {isEditMode ? 'Editar gasto' : isPlanEdit ? 'Editar plan — Cuotas y detalles' : 'Paso 2 de 2 — Detalles'}
       </div>
 
       {isEditMode ? (
@@ -507,11 +531,16 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
 
       {!isEditMode && (
         <>
-          <Lbl>¿Pago en cuotas?</Lbl>
-          <div style={{ display:'flex', gap:'0.5rem' }}>
-            <SegBtn active={!useCuotas} color={C.navy} onClick={() => { setUseCuotas(false); setIsRetro(false); }}>Pago único</SegBtn>
-            <SegBtn active={useCuotas} color={C.accent} onClick={() => setUseCuotas(true)}>En cuotas</SegBtn>
-          </div>
+          {/* El toggle único/cuotas no se muestra al editar un plan: ya es un plan */}
+          {!isPlanEdit && (
+            <>
+              <Lbl>¿Pago en cuotas?</Lbl>
+              <div style={{ display:'flex', gap:'0.5rem' }}>
+                <SegBtn active={!useCuotas} color={C.navy} onClick={() => { setUseCuotas(false); setIsRetro(false); }}>Pago único</SegBtn>
+                <SegBtn active={useCuotas} color={C.accent} onClick={() => setUseCuotas(true)}>En cuotas</SegBtn>
+              </div>
+            </>
+          )}
           {useCuotas && (
             <div style={{ background:C.bg, borderRadius:'1rem', padding:'0.85rem', marginTop:'0.5rem', border:'1px solid '+C.border }}>
               <div style={{ fontSize:'0.78rem', color:C.navy, fontWeight:700, marginBottom:'0.5rem' }}>Cantidad de cuotas totales</div>
@@ -608,8 +637,8 @@ export default function AddEditExpense({ isEditMode = false, initialData = null 
         />
       )}
       <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:'0.5rem' }}>
-        {isEditMode && <Pencil size={18} strokeWidth={2.3} color={C.accent} />}
-        {isEditMode ? 'Editar gasto' : 'Nuevo gasto'}
+        {(isEditMode || isPlanEdit) && <Pencil size={18} strokeWidth={2.3} color={C.accent} />}
+        {isEditMode ? 'Editar gasto' : isPlanEdit ? 'Editar plan de cuotas' : 'Nuevo gasto'}
       </h2>
       {step === 1 ? step1 : step2}
     </div>

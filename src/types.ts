@@ -125,6 +125,7 @@ export interface AppState {
   // UI
   view: string;
   editingExpense: Expense | null;
+  editingPlan: Plan | null;
   pendingDelete: DeleteData | null;
   payModal: PayModalData | null;
   toast: ToastData | null;

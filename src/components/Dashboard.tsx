@@ -1,6 +1,6 @@
 // ── components/Dashboard.tsx ──────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2 } from 'lucide-react';
+import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil } from 'lucide-react';
 import { C, F, MONO, PENDING_PER, SP } from '../constants';
 import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
@@ -22,6 +22,7 @@ function ActivePlans() {
   const plans      = useAppStore(s => s.plans);
   const expenses   = useAppStore(s => s.expenses);
   const cancelPlan = useAppStore(s => s.handleCancelPlan);
+  const editPlan   = useAppStore(s => s.setEditingPlan);
   const [search, setSearch] = useState('');
   if (!plans.length) return null;
   const filtered = search.trim() === '' ? plans : plans.filter(p => p.description.toLowerCase().indexOf(search.toLowerCase()) >= 0);
@@ -66,7 +67,12 @@ function ActivePlans() {
                 {pending > 0
                   ? <div style={{ fontSize:'0.68rem', color:'#b45309', fontWeight:600 }}>⚠ {pending} cuota{pending > 1 ? 's' : ''} sin período</div>
                   : <div style={{ fontSize:'0.68rem', color:'#2d9e7f', fontWeight:600 }}>✓ Todas asignadas</div>}
-                <button onClick={() => cancelPlan(plan.id)} style={{ background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.2rem 0.5rem', fontSize:'0.65rem', color:C.textMuted, cursor:'pointer', fontFamily:F }}>Cancelar</button>
+                <div style={{ display:'flex', gap:'0.35rem', flexShrink:0 }}>
+                  <button onClick={() => editPlan(plan)} style={{ display:'flex', alignItems:'center', gap:'0.2rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.2rem 0.5rem', fontSize:'0.65rem', color:C.navy, cursor:'pointer', fontFamily:F, fontWeight:700 }}>
+                    <Pencil size={11} strokeWidth={2.2} />Editar
+                  </button>
+                  <button onClick={() => cancelPlan(plan.id)} style={{ background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.2rem 0.5rem', fontSize:'0.65rem', color:C.textMuted, cursor:'pointer', fontFamily:F }}>Cancelar</button>
+                </div>
               </div>
             </Card>
           );
