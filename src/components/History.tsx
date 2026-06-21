@@ -1,7 +1,7 @@
 // ── components/History.tsx ────────────────────────────────────────────────────
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
-import { C, F, PENDING_PER, SP } from '../constants';
+import { C, F, PENDING_PER, SP, FS } from '../constants';
 import { fmt, safeN, calcBal, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter } from './ui';
@@ -127,7 +127,7 @@ export default function History() {
 
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl, maxWidth:'min(760px, 100%)', margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
-      <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:SP.md }}>Historial</h2>
+      <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}>Historial</h2>
       <input
         value={search}
         onChange={e => { setSearch(e.target.value); setSelectedPeriods([]); }}

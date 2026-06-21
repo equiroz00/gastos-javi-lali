@@ -636,7 +636,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
           onCancel={() => setShowSplitModal(false)}
         />
       )}
-      <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:'0.5rem' }}>
+      <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:'0.5rem' }}>
         {(isEditMode || isPlanEdit) && <Pencil size={18} strokeWidth={2.3} color={C.accent} />}
         {isEditMode ? 'Editar gasto' : isPlanEdit ? 'Editar plan de cuotas' : 'Nuevo gasto'}
       </h2>
