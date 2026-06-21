@@ -38,7 +38,7 @@ function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection
     <div>
       <div
         onClick={onToggle}
-        style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:headerBg, borderRadius:isOpen ? '1rem 1rem 0 0' : '1rem', padding:'0.85rem 1rem', boxShadow:'0 2px 8px rgba(0,0,0,0.08)', cursor:'pointer', border:'1px solid ' + (isPending ? '#f59e0b' : isSelected ? C.accent : isOpen ? C.navy : C.border) }}
+        style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:headerBg, borderRadius:isOpen ? '1rem 1rem 0 0' : '1rem', padding:'0.85rem 1rem', cursor:'pointer', border:'1px solid ' + (isPending ? '#f59e0b' : isSelected ? C.accent : isOpen ? C.navy : C.border) }}
       >
         <div>
           <div style={{ fontWeight:800, color:textColor, fontSize:'0.9rem' }}>{isPending ? 'Cuotas pendientes' : period}</div>
@@ -61,7 +61,7 @@ function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection
         </div>
       </div>
       {highlighted && (
-        <div style={{ background:C.surface, borderRadius:'0 0 1rem 1rem', boxShadow:'0 2px 8px rgba(0,0,0,0.08)', overflow:'hidden', border:'1px solid '+C.border, borderTop:'none' }}>
+        <div style={{ background:C.surface, borderRadius:'0 0 1rem 1rem', overflow:'hidden', border:'1px solid '+C.border, borderTop:'none' }}>
           <ExpenseList expenses={exps} onDelete={onDelete} onEdit={onEdit} />
         </div>
       )}

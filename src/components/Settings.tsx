@@ -98,20 +98,24 @@ export default function Settings() {
   );
 
   // ── Tema dropdown ───────────────────────────────────────────────────────────
+  const curTheme = coerceTheme(userTheme || 'default');
   const themeCard = (
     <Card>
       <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.95rem' }}>Tema</h3>
-      <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-        <ThemeDots themeKey={coerceTheme(userTheme || 'default')} />
-        <select
-          value={coerceTheme(userTheme || 'default')}
-          onChange={e => saveUserPreferences(e.target.value, userFont)}
-          style={{ ...selStyle, flex:1 }}
-        >
-          {Object.entries(THEMES).map(([key, t]: [string, any]) => (
-            <option key={key} value={key}>{t.label}</option>
-          ))}
-        </select>
+      <div style={{ display:'flex', gap:'0.5rem' }}>
+        {Object.entries(THEMES).map(([key, t]: [string, any]) => {
+          const active = curTheme === key;
+          return (
+            <button
+              key={key}
+              onClick={() => saveUserPreferences(key, userFont)}
+              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'0.45rem', padding:'0.7rem 0.4rem', borderRadius:'0.85rem', border:'2px solid ' + (active ? C.accent : C.border), background: active ? C.accent + '12' : 'transparent', cursor:'pointer', fontFamily:F }}
+            >
+              <ThemeDots themeKey={key} />
+              <span style={{ fontSize:'0.74rem', fontWeight: active ? 800 : 600, color: active ? C.accent : C.navy }}>{t.label}</span>
+            </button>
+          );
+        })}
       </div>
     </Card>
   );
