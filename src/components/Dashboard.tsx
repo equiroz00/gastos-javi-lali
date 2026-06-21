@@ -451,7 +451,7 @@ export default function Dashboard() {
   // ── DESKTOP layout — arriba 3 columnas, abajo 2 columnas ─────────────────────
   if (isDesktop) {
     return (
-      <div style={{ padding:SP.lg, display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+      <div style={{ padding:SP.lg, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap:SP.lg, alignItems:'start' }}>
         {/* Col 1: balance · ¿quién pagó más? · último pago */}
         <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
           {headerBlock}

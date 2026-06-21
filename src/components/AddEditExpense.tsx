@@ -624,7 +624,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   );
 
   return (
-    <div style={{ padding:'1rem', paddingBottom:'2rem' }}>
+    <div style={{ padding:'1rem', paddingBottom:'2rem', maxWidth:'min(640px, 100%)', margin:'0 auto' }}>
       {showSplitModal && (
         <SplitModal
           amount={totalAmt}

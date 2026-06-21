@@ -518,7 +518,7 @@ export default function Stats() {
   // ── DESKTOP — dos columnas según el período seleccionado ────────────────────
   if (isDesktop) {
     const colStyle: React.CSSProperties = { display:'flex', flexDirection:'column' };
-    const twoCol: React.CSSProperties = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start', marginTop:SP.md };
+    const twoCol: React.CSSProperties = { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap:SP.lg, alignItems:'start', marginTop:SP.md };
 
     // Nodos de evolución envueltos para que aporten su propio margen inferior,
     // igual que las demás tarjetas (WrapAvoid).
