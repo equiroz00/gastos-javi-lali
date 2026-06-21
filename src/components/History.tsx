@@ -32,7 +32,7 @@ function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection
   const textColor = isPending ? '#92400e' : isSelected ? C.white : isOpen ? C.onNavy : C.navy;
   const subColor  = isPending ? '#b45309' : isSelected ? 'rgba(255,255,255,0.75)' : isOpen ? C.onNavy + 'B3' : C.textMuted;
   const balColor  = isSelected ? 'rgba(255,255,255,0.9)' : isOpen ? C.onNavy + 'E6' : C.accent;
-  const okColor   = isSelected ? 'rgba(255,255,255,0.85)' : isOpen ? C.onNavy + 'CC' : '#2d9e7f';
+  const okColor   = isSelected ? 'rgba(255,255,255,0.85)' : isOpen ? C.onNavy + 'CC' : C.ok;
 
   return (
     <div>

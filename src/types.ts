@@ -154,6 +154,8 @@ export interface ThemeConfig {
   navy: string; accent: string; beige: string; textMuted: string;
   border: string; white: string; onNavy: string;
   gradMain: string; gradJavi: string; gradLali: string;
+  // Colores semánticos de texto (se adaptan al tema para mantener contraste).
+  danger: string; warn: string; ok: string;
 }
 
 export interface FontConfig {

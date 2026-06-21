@@ -361,7 +361,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
             <div style={{ fontWeight:700, fontSize:'0.82rem', color:C.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.description}</div>
             <div style={{ fontSize:'0.68rem', color:C.textMuted }}>{fmt(safeN(item.amount), item.currency || 'ARS')}</div>
           </div>
-          <button onClick={() => setQueue(q => q.filter((_, j) => j !== i))} style={{ background:'none', border:'none', color:'#c0314f', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}>
+          <button onClick={() => setQueue(q => q.filter((_, j) => j !== i))} style={{ background:'none', border:'none', color:C.danger, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}>
             <X size={15} strokeWidth={2} />
           </button>
         </div>
@@ -375,7 +375,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'1rem' }}>{isPlanEdit ? 'Editar plan — Lo esencial' : 'Paso 1 de 2 — Lo esencial'}</div>
       <Lbl>Descripción</Lbl>
       {descField(true)}
-      {errors.description && <p style={{ color:'#c0314f', fontSize:'0.7rem', margin:'0.15rem 0 0' }}>⚠ {errors.description}</p>}
+      {errors.description && <p style={{ color:C.danger, fontSize:'0.7rem', margin:'0.15rem 0 0' }}>⚠ {errors.description}</p>}
       <Lbl>Monto total</Lbl>
       <input
         style={inpStyle({ borderColor: errors.amount ? '#c0314f' : C.border, background:C.accent + '12', fontSize:'1.9rem', fontWeight:800, textAlign:'center', fontFamily:MONO, padding:'0.85rem', letterSpacing:'-0.02em' })}
@@ -384,7 +384,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         onChange={e => { onAmountChange(e.target.value); setErrors({}); }}
         placeholder="0"
       />
-      {errors.amount && <p style={{ color:'#c0314f', fontSize:'0.7rem', margin:'0.15rem 0 0' }}>⚠ {errors.amount}</p>}
+      {errors.amount && <p style={{ color:C.danger, fontSize:'0.7rem', margin:'0.15rem 0 0' }}>⚠ {errors.amount}</p>}
 
       {/* ── Duplicate warning ── */}
       {dupWarning && (
@@ -573,7 +573,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
                 </div>
                 {isRetro && (
                   <div style={{ background:C.surface, borderRadius:'0.75rem', padding:'0.6rem', border:'1px solid '+C.border, display:'flex', flexDirection:'column', gap:'0.45rem' }}>
-                    <div style={{ fontSize:'0.75rem', color:'#92400e', fontWeight:700 }}>Indicá cuántas cuotas ya se pagaron y a partir de qué período continúan.</div>
+                    <div style={{ fontSize:'0.75rem', color:C.warn, fontWeight:700 }}>Indicá cuántas cuotas ya se pagaron y a partir de qué período continúan.</div>
                     <label style={{ fontSize:'0.78rem', color:C.textMuted, fontWeight:700 }}>Cuotas ya pagadas</label>
                     <input
                       type="number" min={0} max={finalCuotas - 1}
@@ -582,7 +582,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
                       placeholder="0"
                       style={{ border:'1px solid ' + (errors.retroPaid ? '#c0314f' : C.border), borderRadius:'0.6rem', padding:'0.45rem 0.6rem', fontSize:'0.88rem', outline:'none', fontFamily:F, color:C.navy, background:C.bg, width:'6rem', boxSizing:'border-box' }}
                     />
-                    {errors.retroPaid && <p style={{ color:'#c0314f', fontSize:'0.7rem', margin:0 }}>⚠ {errors.retroPaid}</p>}
+                    {errors.retroPaid && <p style={{ color:C.danger, fontSize:'0.7rem', margin:0 }}>⚠ {errors.retroPaid}</p>}
                     <label style={{ fontSize:'0.78rem', color:C.textMuted, fontWeight:700 }}>Período donde va la próxima cuota ({paidNum + 1}/{finalCuotas})</label>
                     <select
                       value={retroStartPer}
@@ -592,10 +592,10 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
                       <option value="">-- Seleccioná un período --</option>
                       {periods.slice().reverse().map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                     </select>
-                    {errors.retroStartPer && <p style={{ color:'#c0314f', fontSize:'0.7rem', margin:0 }}>⚠ {errors.retroStartPer}</p>}
+                    {errors.retroStartPer && <p style={{ color:C.danger, fontSize:'0.7rem', margin:0 }}>⚠ {errors.retroStartPer}</p>}
                     {remaining > 0 && (
                       <div style={{ background:C.bg, borderRadius:'0.6rem', padding:'0.45rem 0.6rem', border:'1px dashed '+C.border, fontSize:'0.75rem', color:C.navy, fontWeight:700 }}>
-                        Se registrarán <span style={{ color:'#b45309' }}>{remaining}</span> cuota{remaining !== 1 ? 's ' : ' '}pendiente{remaining !== 1 ? 's ' : ' '}({paidNum + 1} a {finalCuotas})
+                        Se registrarán <span style={{ color:C.warn }}>{remaining}</span> cuota{remaining !== 1 ? 's ' : ' '}pendiente{remaining !== 1 ? 's ' : ' '}({paidNum + 1} a {finalCuotas})
                       </div>
                     )}
                   </div>

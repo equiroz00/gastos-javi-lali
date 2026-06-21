@@ -65,8 +65,8 @@ function ActivePlans() {
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 {pending > 0
-                  ? <div style={{ fontSize:'0.68rem', color:'#b45309', fontWeight:600 }}>⚠ {pending} cuota{pending > 1 ? 's' : ''} sin período</div>
-                  : <div style={{ fontSize:'0.68rem', color:'#2d9e7f', fontWeight:600 }}>✓ Todas asignadas</div>}
+                  ? <div style={{ fontSize:'0.68rem', color:C.warn, fontWeight:600 }}>⚠ {pending} cuota{pending > 1 ? 's' : ''} sin período</div>
+                  : <div style={{ fontSize:'0.68rem', color:C.ok, fontWeight:600 }}>✓ Todas asignadas</div>}
                 <div style={{ display:'flex', gap:'0.35rem', flexShrink:0 }}>
                   <button onClick={() => editPlan(plan)} style={{ display:'flex', alignItems:'center', gap:'0.2rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.2rem 0.5rem', fontSize:'0.65rem', color:C.navy, cursor:'pointer', fontFamily:F, fontWeight:700 }}>
                     <Pencil size={11} strokeWidth={2.2} />Editar
@@ -253,7 +253,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
     }
   }
   // Gastar más = rojo (▲), gastar menos = verde (▼).
-  const pctColor = amtPct === null ? C.textMuted : amtPct > 0 ? '#dc2626' : amtPct < 0 ? '#16a34a' : C.textMuted;
+  const pctColor = amtPct === null ? C.textMuted : amtPct > 0 ? C.danger : amtPct < 0 ? C.ok : C.textMuted;
   const pctArrow = amtPct === null ? '' : amtPct > 0 ? '▲' : amtPct < 0 ? '▼' : '–';
 
   // ── Fila de balance secundaria (otras monedas) ──────────────────────────────
@@ -305,7 +305,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
                 </span>
                 <button
                   onClick={() => { if (window.confirm('¿Eliminar este pago?')) deletePayment(p.id); }}
-                  style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', display:'flex', alignItems:'center', padding:'0.1rem' }}
+                  style={{ background:'none', border:'none', color:C.danger, cursor:'pointer', display:'flex', alignItems:'center', padding:'0.1rem' }}
                 >
                   <Trash2 size={13} strokeWidth={2} />
                 </button>

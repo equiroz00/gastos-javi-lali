@@ -226,7 +226,7 @@ function CatComparacion({ filtered, prevExps, allCatsFull, cur }: {
         const up   = r.pct !== null && r.pct > 0;
         const down = r.pct !== null && r.pct < 0;
         const arrow = up ? '▲' : down ? '▼' : '–';
-        const arrowColor = up ? '#dc2626' : down ? '#16a34a' : C.textMuted;
+        const arrowColor = up ? C.danger : down ? C.ok : C.textMuted;
         return (
           <div key={r.label} style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.5rem', padding:'0.45rem 0.6rem', background:C.bg, borderRadius:'0.65rem', border:'1px solid '+C.border }}>
             <span style={{ flex:1, fontSize:'0.78rem', color:C.navy, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.label}</span>
@@ -383,7 +383,7 @@ export default function Stats() {
 
   const [period, setPeriod] = useState('Todos');
   const [cur, setCur]       = useState<Currency>('ARS');
-  const [catChart, setCatChart] = useState('Tabla');
+  const [catChart, setCatChart] = useState('Torta');
   const [pmChart, setPmChart]   = useState('Tabla');
 
   const byPer    = period === 'Todos' ? expenses : expenses.filter(e => e.period === period);

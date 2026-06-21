@@ -281,7 +281,7 @@ export function PaymentModal() {
           placeholder="0"
         />
         {err
-          ? <p style={{ color:'#c0314f', fontSize:'0.7rem', margin:'0.1rem 0 0.5rem' }}>⚠ {err}</p>
+          ? <p style={{ color:C.danger, fontSize:'0.7rem', margin:'0.1rem 0 0.5rem' }}>⚠ {err}</p>
           : <div style={{ height:'0.65rem' }} />}
         <label style={{ fontSize:'0.8rem', color:C.textMuted, fontWeight:700, display:'block', marginBottom:'0.3rem', marginTop:'0.5rem' }}>Fecha</label>
         <input style={{ ...inp, marginBottom:'1rem' }} type="date" value={date} onChange={e => setDate(e.target.value)} />

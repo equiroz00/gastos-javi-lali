@@ -171,7 +171,7 @@ export default function Settings() {
           <input type="date" style={{ ...inp, flex:1 } as any} value={np.start} onChange={e => { setNp(p => ({ ...p, start:e.target.value })); setPeriodError(''); }} />
           <input type="date" style={{ ...inp, flex:1 } as any} value={np.end}   onChange={e => { setNp(p => ({ ...p, end:e.target.value }));   setPeriodError(''); }} />
         </div>
-        {periodError && <p style={{ color:'#c0314f', fontSize:'0.75rem', margin:'0 0 0.4rem', fontWeight:600 }}>⚠ {periodError}</p>}
+        {periodError && <p style={{ color:C.danger, fontSize:'0.75rem', margin:'0 0 0.4rem', fontWeight:600 }}>⚠ {periodError}</p>}
         <button onClick={addPeriod} style={{ width:'100%', padding:'0.5rem', background:C.navy, color:C.onNavy, border:'none', borderRadius:'0.6rem', fontWeight:700, fontSize:'0.85rem', cursor:'pointer', fontFamily:F }}>
           + Agregar período
         </button>
@@ -194,7 +194,7 @@ export default function Settings() {
                       <div style={{ fontWeight:700, fontSize:'0.85rem', color:C.navy }}>{p.name}</div>
                       <div style={{ fontSize:'0.7rem', color:C.textMuted }}>{p.start} → {p.end}</div>
                     </div>
-                    <button onClick={() => setPeriods(ps => ps.filter(x => x.name !== p.name))} style={{ background:'none', border:'none', color:'#c0314f', cursor:'pointer', fontSize:'1rem' }}>✕</button>
+                    <button onClick={() => setPeriods(ps => ps.filter(x => x.name !== p.name))} style={{ background:'none', border:'none', color:C.danger, cursor:'pointer', fontSize:'1rem' }}>✕</button>
                   </div>
                 ))}
               </div>
