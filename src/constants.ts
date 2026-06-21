@@ -5,9 +5,14 @@ import type { ThemeConfig, FontConfig, ThemeKey, FontKey } from './types';
 // navy es azul → texto blanco; en el oscuro navy es casi blanco (#F4F4F5) →
 // texto oscuro. Usar siempre onNavy (no `white`) sobre fondos navy, si no las
 // burbujas seleccionadas quedan blanco sobre blanco en el tema oscuro.
+// Budget Flow: estética iOS clara (fondo gris-sistema, tarjetas blancas, planas)
+// pero conservando el violeta/morado de la marca como acento principal. navy =
+// violeta oscuro legible (texto + Javi), accent = malva (Lali), igual que el
+// original para no perder la identidad de pareja.
 export const THEMES: Record<ThemeKey, ThemeConfig> = {
-  default: { label:'Original', emoji:'💜', bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#E4DAD2', textMuted:'#8a7a85', border:'#E2D8CF', white:'#FFFFFF', onNavy:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)' },
-  oscuro:  { label:'Oscuro',   emoji:'🌑', bg:'#0F1115', surface:'#191C22', navy:'#F4F4F5', accent:'#10B981', beige:'#23272F', textMuted:'#8B909B', border:'#262A32', white:'#FFFFFF', onNavy:'#0F1115', gradMain:'linear-gradient(135deg,#1A1D24,#23272F)', gradJavi:'linear-gradient(135deg,#10B981,#0E9F6E)', gradLali:'linear-gradient(135deg,#A78BFA,#8B5CF6)' },
+  default:    { label:'Original',    emoji:'💜', bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#E4DAD2', textMuted:'#8a7a85', border:'#E2D8CF', white:'#FFFFFF', onNavy:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)', danger:'#c0314f', warn:'#b45309', ok:'#2d9e7f' },
+  budgetflow: { label:'Budget Flow', emoji:'🟣', bg:'#F2F2F7', surface:'#FFFFFF', navy:'#3D2F73', accent:'#A77693', beige:'#ECECF2', textMuted:'#8A8A8E', border:'#E4E4EC', white:'#FFFFFF', onNavy:'#FFFFFF', gradMain:'linear-gradient(135deg,#6E4DC9,#A77693)', gradJavi:'linear-gradient(135deg,#4D3B9E,#6E4DC9)', gradLali:'linear-gradient(135deg,#A77693,#C490A8)', danger:'#c0314f', warn:'#b45309', ok:'#2d9e7f' },
+  oscuro:     { label:'Oscuro',      emoji:'🌑', bg:'#0F1115', surface:'#191C22', navy:'#F4F4F5', accent:'#10B981', beige:'#23272F', textMuted:'#8B909B', border:'#262A32', white:'#FFFFFF', onNavy:'#0F1115', gradMain:'linear-gradient(135deg,#1A1D24,#23272F)', gradJavi:'linear-gradient(135deg,#10B981,#0E9F6E)', gradLali:'linear-gradient(135deg,#A78BFA,#8B5CF6)', danger:'#F87171', warn:'#FBBF24', ok:'#34D399' },
 };
 
 export const FONTS: Record<FontKey, FontConfig> = {
@@ -59,7 +64,7 @@ export let F: string = "'Nunito',sans-serif";
 // Legacy preference migration: old theme/font keys → current valid keys
 const LEGACY_DARK = ['bosque','oceano','moca','noche','carbon','selva','madera'];
 export function coerceTheme(key: string): string {
-  if (key === 'default' || key === 'oscuro') return key;
+  if (key === 'default' || key === 'budgetflow' || key === 'oscuro') return key;
   return LEGACY_DARK.indexOf(key) >= 0 ? 'oscuro' : 'default';
 }
 export function coerceFont(key: string): string {

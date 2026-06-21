@@ -5,7 +5,7 @@ import { C, F, MONO, PENDING_PER, SP } from '../constants';
 import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
-import { Card } from './ui';
+import { Card, DonutRing } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense, Payment, Period, Currency } from '../types';
 
@@ -65,8 +65,8 @@ function ActivePlans() {
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 {pending > 0
-                  ? <div style={{ fontSize:'0.68rem', color:'#b45309', fontWeight:600 }}>⚠ {pending} cuota{pending > 1 ? 's' : ''} sin período</div>
-                  : <div style={{ fontSize:'0.68rem', color:'#2d9e7f', fontWeight:600 }}>✓ Todas asignadas</div>}
+                  ? <div style={{ fontSize:'0.68rem', color:C.warn, fontWeight:600 }}>⚠ {pending} cuota{pending > 1 ? 's' : ''} sin período</div>
+                  : <div style={{ fontSize:'0.68rem', color:C.ok, fontWeight:600 }}>✓ Todas asignadas</div>}
                 <div style={{ display:'flex', gap:'0.35rem', flexShrink:0 }}>
                   <button onClick={() => editPlan(plan)} style={{ display:'flex', alignItems:'center', gap:'0.2rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.2rem 0.5rem', fontSize:'0.65rem', color:C.navy, cursor:'pointer', fontFamily:F, fontWeight:700 }}>
                     <Pencil size={11} strokeWidth={2.2} />Editar
@@ -95,31 +95,43 @@ function WhoPaidMore({ periodExps, cur }: { periodExps: Expense[]; cur: Currency
   const javiResp = curExps.reduce((s, e) => s + safeN(e.javiAmount), 0);
   const laliResp = curExps.reduce((s, e) => s + safeN(e.laliAmount), 0);
 
+  const javiPct = total > 0 ? Math.round(javiPaid / total * 100) : 0;
+  const laliPct = total > 0 ? 100 - javiPct : 0;
+  const leaderJavi = javiPaid >= laliPaid;
+  const ringSegments = total > 0
+    ? [{ value: javiPaid, color: C.navy }, { value: laliPaid, color: C.accent }]
+    : [{ value: 1, color: C.border }];
+
+  // Fila por persona: punto de color · nombre · monto pagado · porcentaje.
+  const personRow = (name: 'Javi' | 'Lali', color: string, paid: number, pct: number, resp: number) => (
+    <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+      <span style={{ width:'9px', height:'9px', borderRadius:'50%', background:color, flexShrink:0 }} />
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:'0.78rem', fontWeight:700, color:C.navy }}>{name}</div>
+        <div style={{ fontSize:'0.62rem', color:C.textMuted }}>Resp. {fmtS(resp, cur)}</div>
+      </div>
+      <div style={{ textAlign:'right', flexShrink:0 }}>
+        <div style={{ fontWeight:800, color:C.navy, fontSize:'0.82rem', fontFamily:MONO }}>{fmtS(paid, cur)}</div>
+        <div style={{ fontSize:'0.62rem', color:C.textMuted }}>{pct}%</div>
+      </div>
+    </div>
+  );
+
   return (
     <Card>
-      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.85rem', fontSize:'0.9rem' }}>
         <CreditCard size={15} strokeWidth={2.2} color={C.accent} />¿Quién pagó más?
       </h3>
-      <div style={{ display:'flex', gap:'0.6rem', marginBottom:'0.6rem' }}>
-        {(['Javi', 'Lali'] as const).map(name => {
-          const paid = name === 'Javi' ? javiPaid : laliPaid;
-          const grad = name === 'Javi' ? C.gradJavi : C.gradLali;
-          return (
-            <div key={name} style={{ flex:1, background:grad, borderRadius:'0.85rem', padding:'0.6rem', textAlign:'center', color:C.white }}>
-              <div style={{ fontWeight:800, fontSize:'0.9rem', fontFamily:MONO }}>{fmtS(paid, cur)}</div>
-              <div style={{ fontSize:'0.7rem', opacity:0.85 }}>{total > 0 ? Math.round(paid / total * 100) : 0}%</div>
-              <div style={{ fontSize:'0.62rem', opacity:0.8, marginTop:'0.1rem', fontWeight:700 }}>{name}</div>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display:'flex', gap:'0.6rem' }}>
-        {([['Javi', C.navy, javiResp], ['Lali', C.accent, laliResp]] as const).map(([name, color, val]) => (
-          <div key={name} style={{ flex:1, background:C.bg, borderRadius:'0.75rem', padding:'0.5rem', textAlign:'center', border:'1px solid '+C.border }}>
-            <div style={{ fontSize:'0.65rem', color:C.textMuted }}>Resp. {name}</div>
-            <div style={{ fontWeight:800, color:String(color), fontSize:'0.85rem', fontFamily:MONO }}>{fmtS(Number(val), cur)}</div>
-          </div>
-        ))}
+      <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
+        <DonutRing size={94} thickness={14} segments={ringSegments}>
+          <div style={{ fontWeight:800, fontSize:'1rem', color:leaderJavi ? C.navy : C.accent, fontFamily:MONO }}>{total > 0 ? (leaderJavi ? javiPct : laliPct) : 0}%</div>
+          <div style={{ fontSize:'0.56rem', color:C.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.04em' }}>{leaderJavi ? 'Javi' : 'Lali'}</div>
+        </DonutRing>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', gap:'0.55rem' }}>
+          {personRow('Javi', C.navy, javiPaid, javiPct, javiResp)}
+          <div style={{ height:'1px', background:C.border }} />
+          {personRow('Lali', C.accent, laliPaid, laliPct, laliResp)}
+        </div>
       </div>
     </Card>
   );
@@ -241,7 +253,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
     }
   }
   // Gastar más = rojo (▲), gastar menos = verde (▼).
-  const pctColor = amtPct === null ? C.textMuted : amtPct > 0 ? '#dc2626' : amtPct < 0 ? '#16a34a' : C.textMuted;
+  const pctColor = amtPct === null ? C.textMuted : amtPct > 0 ? C.danger : amtPct < 0 ? C.ok : C.textMuted;
   const pctArrow = amtPct === null ? '' : amtPct > 0 ? '▲' : amtPct < 0 ? '▼' : '–';
 
   // ── Fila de balance secundaria (otras monedas) ──────────────────────────────
@@ -293,7 +305,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
                 </span>
                 <button
                   onClick={() => { if (window.confirm('¿Eliminar este pago?')) deletePayment(p.id); }}
-                  style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', display:'flex', alignItems:'center', padding:'0.1rem' }}
+                  style={{ background:'none', border:'none', color:C.danger, cursor:'pointer', display:'flex', alignItems:'center', padding:'0.1rem' }}
                 >
                   <Trash2 size={13} strokeWidth={2} />
                 </button>
@@ -306,7 +318,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
   }
 
   return (
-    <Card style={{ padding:'1rem 1.1rem' }}>
+    <Card style={{ padding:'1rem 1.1rem', background:C.accent + '14' }}>
       {/* Top row: período + count + total + variación */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.85rem', flexWrap:'wrap', gap:'0.4rem' }}>
         {periodSelector}
@@ -439,13 +451,15 @@ export default function Dashboard() {
   // ── DESKTOP layout — arriba 3 columnas, abajo 2 columnas ─────────────────────
   if (isDesktop) {
     return (
-      <div style={{ padding:SP.lg, display:'flex', flexDirection:'column', gap:SP.lg }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1.15fr 1fr 1fr', gap:SP.lg, alignItems:'start' }}>
-          <div>{headerBlock}</div>
+      <div style={{ padding:SP.lg, display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+        {/* Col 1: balance · ¿quién pagó más? · último pago */}
+        <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
+          {headerBlock}
           {whoPaidBlock}
           {lastPayBlock}
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+        {/* Col 2: esta semana · cuotas activas */}
+        <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
           {weekSection}
           {plansSection}
         </div>

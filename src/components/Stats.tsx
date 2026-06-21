@@ -81,7 +81,7 @@ function CategoryChart({ data, type, cur }: { data: CatRow[]; type: string; cur:
   if (type === 'Torta') return (
     <ResponsiveContainer width="100%" height={200}>
       <PieChart>
-        <Pie data={data} dataKey="value" cx="50%" cy="50%" outerRadius={80} label={(p) => p.pct + '%'} fontSize={9}>
+        <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={46} outerRadius={80} paddingAngle={1} label={(p) => p.pct + '%'} fontSize={9}>
           {data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
         </Pie>
         <Tooltip {...tt} />
@@ -125,7 +125,7 @@ function PMChart({ data, type, cur }: { data: PMRow[]; type: string; cur: Curren
   if (type === 'Torta') return (
     <ResponsiveContainer width="100%" height={200}>
       <PieChart>
-        <Pie data={data} dataKey="value" cx="50%" cy="50%" outerRadius={80} label={(p) => p.pct + '%'} fontSize={9}>
+        <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={46} outerRadius={80} paddingAngle={1} label={(p) => p.pct + '%'} fontSize={9}>
           {data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
         </Pie>
         <Tooltip {...tt} />
@@ -226,7 +226,7 @@ function CatComparacion({ filtered, prevExps, allCatsFull, cur }: {
         const up   = r.pct !== null && r.pct > 0;
         const down = r.pct !== null && r.pct < 0;
         const arrow = up ? '▲' : down ? '▼' : '–';
-        const arrowColor = up ? '#dc2626' : down ? '#16a34a' : C.textMuted;
+        const arrowColor = up ? C.danger : down ? C.ok : C.textMuted;
         return (
           <div key={r.label} style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.5rem', padding:'0.45rem 0.6rem', background:C.bg, borderRadius:'0.65rem', border:'1px solid '+C.border }}>
             <span style={{ flex:1, fontSize:'0.78rem', color:C.navy, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.label}</span>
@@ -383,7 +383,7 @@ export default function Stats() {
 
   const [period, setPeriod] = useState('Todos');
   const [cur, setCur]       = useState<Currency>('ARS');
-  const [catChart, setCatChart] = useState('Tabla');
+  const [catChart, setCatChart] = useState('Torta');
   const [pmChart, setPmChart]   = useState('Tabla');
 
   const byPer    = period === 'Todos' ? expenses : expenses.filter(e => e.period === period);
@@ -515,64 +515,48 @@ export default function Stats() {
   const showEvolArea = configPeriods.length >= 2;
   const canCompare = prevExps.length > 0;
 
-  // ── DESKTOP — layout según el período seleccionado ──────────────────────────
+  // ── DESKTOP — dos columnas según el período seleccionado ────────────────────
   if (isDesktop) {
-    const colStyle: React.CSSProperties = { flex:1, minWidth:0, display:'flex', flexDirection:'column' };
-    const rowStyle: React.CSSProperties = { display:'flex', gap:SP.lg, alignItems:'flex-start', marginTop:SP.md };
+    const colStyle: React.CSSProperties = { display:'flex', flexDirection:'column' };
+    const twoCol: React.CSSProperties = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start', marginTop:SP.md };
 
-    let topRow: React.ReactNode;
-    let bottomRow: React.ReactNode = null;
+    // Nodos de evolución envueltos para que aporten su propio margen inferior,
+    // igual que las demás tarjetas (WrapAvoid).
+    const evolAreaNode = showEvolArea ? <WrapAvoid>{evolucionArea}</WrapAvoid> : null;
+    const evolJaviNode = evolucionJaviLaliNode ? <WrapAvoid>{evolucionJaviLaliNode}</WrapAvoid> : null;
 
+    let body: React.ReactNode;
     if (period === 'Todos') {
-      // 3 columnas: categoría · métodos de pago · top 5 ; abajo 2 columnas de evolución
-      topRow = (
-        <div style={rowStyle}>
-          <div style={colStyle}>{catCard}</div>
-          <div style={colStyle}>{pmCard}</div>
-          <div style={colStyle}>{topGastosNode}</div>
+      // Col1: categoría · métodos · top 5 — Col2: evolución área · evolución Javi/Lali
+      body = (
+        <div style={twoCol}>
+          <div style={colStyle}>{catCard}{pmCard}{topGastosNode}</div>
+          <div style={colStyle}>{evolAreaNode}{evolJaviNode}</div>
         </div>
       );
-      if (showEvolArea || evolucionJaviLaliNode) {
-        bottomRow = (
-          <div style={rowStyle}>
-            {showEvolArea && <div style={colStyle}>{evolucionArea}</div>}
-            {evolucionJaviLaliNode && <div style={colStyle}>{evolucionJaviLaliNode}</div>}
-          </div>
-        );
-      }
     } else if (!canCompare) {
-      // primer ciclo (sin período anterior con el cual comparar)
-      topRow = (
-        <div style={rowStyle}>
-          <div style={colStyle}>{catCard}</div>
-          <div style={colStyle}>{pmCard}</div>
-          <div style={colStyle}>{topGastosNode}{showProy && proyeccionNode}</div>
+      // Primer ciclo (sin período anterior): distribución 2x2 (cat·pm / top·evolución)
+      body = (
+        <div style={twoCol}>
+          <div style={colStyle}>{catCard}{topGastosNode}{showProy && proyeccionNode}</div>
+          <div style={colStyle}>{pmCard}{evolAreaNode}</div>
         </div>
       );
-      if (showEvolArea) {
-        bottomRow = <div style={rowStyle}><div style={colStyle}>{evolucionArea}</div></div>;
-      }
     } else {
-      // períodos comparables: comparación al centro, pago/proyección a un lado,
-      // top 5 / categoría al otro
-      topRow = (
-        <div style={rowStyle}>
-          <div style={colStyle}>{pmCard}{showProy && proyeccionNode}</div>
-          <div style={colStyle}>{catComparacionNode}</div>
-          <div style={colStyle}>{topGastosNode}{catCard}</div>
+      // Ciclos posteriores: Col1 categoría · métodos · top 5 — Col2 comparación · evolución
+      body = (
+        <div style={twoCol}>
+          <div style={colStyle}>{catCard}{pmCard}{topGastosNode}</div>
+          <div style={colStyle}>{catComparacionNode}{evolAreaNode}{showProy && proyeccionNode}</div>
         </div>
       );
-      if (showEvolArea) {
-        bottomRow = <div style={rowStyle}><div style={colStyle}>{evolucionArea}</div></div>;
-      }
     }
 
     return (
       <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
         <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:'0 0 '+SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
         {filters}
-        {topRow}
-        {bottomRow}
+        {body}
       </div>
     );
   }

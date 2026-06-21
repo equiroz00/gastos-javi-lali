@@ -1,6 +1,6 @@
 // ── components/Settings.tsx ───────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { Palette, SlidersHorizontal, Download, CalendarDays } from 'lucide-react';
+import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown } from 'lucide-react';
 import { C, F, THEMES, FONTS, coerceTheme, coerceFont, SP } from '../constants';
 import useAppStore from '../store/useAppStore';
 import { Card } from './ui';
@@ -22,6 +22,7 @@ export default function Settings() {
   const [saved, setSaved]             = useState(false);
   const [csvFrom, setCsvFrom]         = useState('');
   const [csvTo, setCsvTo]             = useState('');
+  const [showPeriods, setShowPeriods] = useState(false);
 
   function dateOverlaps(start: string, end: string, existing: typeof periods) {
     const s = new Date(start + 'T00:00:00'), e = new Date(end + 'T23:59:59');
@@ -98,20 +99,24 @@ export default function Settings() {
   );
 
   // ── Tema dropdown ───────────────────────────────────────────────────────────
+  const curTheme = coerceTheme(userTheme || 'default');
   const themeCard = (
     <Card>
       <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.95rem' }}>Tema</h3>
-      <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-        <ThemeDots themeKey={coerceTheme(userTheme || 'default')} />
-        <select
-          value={coerceTheme(userTheme || 'default')}
-          onChange={e => saveUserPreferences(e.target.value, userFont)}
-          style={{ ...selStyle, flex:1 }}
-        >
-          {Object.entries(THEMES).map(([key, t]: [string, any]) => (
-            <option key={key} value={key}>{t.label}</option>
-          ))}
-        </select>
+      <div style={{ display:'flex', gap:'0.5rem' }}>
+        {Object.entries(THEMES).map(([key, t]: [string, any]) => {
+          const active = curTheme === key;
+          return (
+            <button
+              key={key}
+              onClick={() => saveUserPreferences(key, userFont)}
+              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'0.45rem', padding:'0.7rem 0.4rem', borderRadius:'0.85rem', border:'2px solid ' + (active ? C.accent : C.border), background: active ? C.accent + '12' : 'transparent', cursor:'pointer', fontFamily:F }}
+            >
+              <ThemeDots themeKey={key} />
+              <span style={{ fontSize:'0.74rem', fontWeight: active ? 800 : 600, color: active ? C.accent : C.navy }}>{t.label}</span>
+            </button>
+          );
+        })}
       </div>
     </Card>
   );
@@ -166,7 +171,7 @@ export default function Settings() {
           <input type="date" style={{ ...inp, flex:1 } as any} value={np.start} onChange={e => { setNp(p => ({ ...p, start:e.target.value })); setPeriodError(''); }} />
           <input type="date" style={{ ...inp, flex:1 } as any} value={np.end}   onChange={e => { setNp(p => ({ ...p, end:e.target.value }));   setPeriodError(''); }} />
         </div>
-        {periodError && <p style={{ color:'#c0314f', fontSize:'0.75rem', margin:'0 0 0.4rem', fontWeight:600 }}>⚠ {periodError}</p>}
+        {periodError && <p style={{ color:C.danger, fontSize:'0.75rem', margin:'0 0 0.4rem', fontWeight:600 }}>⚠ {periodError}</p>}
         <button onClick={addPeriod} style={{ width:'100%', padding:'0.5rem', background:C.navy, color:C.onNavy, border:'none', borderRadius:'0.6rem', fontWeight:700, fontSize:'0.85rem', cursor:'pointer', fontFamily:F }}>
           + Agregar período
         </button>
@@ -174,18 +179,26 @@ export default function Settings() {
       {periods.length === 0
         ? <p style={{ fontSize:'0.8rem', color:C.textMuted, margin:0 }}>No hay períodos configurados aún.</p>
         : <>
-            <p style={{ fontSize:'0.75rem', color:C.textMuted, margin:'0 0 0.4rem', fontWeight:700 }}>Períodos registrados ({periods.length}):</p>
-            <div style={{ maxHeight:'220px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'0.4rem' }}>
-              {periods.slice().reverse().map((p, i) => (
-                <div key={p.name + i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg, borderRadius:'0.6rem', padding:'0.5rem 0.75rem', border:'1px solid '+C.border, flexShrink:0 }}>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:'0.85rem', color:C.navy }}>{p.name}</div>
-                    <div style={{ fontSize:'0.7rem', color:C.textMuted }}>{p.start} → {p.end}</div>
+            <button
+              onClick={() => setShowPeriods(v => !v)}
+              style={{ width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center', background:'none', border:'none', padding:'0.15rem 0', cursor:'pointer', fontFamily:F }}
+            >
+              <span style={{ fontSize:'0.75rem', color:C.textMuted, fontWeight:700 }}>Períodos registrados ({periods.length})</span>
+              <ChevronDown size={16} strokeWidth={2.2} color={C.textMuted} style={{ transform: showPeriods ? 'rotate(180deg)' : 'none', transition:'transform 0.2s' }} />
+            </button>
+            {showPeriods && (
+              <div style={{ maxHeight:'220px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'0.4rem', marginTop:'0.4rem' }}>
+                {periods.slice().reverse().map((p, i) => (
+                  <div key={p.name + i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg, borderRadius:'0.6rem', padding:'0.5rem 0.75rem', border:'1px solid '+C.border, flexShrink:0 }}>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:'0.85rem', color:C.navy }}>{p.name}</div>
+                      <div style={{ fontSize:'0.7rem', color:C.textMuted }}>{p.start} → {p.end}</div>
+                    </div>
+                    <button onClick={() => setPeriods(ps => ps.filter(x => x.name !== p.name))} style={{ background:'none', border:'none', color:C.danger, cursor:'pointer', fontSize:'1rem' }}>✕</button>
                   </div>
-                  <button onClick={() => setPeriods(ps => ps.filter(x => x.name !== p.name))} style={{ background:'none', border:'none', color:'#c0314f', cursor:'pointer', fontSize:'1rem' }}>✕</button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </>
       }
     </Card>
@@ -207,7 +220,7 @@ export default function Settings() {
         <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}>Configuración</h2>
         {/* Apariencia banner + 2-col grid */}
         {appearanceBanner}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'stretch' }}>
           {themeCard}
           {fontCard}
         </div>
