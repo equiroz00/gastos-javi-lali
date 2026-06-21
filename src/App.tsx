@@ -258,7 +258,7 @@ export default function App() {
                 <button
                   key={t.id}
                   onClick={() => setView(t.id)}
-                  style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 1rem', borderRadius:'0.75rem', border:'none', cursor:'pointer', fontFamily:F, fontWeight:active ? 800 : 500, fontSize:'0.85rem', background:active ? C.navy+'18' : 'transparent', color:active ? C.navy : C.textMuted, textAlign:'left' }}
+                  style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 1rem', borderRadius:'0.75rem', border:'none', cursor:'pointer', fontFamily:F, fontWeight:active ? 800 : 500, fontSize:'0.85rem', background:active ? C.accent+'1F' : 'transparent', color:active ? C.accent : C.textMuted, textAlign:'left' }}
                 >
                   {t.icon}
                   {t.label}
@@ -289,27 +289,29 @@ export default function App() {
         {Content}
       </div>
 
-      {/* Bottom nav with FAB in center */}
-      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:'480px', background:C.surface, borderTop:'1px solid '+C.border, display:'flex', alignItems:'flex-end', boxShadow:'0 -2px 12px rgba(0,0,0,0.1)', zIndex:10, paddingBottom:'env(safe-area-inset-bottom)' }}>
+      {/* Bottom nav — barra de pestañas estilo iOS (Budget Flow). El "Agregar"
+          es un cuadrado de acento, no un FAB flotante. */}
+      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:'480px', background:C.surface, borderTop:'1px solid '+C.border, display:'flex', alignItems:'center', zIndex:10, paddingBottom:'env(safe-area-inset-bottom)' }}>
         {TABS.map(t => {
           const isAdd = t.id === 'add';
           const active = view === t.id;
           if (isAdd) return (
-            <div key={t.id} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', paddingBottom:'0.5rem' }}>
-              <button
-                onClick={() => setView('add')}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', width:'54px', height:'54px', borderRadius:'50%', border:'none', cursor:'pointer', background:C.gradMain, color:C.white, boxShadow:'0 4px 16px rgba(0,0,0,0.25)', transform:'translateY(-12px)', marginBottom:'-4px' }}
-              >
-                <Plus size={26} strokeWidth={2.5} />
-              </button>
-              <span style={{ fontSize:'0.6rem', fontFamily:F, color: active ? C.navy : C.textMuted, fontWeight: active ? 900 : 500, marginTop:'2px' }}>Agregar</span>
-            </div>
+            <button
+              key={t.id}
+              onClick={() => setView('add')}
+              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'0.18rem', padding:'0.5rem 0 0.45rem', border:'none', background:'none', cursor:'pointer', fontFamily:F }}
+            >
+              <span style={{ width:'30px', height:'30px', borderRadius:'9px', background:C.accent, color:C.white, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <Plus size={20} strokeWidth={2.6} />
+              </span>
+              <span style={{ fontSize:'0.6rem', color: active ? C.accent : C.textMuted, fontWeight: active ? 800 : 500 }}>Agregar</span>
+            </button>
           );
           return (
             <button
               key={t.id}
               onClick={() => setView(t.id)}
-              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.6rem 0 0.5rem', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:active ? C.navy : C.textMuted, fontSize:'0.6rem', fontWeight:active ? 900 : 500, gap:'0.2rem' }}
+              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.55rem 0 0.45rem', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:active ? C.accent : C.textMuted, fontSize:'0.6rem', fontWeight:active ? 800 : 500, gap:'0.2rem' }}
             >
               {t.icon}
               {t.label}

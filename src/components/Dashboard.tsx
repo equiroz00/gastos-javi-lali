@@ -318,7 +318,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
   }
 
   return (
-    <Card style={{ padding:'1rem 1.1rem' }}>
+    <Card style={{ padding:'1rem 1.1rem', background:C.accent + '14' }}>
       {/* Top row: período + count + total + variación */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.85rem', flexWrap:'wrap', gap:'0.4rem' }}>
         {periodSelector}
