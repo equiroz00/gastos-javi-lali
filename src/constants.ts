@@ -42,6 +42,20 @@ export const SP = {
 // max-width (si no se contradicen entre sí).
 export const MAXW = '1040px';
 
+// Ancho del contenedor de una columna (móvil/tablet). Fluido: usa el ancho
+// disponible hasta un máximo cómodo, en vez de toparse seco en 480px y dejar
+// franjas vacías en pantallas medianas.
+export const SHELL_MAXW = 'min(640px, 100%)';
+
+// Tipografía fluida — escala suave con el ancho del viewport (clamp: mín, ideal
+// con vw, máx). Para los números/títulos protagonistas que se benefician de
+// crecer en pantallas grandes sin saltos.
+export const FS = {
+  hero:   'clamp(1.9rem, 1.15rem + 3.4vw, 2.8rem)', // balance principal (Inicio)
+  amount: 'clamp(1.6rem, 1.1rem + 2.6vw, 2.3rem)',  // monto en Nuevo gasto
+  title:  'clamp(1.15rem, 1rem + 0.9vw, 1.5rem)',   // títulos de pantalla (h2)
+} as const;
+
 export const PALETTE: string[]      = ['#174871','#A77693','#4a9d8f','#d4875a','#7b5fa0','#c4965a','#5a8fa0','#a05a6e','#4a7a5a','#9a7040'];
 export const DEFAULT_CATS: string[] = ['🏠 Hogar','🍕 Alimentación','🔑 Arriendo','💡 Servicios Públicos','🚌 Transporte','🎬 Entretenimiento','👥 Amigos','💆 Cuidado Personal','💪 Gimnasio','💊 Farmacia','👶 Hijito','👕 Ropa'];
 export const PAY_METHODS: string[]  = ['Efectivo','TC Visa Laura','TC Master Card Laura','TC Visa Extensión','TC Master Card Extensión','Dinero en Cuenta','TC Visa Javi','TC Amex Javi','TC Amex Laura'];
