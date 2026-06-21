@@ -146,7 +146,7 @@ export interface ExpenseForm {
   customCurrency?: string;
 }
 
-export type ThemeKey = 'default' | 'oscuro';
+export type ThemeKey = 'default' | 'budgetflow' | 'oscuro';
 export type FontKey  = 'Nunito' | 'PlusJakarta' | 'Jost';
 
 export interface ThemeConfig {
