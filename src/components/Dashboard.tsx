@@ -451,13 +451,15 @@ export default function Dashboard() {
   // ── DESKTOP layout — arriba 3 columnas, abajo 2 columnas ─────────────────────
   if (isDesktop) {
     return (
-      <div style={{ padding:SP.lg, display:'flex', flexDirection:'column', gap:SP.lg }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1.15fr 1fr 1fr', gap:SP.lg, alignItems:'start' }}>
-          <div>{headerBlock}</div>
+      <div style={{ padding:SP.lg, display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+        {/* Col 1: balance · ¿quién pagó más? · último pago */}
+        <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
+          {headerBlock}
           {whoPaidBlock}
           {lastPayBlock}
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+        {/* Col 2: esta semana · cuotas activas */}
+        <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
           {weekSection}
           {plansSection}
         </div>
