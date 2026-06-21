@@ -59,10 +59,46 @@ export function UserDot({ user, style }: { user: string; style?: React.CSSProper
   return <span style={{ display:'inline-block', width:'7px', height:'7px', borderRadius:'50%', background:isJavi ? C.navy : C.accent, flexShrink:0, ...style }} />;
 }
 
+// Tarjeta base — estética Budget Flow / iOS: esquinas amplias, plana (sin
+// sombra; resalta por contraste con el fondo gris-sistema), borde fino.
 export function Card({ style, children }: { style?: React.CSSProperties; children?: React.ReactNode }) {
   return (
-    <div style={{ background:C.surface, borderRadius:'1.1rem', padding:'1rem', boxShadow:'0 2px 8px rgba(0,0,0,0.1)', border:'1px solid '+C.border, ...style }}>
+    <div style={{ background:C.surface, borderRadius:'1.15rem', padding:'1rem', border:'1px solid '+C.border, ...style }}>
       {children}
+    </div>
+  );
+}
+
+// Etiqueta de sección estilo iOS (mayúsculas, espaciada, apagada).
+export function SectionLabel({ children, style }: { children?: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{ fontSize:'0.66rem', fontWeight:800, letterSpacing:'0.05em', textTransform:'uppercase', color:C.textMuted, margin:'0 0 0.4rem 0.15rem', fontFamily:F, ...style }}>
+      {children}
+    </div>
+  );
+}
+
+// Anillo donut con agujero central — firma visual de Budget Flow. Los segmentos
+// se dibujan con conic-gradient en proporción a su valor; el centro usa el color
+// de superficie del tema (queda bien en claro y oscuro).
+export function DonutRing({ segments, size = 84, thickness = 12, children }: {
+  segments: Array<{ value: number; color: string }>;
+  size?: number; thickness?: number; children?: React.ReactNode;
+}) {
+  const total = segments.reduce((s, x) => s + (x.value > 0 ? x.value : 0), 0) || 1;
+  let acc = 0;
+  const stops = segments.map(seg => {
+    const start = (acc / total) * 100;
+    acc += Math.max(0, seg.value);
+    const end = (acc / total) * 100;
+    return `${seg.color} ${start}% ${end}%`;
+  });
+  const hole = size - thickness * 2;
+  return (
+    <div style={{ width:size, height:size, borderRadius:'50%', background:`conic-gradient(${stops.join(',')})`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+      <div style={{ width:hole, height:hole, borderRadius:'50%', background:C.surface, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', lineHeight:1.15 }}>
+        {children}
+      </div>
     </div>
   );
 }
