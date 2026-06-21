@@ -1,9 +1,8 @@
 // ── components/History.tsx ────────────────────────────────────────────────────
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
-import { C, F, PENDING_PER, SP } from '../constants';
+import { C, F, PENDING_PER, SP, FS } from '../constants';
 import { fmt, safeN, calcBal, sortByDate } from '../lib/helpers';
-import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter } from './ui';
 import ExpenseList from './ExpenseList';
@@ -70,7 +69,6 @@ function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection
 }
 
 export default function History() {
-  const isDesktop         = useIsDesktop();
   const expenses          = useAppStore(s => s.expenses);
   const settings          = useAppStore(s => s.settings);
   const requestDelete     = useAppStore(s => s.requestDelete);
@@ -128,8 +126,8 @@ export default function History() {
   const showExpMatches = !!searchLower && expenseMatches.length > 0;
 
   return (
-    <div style={{ padding:SP.lg, paddingBottom:SP.xxl, maxWidth: isDesktop ? '760px' : undefined, margin: isDesktop ? '0 auto' : undefined, width:'100%', boxSizing:'border-box' }}>
-      <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:SP.md }}>Historial</h2>
+    <div style={{ padding:SP.lg, paddingBottom:SP.xxl, maxWidth:'min(760px, 100%)', margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
+      <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}>Historial</h2>
       <input
         value={search}
         onChange={e => { setSearch(e.target.value); setSelectedPeriods([]); }}

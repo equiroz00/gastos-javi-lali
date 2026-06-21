@@ -1,7 +1,7 @@
 // ── components/AddEditExpense.tsx ─────────────────────────────────────────────
 import React, { useState } from 'react';
 import { Plus, X, Pencil, AlertTriangle } from 'lucide-react';
-import { C, F, MONO, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
+import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
 import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
@@ -378,7 +378,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       {errors.description && <p style={{ color:C.danger, fontSize:'0.7rem', margin:'0.15rem 0 0' }}>⚠ {errors.description}</p>}
       <Lbl>Monto total</Lbl>
       <input
-        style={inpStyle({ borderColor: errors.amount ? '#c0314f' : C.border, background:C.accent + '12', fontSize:'1.9rem', fontWeight:800, textAlign:'center', fontFamily:MONO, padding:'0.85rem', letterSpacing:'-0.02em' })}
+        style={inpStyle({ borderColor: errors.amount ? '#c0314f' : C.border, background:C.accent + '12', fontSize:FS.amount, fontWeight:800, textAlign:'center', fontFamily:MONO, padding:'0.85rem', letterSpacing:'-0.02em' })}
         type="number"
         value={form.amount}
         onChange={e => { onAmountChange(e.target.value); setErrors({}); }}
@@ -624,7 +624,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   );
 
   return (
-    <div style={{ padding:'1rem', paddingBottom:'2rem' }}>
+    <div style={{ padding:'1rem', paddingBottom:'2rem', maxWidth:'min(640px, 100%)', margin:'0 auto' }}>
       {showSplitModal && (
         <SplitModal
           amount={totalAmt}
@@ -636,7 +636,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
           onCancel={() => setShowSplitModal(false)}
         />
       )}
-      <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:'0.5rem' }}>
+      <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:'0.5rem' }}>
         {(isEditMode || isPlanEdit) && <Pencil size={18} strokeWidth={2.3} color={C.accent} />}
         {isEditMode ? 'Editar gasto' : isPlanEdit ? 'Editar plan de cuotas' : 'Nuevo gasto'}
       </h2>

@@ -8,7 +8,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, PieChart, Pie, Cell,
   AreaChart, Area,
 } from 'recharts';
-import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP } from '../constants';
+import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP, FS } from '../constants';
 import { fmtS, fmt, safeN, catEm, catLb, normCat, pctChange, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card, ScrollFilter, ChartSelector } from './ui';
@@ -408,7 +408,7 @@ export default function Stats() {
 
   if (!filtered.length) return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
-      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, marginBottom:SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
       {filters}
       <Card style={{ textAlign:'center', padding:'3rem', color:C.textMuted }}>
         <div style={{ display:'flex', justifyContent:'center', marginBottom:'0.5rem' }}><BarChart3 size={36} strokeWidth={1.6} color={C.textMuted} /></div>
@@ -518,7 +518,7 @@ export default function Stats() {
   // ── DESKTOP — dos columnas según el período seleccionado ────────────────────
   if (isDesktop) {
     const colStyle: React.CSSProperties = { display:'flex', flexDirection:'column' };
-    const twoCol: React.CSSProperties = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start', marginTop:SP.md };
+    const twoCol: React.CSSProperties = { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap:SP.lg, alignItems:'start', marginTop:SP.md };
 
     // Nodos de evolución envueltos para que aporten su propio margen inferior,
     // igual que las demás tarjetas (WrapAvoid).
@@ -554,7 +554,7 @@ export default function Stats() {
 
     return (
       <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
-        <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:'0 0 '+SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+        <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, margin:'0 0 '+SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
         {filters}
         {body}
       </div>
@@ -564,7 +564,7 @@ export default function Stats() {
   // ── MOBILE — una sola columna ──────────────────────────────────────────────
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl, display:'flex', flexDirection:'column', gap:SP.md }}>
-      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
       {filters}
       <ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} />
       {canCompare && <CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} />}

@@ -1,7 +1,7 @@
 // ── components/Dashboard.tsx ──────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil } from 'lucide-react';
-import { C, F, MONO, PENDING_PER, SP } from '../constants';
+import { C, F, MONO, PENDING_PER, SP, FS } from '../constants';
 import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
@@ -347,7 +347,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
         ) : (
           <>
             <div style={{ fontSize:'0.82rem', color:C.textMuted, marginTop:'0.1rem', fontWeight:500 }}>{(pd.laliOwes ? 'Lali' : 'Javi')} le debe a {(pd.laliOwes ? 'Javi' : 'Lali')}</div>
-            <div style={{ fontSize:'2.1rem', fontWeight:800, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05, marginTop:'0.1rem' }}>{fmt(pd.netBal, primary)}</div>
+            <div style={{ fontSize:FS.hero, fontWeight:800, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05, marginTop:'0.1rem' }}>{fmt(pd.netBal, primary)}</div>
           </>
         )}
       </div>
@@ -451,7 +451,7 @@ export default function Dashboard() {
   // ── DESKTOP layout — arriba 3 columnas, abajo 2 columnas ─────────────────────
   if (isDesktop) {
     return (
-      <div style={{ padding:SP.lg, display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+      <div style={{ padding:SP.lg, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap:SP.lg, alignItems:'start' }}>
         {/* Col 1: balance · ¿quién pagó más? · último pago */}
         <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
           {headerBlock}

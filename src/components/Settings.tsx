@@ -1,7 +1,7 @@
 // ── components/Settings.tsx ───────────────────────────────────────────────────
 import React, { useState } from 'react';
 import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown } from 'lucide-react';
-import { C, F, THEMES, FONTS, coerceTheme, coerceFont, SP } from '../constants';
+import { C, F, THEMES, FONTS, coerceTheme, coerceFont, SP, FS } from '../constants';
 import useAppStore from '../store/useAppStore';
 import { Card } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
@@ -217,15 +217,15 @@ export default function Settings() {
   if (isDesktop) {
     return (
       <div style={{ padding:SP.lg, paddingBottom:SP.xxl, display:'flex', flexDirection:'column', gap:SP.lg }}>
-        <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}>Configuración</h2>
+        <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>
         {/* Apariencia banner + 2-col grid */}
         {appearanceBanner}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'stretch' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'stretch' }}>
           {themeCard}
           {fontCard}
         </div>
         {sharedBanner}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SP.lg, alignItems:'start' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'start' }}>
           {periodsCard}
           {csvCard}
         </div>
@@ -237,7 +237,7 @@ export default function Settings() {
   // ── MOBILE — single column, order: Períodos · CSV · Tema · Tipografía · Guardar
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl, display:'flex', flexDirection:'column', gap:SP.md }}>
-      <h2 style={{ fontWeight:900, fontSize:'1.2rem', color:C.navy, margin:0 }}>Configuración</h2>
+      <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>
       {sharedBanner}
       {periodsCard}
       {csvCard}
