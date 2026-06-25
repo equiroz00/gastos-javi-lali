@@ -1,8 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
+
+// El plugin de Sentry sube los source maps SOLO si hay auth token (lo setea
+// Vercel en el build). Sin token (local / CI de GitHub) no se activa, así esos
+// builds no fallan ni dependen de secretos.
+const sentryEnabled = !!process.env.SENTRY_AUTH_TOKEN
 
 export default defineConfig({
+  build: {
+    // Source maps solo cuando se van a subir a Sentry; el plugin los borra del
+    // dist tras subirlos, así no quedan servidos públicamente.
+    sourcemap: sentryEnabled,
+  },
   plugins: [
     react(),
     // PWA: instalable en el teléfono + caché del shell de la app para abrir
@@ -42,6 +53,17 @@ export default defineConfig({
         ],
       },
     }),
+    // Sentry al final: sube source maps en el build de producción (Vercel) para
+    // que los stack traces sean legibles. Inactivo sin SENTRY_AUTH_TOKEN.
+    ...(sentryEnabled
+      ? [sentryVitePlugin({
+          org: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+          sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+          telemetry: false,
+        })]
+      : []),
   ],
   base: '/',
 })
