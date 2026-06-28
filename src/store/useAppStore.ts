@@ -4,7 +4,7 @@ import { db, auth } from '../firebase.js';
 import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import {
-  getPeriod, generatePlanExpenses, reassignPlanExpenses,
+  getPeriod, generatePlanExpenses, reassignExpensePeriods,
   sanitize, calcAmts, safeN, catEm, fmt, genId,
 } from '../lib/helpers.js';
 import { DEFAULT_CATS } from '../constants.js';
@@ -386,11 +386,9 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   saveSettings: s => {
     const state = get();
-    let updated = state.expenses.map(e => ({
-      ...e,
-      period: (!e.fromPlan && e.date) ? getPeriod(e.date, s.periods) : (e.period || 'Sin período'),
-    }));
-    if (s.periods?.length) updated = reassignPlanExpenses(updated, s.periods, state.plans);
+    // Re-bucketea TODOS los gastos según los períodos nuevos (re-ubica los que
+    // habían quedado "Sin período" y ahora caen en un período definido).
+    const updated = reassignExpensePeriods(state.expenses, s.periods, state.plans);
     // Escribir en batch (no doc por doc) — Firestore limita 500 ops por batch.
     const changed = updated.filter((e, i) => e.period !== state.expenses[i]?.period);
     for (let i = 0; i < changed.length; i += 450) {
@@ -401,6 +399,9 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     set({ expenses: updated, settings: s });
     setDoc(settingsDoc(), { ...s, customCats: state.customCats })
       .catch(reportWriteError('saveSettings'));
+    state.showMsg(changed.length > 0
+      ? '✓ Guardado · ' + changed.length + ' gasto' + (changed.length !== 1 ? 's' : '') + ' reubicado' + (changed.length !== 1 ? 's' : '')
+      : '✓ Configuración guardada.');
   },
 
   // CSV Export

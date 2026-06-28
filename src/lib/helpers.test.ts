@@ -6,7 +6,7 @@ import {
   round2, safeN, fmt, fmtS, todayStr, genId,
   catEm, catLb, normCat, sortByDate, pctChange, getWeekStart,
   calcAmts, divideAmount, calcBal, calcNetBal, lastPayment, getPeriod,
-  generatePlanExpenses, reassignPlanExpenses, sanitize,
+  generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
@@ -375,6 +375,29 @@ describe('reassignPlanExpenses', () => {
     expect(out[1].period).toBe('Jun 2026');
     expect(out[2].period).toBe(PENDING_PER);
     expect(out[3].period).toBe('Jun 2026'); // gasto normal intacto
+  });
+});
+
+describe('reassignExpensePeriods (re-bucketeo al cambiar períodos)', () => {
+  it('reubica un gasto "Sin período" cuando aparece un período que cubre su fecha (BUG reportado)', () => {
+    // Escenario del usuario: cargó un gasto con fecha posterior al último período
+    // → quedó "Sin período". Luego define un período (Jul) que cubre esa fecha.
+    const orphan = exp({ id: 'orphan', date: '2026-07-15', period: 'Sin período', fromPlan: false });
+    const out = reassignExpensePeriods([orphan], PERIODS, []); // PERIODS incluye Jul 2026
+    expect(out[0].period).toBe('Jul 2026');
+  });
+  it('si la fecha sigue sin caer en ningún período, queda "Sin período"', () => {
+    const orphan = exp({ id: 'o2', date: '2027-12-01', period: 'Sin período' });
+    expect(reassignExpensePeriods([orphan], PERIODS, [])[0].period).toBe('Sin período');
+  });
+  it('corrige un gasto mal asignado a otro período según su fecha', () => {
+    const mal = exp({ id: 'e3', date: '2026-05-10', period: 'Jun 2026' });
+    expect(reassignExpensePeriods([mal], PERIODS, [])[0].period).toBe('May 2026');
+  });
+  it('las cuotas de plan se reasignan por posición (no por fecha)', () => {
+    const insts = generatePlanExpenses(plan(), PERIODS);
+    const out = reassignExpensePeriods(insts, PERIODS, [plan()]);
+    expect(out.map(i => i.period)).toEqual(['May 2026', 'Jun 2026', 'Jul 2026']);
   });
 });
 

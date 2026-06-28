@@ -192,6 +192,19 @@ export function reassignPlanExpenses(exps: Expense[], periods: Period[], plans: 
   });
 }
 
+// Reasigna el período de TODOS los gastos según la lista de períodos dada. Es la
+// ÚNICA fuente de la lógica de re-bucketeo (la usa saveSettings y queda testeable):
+//   · gastos comunes con fecha → getPeriod(fecha)  ← re-ubica los "Sin período"
+//     cuando se agrega un período que ahora cubre su fecha
+//   · cuotas de planes → reassignPlanExpenses (posición según el plan, no fecha)
+export function reassignExpensePeriods(exps: Expense[], periods: Period[], plans: Plan[]): Expense[] {
+  const recomputed = exps.map(e => ({
+    ...e,
+    period: (!e.fromPlan && e.date) ? getPeriod(e.date, periods) : (e.period || 'Sin período'),
+  }));
+  return periods.length ? reassignPlanExpenses(recomputed, periods, plans) : recomputed;
+}
+
 // ── Sanitize ──────────────────────────────────────────────────────────────────
 export function sanitize(e: Partial<Expense>, cats: string[]): Expense {
   const date = (typeof e.date === 'string' && e.date.match(/^\d{4}-\d{2}-\d{2}/))
