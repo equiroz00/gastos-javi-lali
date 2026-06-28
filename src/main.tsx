@@ -1,7 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AlertTriangle } from 'lucide-react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Sentry } from './sentry';
+import { queryClient } from './lib/queryClient';
 import App from './App';
 
 // Pantalla de respaldo si la app crashea: en vez de quedar en blanco, muestra un
@@ -31,7 +33,9 @@ function CrashFallback() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <Sentry.ErrorBoundary fallback={<CrashFallback />}>
-      <App />
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
     </Sentry.ErrorBoundary>
   </React.StrictMode>,
 );

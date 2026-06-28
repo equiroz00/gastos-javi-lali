@@ -5,6 +5,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
 import { C, F, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
+import { queryClient } from './lib/queryClient';
+import { parseExpenses } from './lib/schemas';
 import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
@@ -111,7 +113,12 @@ export default function App() {
         };
 
         const u1 = onSnapshot(expensesCol(), snap => {
-          setExpenses(snap.docs.map(d => d.data() as Expense));
+          // Validación Zod en el borde + caché de TanStack Query (fuente de lectura).
+          // setExpenses mantiene un espejo temporal en Zustand para las escrituras
+          // que todavía no migraron (se quita al migrar el lado de escritura).
+          const exps = parseExpenses(snap.docs.map(d => d.data()));
+          queryClient.setQueryData(['expenses'], exps);
+          setExpenses(exps);
           fired.exp = true; checkDone();
         }, e => { console.error('expenses:', e.code); fired.exp = true; checkDone(); });
 
