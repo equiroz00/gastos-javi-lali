@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { C, F, PENDING_PER, SP, FS } from '../constants';
 import { fmt, safeN, calcBal, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
+import { useExpenses } from '../lib/queries';
 import { Card, ScrollFilter } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense } from '../types';
@@ -69,7 +70,7 @@ function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection
 }
 
 export default function History() {
-  const expenses          = useAppStore(s => s.expenses);
+  const expenses          = useExpenses();
   const settings          = useAppStore(s => s.settings);
   const requestDelete     = useAppStore(s => s.requestDelete);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
