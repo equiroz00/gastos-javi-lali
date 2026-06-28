@@ -21,7 +21,7 @@ function primaryCurrency(exps: Expense[]): Currency {
 // ── ActivePlans ────────────────────────────────────────────────────────────────
 function ActivePlans() {
   const plans      = useAppStore(s => s.plans);
-  const expenses   = useAppStore(s => s.expenses);
+  const expenses   = useExpenses();
   const cancelPlan = useAppStore(s => s.handleCancelPlan);
   const editPlan   = useAppStore(s => s.setEditingPlan);
   const [search, setSearch] = useState('');

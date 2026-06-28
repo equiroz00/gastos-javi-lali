@@ -65,7 +65,6 @@ export default function App() {
   const setCurrentUser    = useAppStore(s => s.setCurrentUser);
   const setAuthDenied     = useAppStore(s => s.setAuthDenied);
   const setLoading        = useAppStore(s => s.setLoading);
-  const setExpenses       = useAppStore(s => s.setExpenses);
   const setPlans          = useAppStore(s => s.setPlans);
   const setPayments       = useAppStore(s => s.setPayments);
   const setSettings       = useAppStore(s => s.setSettings);
@@ -113,12 +112,9 @@ export default function App() {
         };
 
         const u1 = onSnapshot(expensesCol(), snap => {
-          // Validación Zod en el borde + caché de TanStack Query (fuente de lectura).
-          // setExpenses mantiene un espejo temporal en Zustand para las escrituras
-          // que todavía no migraron (se quita al migrar el lado de escritura).
+          // Validación Zod en el borde + caché de TanStack Query (única fuente de los gastos).
           const exps = parseExpenses(snap.docs.map(d => d.data()));
           queryClient.setQueryData(['expenses'], exps);
-          setExpenses(exps);
           fired.exp = true; checkDone();
         }, e => { console.error('expenses:', e.code); fired.exp = true; checkDone(); });
 

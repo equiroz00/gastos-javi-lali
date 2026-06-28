@@ -8,6 +8,8 @@ import {
   sanitize, calcAmts, safeN, catEm, fmt, genId,
 } from '../lib/helpers.js';
 import { DEFAULT_CATS } from '../constants.js';
+import { queryClient } from '../lib/queryClient';
+import { checkExpenseForWrite } from '../lib/schemas';
 import type {
   AppState, Expense, Plan, Payment, Settings,
   Currency, UserName,
@@ -24,6 +26,12 @@ export const paymentsCol    = ()            => collection(db, 'payments');
 export const userPrefDoc    = (u: string)   => doc(db, 'userPreferences', u);
 export const activityLogCol = ()            => collection(db, 'activityLog');
 export const activityLogDoc = (id: string)  => doc(db, 'activityLog', id);
+
+// ── Gastos: lectura/escritura de la caché de TanStack Query ───────────────────
+// Tras el Paso 1b los gastos viven SOLO en la caché de Query (no en Zustand).
+// Las escrituras son optimistas; el onSnapshot reconcilia luego con setQueryData.
+const getExps = (): Expense[] => queryClient.getQueryData<Expense[]>(['expenses']) ?? [];
+const setExps = (next: Expense[]): void => { queryClient.setQueryData<Expense[]>(['expenses'], next); };
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 export function runMigrationIfNeeded(onDone: () => void): void {
@@ -87,7 +95,6 @@ interface AppActions {
   setCurrentUser: (u: UserName | null) => void;
   setAuthDenied:  (v: boolean) => void;
   setLoading:     (v: boolean) => void;
-  setExpenses:    (exps: Expense[])   => void;
   setPlans:       (ps: Plan[])        => void;
   setPayments:    (pays: Payment[])   => void;
   setSettings:    (s: Settings)       => void;
@@ -127,7 +134,6 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   currentUser:    null,
   authDenied:     false,
   loading:        true,
-  expenses:       [],
   plans:          [],
   payments:       [],
   settings:       { periods: [], theme: 'default', font: 'Nunito' },
@@ -150,7 +156,6 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   setLoading:     v => set({ loading: v }),
 
   // Data setters
-  setExpenses:   exps => set({ expenses: exps }),
   setPlans:      ps   => set({ plans: ps }),
   setPayments:   pays => set({ payments: pays }),
   setSettings:   s    => set({ settings: s }),
@@ -227,7 +232,9 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const state = get();
     const allCats = DEFAULT_CATS.concat(state.customCats);
     const s = sanitize({ ...expense, id: genId() }, allCats);
-    set({ expenses: [s, ...state.expenses], view: 'dashboard' });
+    checkExpenseForWrite(s);
+    setExps([s, ...getExps()]);
+    set({ view: 'dashboard' });
     setDoc(expenseDoc(s.id), s).catch(reportWriteError('handleAdd'));
     state.showToast(s);
     (state as any)._logActivity('add', s);
@@ -238,9 +245,10 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const allCats = DEFAULT_CATS.concat(state.customCats);
     const sanitized = exps.map(e => sanitize(e, allCats));
     const batch = writeBatch(db);
-    sanitized.forEach(s => batch.set(expenseDoc(s.id), s));
+    sanitized.forEach(s => { checkExpenseForWrite(s); batch.set(expenseDoc(s.id), s); });
     batch.commit().catch(reportWriteError('handleAddMultiple'));
-    set({ expenses: [...sanitized, ...state.expenses], view: 'dashboard' });
+    setExps([...sanitized, ...getExps()]);
+    set({ view: 'dashboard' });
     const last = sanitized[sanitized.length - 1];
     state.showToast(last);
     (state as any)._logActivity('add', last);
@@ -250,7 +258,9 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const state = get();
     const allCats = DEFAULT_CATS.concat(state.customCats);
     const s = sanitize(expense, allCats);
-    set({ expenses: state.expenses.map(e => e.id === s.id ? s : e), editingExpense: null });
+    checkExpenseForWrite(s);
+    setExps(getExps().map(e => e.id === s.id ? s : e));
+    set({ editingExpense: null });
     setDoc(expenseDoc(s.id), s).catch(reportWriteError('handleEdit'));
     state.showToast(s);
     (state as any)._logActivity('edit', s);
@@ -262,7 +272,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const state = get();
     if (!state.pendingDelete) return;
     const { id, expense } = state.pendingDelete;
-    set({ expenses: state.expenses.filter(e => e.id !== id), pendingDelete: null });
+    setExps(getExps().filter(e => e.id !== id));
+    set({ pendingDelete: null });
     deleteDoc(expenseDoc(id)).catch(reportWriteError('confirmDelete'));
     (state as any)._logActivity('delete', expense);
   },
@@ -296,9 +307,10 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const installments = generatePlanExpenses(plan, state.settings.periods);
     const batch = writeBatch(db);
     batch.set(planDoc(plan.id), plan);
-    installments.forEach(inst => batch.set(expenseDoc(inst.id), inst));
+    installments.forEach(inst => { checkExpenseForWrite(inst); batch.set(expenseDoc(inst.id), inst); });
     batch.commit().catch(reportWriteError('handleAddPlan'));
-    set({ plans: [...state.plans, plan], expenses: [...installments, ...state.expenses], view: 'dashboard' });
+    setExps([...installments, ...getExps()]);
+    set({ plans: [...state.plans, plan], view: 'dashboard' });
   },
 
   // Edita el plan "madre" y regenera sus cuotas. Mantiene el mismo id de plan.
@@ -329,7 +341,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       laliAmount: amts.laliAmount,
       createdAt: existing?.createdAt || new Date().toISOString(),
     };
-    const oldExps = state.expenses.filter(e => e.planId === planId);
+    const oldExps = getExps().filter(e => e.planId === planId);
     const installments = generatePlanExpenses(plan, state.settings.periods);
     const newIds = new Set(installments.map(i => i.id));
     const batch = writeBatch(db);
@@ -337,12 +349,12 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     // sobrescriben con set — evita escribir dos veces el mismo doc en el batch).
     oldExps.filter(e => !newIds.has(e.id)).forEach(e => batch.delete(expenseDoc(e.id)));
     batch.set(planDoc(plan.id), plan);
-    installments.forEach(inst => batch.set(expenseDoc(inst.id), inst));
+    installments.forEach(inst => { checkExpenseForWrite(inst); batch.set(expenseDoc(inst.id), inst); });
     batch.commit().catch(reportWriteError('handleEditPlan'));
-    const otherExps = state.expenses.filter(e => e.planId !== planId);
+    const otherExps = getExps().filter(e => e.planId !== planId);
+    setExps([...installments, ...otherExps]);
     set({
       plans: state.plans.map(p => p.id === planId ? plan : p),
-      expenses: [...installments, ...otherExps],
       editingPlan: null,
       view: 'dashboard',
     });
@@ -351,12 +363,13 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   handleCancelPlan: planId => {
     const state = get();
-    const planExps = state.expenses.filter(e => e.planId === planId);
+    const planExps = getExps().filter(e => e.planId === planId);
     const batch = writeBatch(db);
     batch.delete(planDoc(planId));
     planExps.forEach(e => batch.delete(expenseDoc(e.id)));
     batch.commit().catch(reportWriteError('handleCancelPlan'));
-    set({ plans: state.plans.filter(p => p.id !== planId), expenses: state.expenses.filter(e => e.planId !== planId) });
+    setExps(getExps().filter(e => e.planId !== planId));
+    set({ plans: state.plans.filter(p => p.id !== planId) });
   },
 
   // Payment actions
@@ -388,15 +401,17 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const state = get();
     // Re-bucketea TODOS los gastos según los períodos nuevos (re-ubica los que
     // habían quedado "Sin período" y ahora caen en un período definido).
-    const updated = reassignExpensePeriods(state.expenses, s.periods, state.plans);
+    const current = getExps();
+    const updated = reassignExpensePeriods(current, s.periods, state.plans);
     // Escribir en batch (no doc por doc) — Firestore limita 500 ops por batch.
-    const changed = updated.filter((e, i) => e.period !== state.expenses[i]?.period);
+    const changed = updated.filter((e, i) => e.period !== current[i]?.period);
     for (let i = 0; i < changed.length; i += 450) {
       const batch = writeBatch(db);
-      changed.slice(i, i + 450).forEach(e => batch.set(expenseDoc(e.id), e));
+      changed.slice(i, i + 450).forEach(e => { checkExpenseForWrite(e); batch.set(expenseDoc(e.id), e); });
       batch.commit().catch(reportWriteError('saveSettings/expenses'));
     }
-    set({ expenses: updated, settings: s });
+    setExps(updated);
+    set({ settings: s });
     setDoc(settingsDoc(), { ...s, customCats: state.customCats })
       .catch(reportWriteError('saveSettings'));
     state.showMsg(changed.length > 0
@@ -407,7 +422,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   // CSV Export
   exportCSV: (from, to) => {
     const state = get();
-    const filtered = state.expenses.filter(e => {
+    const filtered = getExps().filter(e => {
       if (!e.date) return false;
       if (from && e.date < from) return false;
       if (to   && e.date > to)   return false;

@@ -71,3 +71,11 @@ export function parseExpenses(raw: unknown[]): Expense[] {
   }
   return out;
 }
+
+// Guard de ESCRITURA: valida un gasto antes de mandarlo a Firestore. No bloquea
+// al usuario (el dato ya viene saneado), pero enciende una alarma en Sentry si
+// algo no cuadra — "nada entra a Firestore sin validar".
+export function checkExpenseForWrite(e: Expense): void {
+  const r = ExpenseStrict.safeParse(e);
+  if (!r.success) reportAnomaly(e, r.error);
+}
