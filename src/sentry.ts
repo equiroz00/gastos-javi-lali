@@ -29,15 +29,6 @@ if (dsn) {
       return event;
     },
   });
-
-  // ── TEMPORAL — disparador de prueba ─────────────────────────────────────────
-  // Abrir la app con `#sentry-test` al final de la URL manda un evento de prueba
-  // a Sentry, para verificar que el panel los recibe de punta a punta.
-  // QUITAR este bloque una vez confirmado.
-  if (window.location.hash === '#sentry-test') {
-    Sentry.captureException(new Error('Prueba intencional de Sentry — se puede ignorar'));
-    setTimeout(() => window.alert('Evento de prueba enviado a Sentry. Revisa Issues en ~1 minuto.'), 100);
-  }
 }
 
 export { Sentry };
