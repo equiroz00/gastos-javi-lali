@@ -39,8 +39,18 @@ export default function Settings() {
     const conflict = dateOverlaps(np.start, np.end, periods);
     if (conflict) { setPeriodError(`Se superpone con "${conflict}".`); return; }
     setPeriodError('');
-    setPeriods(p => [...p, np]);
+    const next = [...periods, np];
+    setPeriods(next);
     setNp({ name:'', start:'', end:'' });
+    // Persistir y reubicar los gastos al instante (no depender del botón Guardar).
+    saveSettings({ ...settings, periods: next });
+  }
+
+  // Quitar un período también persiste + reubica (sus gastos vuelven a recalcularse).
+  function removePeriod(name: string) {
+    const next = periods.filter(x => x.name !== name);
+    setPeriods(next);
+    saveSettings({ ...settings, periods: next });
   }
 
   function save() {
@@ -194,7 +204,7 @@ export default function Settings() {
                       <div style={{ fontWeight:700, fontSize:'0.85rem', color:C.navy }}>{p.name}</div>
                       <div style={{ fontSize:'0.7rem', color:C.textMuted }}>{p.start} → {p.end}</div>
                     </div>
-                    <button onClick={() => setPeriods(ps => ps.filter(x => x.name !== p.name))} style={{ background:'none', border:'none', color:C.danger, cursor:'pointer', fontSize:'1rem' }}>✕</button>
+                    <button onClick={() => removePeriod(p.name)} style={{ background:'none', border:'none', color:C.danger, cursor:'pointer', fontSize:'1rem' }}>✕</button>
                   </div>
                 ))}
               </div>
