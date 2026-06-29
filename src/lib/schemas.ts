@@ -4,7 +4,7 @@
 // y un schema estricto aparte detecta anomalías y las reporta a Sentry (solo
 // id + nombres de campo, NUNCA montos ni descripciones — privacidad).
 import { z } from 'zod';
-import type { Expense, Payment } from '../types';
+import type { Expense, Payment, Plan } from '../types';
 import { Sentry } from '../sentry';
 
 // ── Schema TOLERANTE (el que se usa para mostrar) ─────────────────────────────
@@ -116,4 +116,52 @@ export function parsePayments(raw: unknown[]): Payment[] {
 export function checkPaymentForWrite(p: Payment): void {
   const r = PaymentStrict.safeParse(p);
   if (!r.success) reportAnomaly('Pago', p, r.error);
+}
+
+// ── Planes de cuotas ──────────────────────────────────────────────────────────
+export const PlanSchema = z.object({
+  id:                z.string(),
+  description:       z.string().catch(''),
+  totalAmount:       z.coerce.number().catch(0),
+  installmentAmount: z.coerce.number().catch(0),
+  numInstallments:   z.coerce.number().catch(0),
+  paidInstallments:  z.coerce.number().catch(0),
+  startPeriod:       z.string().catch(''),
+  startDate:         z.string().catch(''),
+  currency:          z.string().catch('ARS'),
+  paidBy:            z.enum(['Javi', 'Lali']).catch('Javi'),
+  responsible:       z.enum(['Javi', 'Lali', 'Ambos']).catch('Ambos'),
+  paymentMethod:     z.string().catch(''),
+  bank:              z.string().catch(''),
+  category:          z.string().catch(''),
+  javiAmount:        z.coerce.number().catch(0),
+  laliAmount:        z.coerce.number().catch(0),
+  createdAt:         z.string().catch(''),
+});
+
+const PlanStrict = z.object({
+  id:              z.string().min(1),
+  totalAmount:     z.number(),
+  numInstallments: z.number(),
+  startPeriod:     z.string().min(1),
+  currency:        z.string().min(1),
+  paidBy:          z.enum(['Javi', 'Lali']),
+  responsible:     z.enum(['Javi', 'Lali', 'Ambos']),
+});
+
+export function parsePlans(raw: unknown[]): Plan[] {
+  const out: Plan[] = [];
+  for (const r of raw) {
+    const lenient = PlanSchema.safeParse(r);
+    if (!lenient.success) { reportAnomaly('Plan', r, lenient.error); continue; }
+    out.push(lenient.data as Plan);
+    const strict = PlanStrict.safeParse(r);
+    if (!strict.success) reportAnomaly('Plan', r, strict.error);
+  }
+  return out;
+}
+
+export function checkPlanForWrite(p: Plan): void {
+  const r = PlanStrict.safeParse(p);
+  if (!r.success) reportAnomaly('Plan', p, r.error);
 }
