@@ -6,7 +6,7 @@ import { onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
 import { C, F, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
 import { queryClient } from './lib/queryClient';
-import { parseExpenses, parsePayments } from './lib/schemas';
+import { parseExpenses, parsePayments, parsePlans } from './lib/schemas';
 import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
@@ -65,7 +65,6 @@ export default function App() {
   const setCurrentUser    = useAppStore(s => s.setCurrentUser);
   const setAuthDenied     = useAppStore(s => s.setAuthDenied);
   const setLoading        = useAppStore(s => s.setLoading);
-  const setPlans          = useAppStore(s => s.setPlans);
   const setSettings       = useAppStore(s => s.setSettings);
   const setCustomCats     = useAppStore(s => s.setCustomCats);
   const setUserTheme      = useAppStore(s => s.setUserTheme);
@@ -118,7 +117,7 @@ export default function App() {
         }, e => { console.error('expenses:', e.code); fired.exp = true; checkDone(); });
 
         const u2 = onSnapshot(plansCol(), snap => {
-          setPlans(snap.docs.map(d => d.data() as Plan));
+          queryClient.setQueryData(['plans'], parsePlans(snap.docs.map(d => d.data())));
           fired.plans = true; checkDone();
         }, e => { console.error('plans:', e.code); fired.plans = true; checkDone(); });
 

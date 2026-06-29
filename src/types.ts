@@ -107,8 +107,7 @@ export interface AppState {
   authDenied: boolean;
   loading: boolean;
 
-  // Data (expenses vive en la caché de TanStack Query, no acá)
-  plans: Plan[];
+  // Data (expenses/plans viven en la caché de TanStack Query, no acá)
   settings: Settings;
   customCats: string[];
 
