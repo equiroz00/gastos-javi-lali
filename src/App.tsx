@@ -6,7 +6,7 @@ import { onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
 import { C, F, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
 import { queryClient } from './lib/queryClient';
-import { parseExpenses } from './lib/schemas';
+import { parseExpenses, parsePayments } from './lib/schemas';
 import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
@@ -66,7 +66,6 @@ export default function App() {
   const setAuthDenied     = useAppStore(s => s.setAuthDenied);
   const setLoading        = useAppStore(s => s.setLoading);
   const setPlans          = useAppStore(s => s.setPlans);
-  const setPayments       = useAppStore(s => s.setPayments);
   const setSettings       = useAppStore(s => s.setSettings);
   const setCustomCats     = useAppStore(s => s.setCustomCats);
   const setUserTheme      = useAppStore(s => s.setUserTheme);
@@ -124,7 +123,7 @@ export default function App() {
         }, e => { console.error('plans:', e.code); fired.plans = true; checkDone(); });
 
         const u3 = onSnapshot(paymentsCol(), snap => {
-          setPayments(snap.docs.map(d => d.data() as Payment));
+          queryClient.setQueryData(['payments'], parsePayments(snap.docs.map(d => d.data())));
           fired.pay = true; checkDone();
         }, e => { console.error('payments:', e.code); fired.pay = true; checkDone(); });
 

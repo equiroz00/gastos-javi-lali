@@ -4,7 +4,7 @@
 // y un schema estricto aparte detecta anomalías y las reporta a Sentry (solo
 // id + nombres de campo, NUNCA montos ni descripciones — privacidad).
 import { z } from 'zod';
-import type { Expense } from '../types';
+import type { Expense, Payment } from '../types';
 import { Sentry } from '../sentry';
 
 // ── Schema TOLERANTE (el que se usa para mostrar) ─────────────────────────────
@@ -48,12 +48,12 @@ const ExpenseStrict = z.object({
 
 // Reporta a Sentry SOLO el id del doc y los nombres de campo con problema.
 // Nunca valores (montos, descripciones, etc.).
-function reportAnomaly(raw: unknown, err: z.ZodError): void {
+function reportAnomaly(entity: string, raw: unknown, err: z.ZodError): void {
   const id = (raw && typeof raw === 'object' && 'id' in raw)
     ? String((raw as { id: unknown }).id)
     : '(sin id)';
   const campos = err.issues.map(i => i.path.join('.') || '(raíz)');
-  Sentry.captureException(new Error('Gasto con datos inválidos en Firestore'), {
+  Sentry.captureException(new Error(entity + ' con datos inválidos en Firestore'), {
     extra: { id, campos },
   });
 }
@@ -64,10 +64,10 @@ export function parseExpenses(raw: unknown[]): Expense[] {
   const out: Expense[] = [];
   for (const r of raw) {
     const lenient = ExpenseSchema.safeParse(r);
-    if (!lenient.success) { reportAnomaly(r, lenient.error); continue; }
+    if (!lenient.success) { reportAnomaly('Gasto', r, lenient.error); continue; }
     out.push(lenient.data as Expense);
     const strict = ExpenseStrict.safeParse(r);
-    if (!strict.success) reportAnomaly(r, strict.error);
+    if (!strict.success) reportAnomaly('Gasto', r, strict.error);
   }
   return out;
 }
@@ -77,5 +77,43 @@ export function parseExpenses(raw: unknown[]): Expense[] {
 // algo no cuadra — "nada entra a Firestore sin validar".
 export function checkExpenseForWrite(e: Expense): void {
   const r = ExpenseStrict.safeParse(e);
-  if (!r.success) reportAnomaly(e, r.error);
+  if (!r.success) reportAnomaly('Gasto', e, r.error);
+}
+
+// ── Pagos entre usuarios ──────────────────────────────────────────────────────
+export const PaymentSchema = z.object({
+  id:           z.string(),
+  date:         z.string().catch(''),
+  amount:       z.coerce.number().catch(0),
+  currency:     z.string().catch('ARS'),
+  from:         z.enum(['Javi', 'Lali']).catch('Lali'),
+  to:           z.enum(['Javi', 'Lali']).catch('Javi'),
+  period:       z.string().optional(),
+  registeredAt: z.string().catch(''),
+});
+
+const PaymentStrict = z.object({
+  id:       z.string().min(1),
+  amount:   z.number(),
+  currency: z.string().min(1),
+  date:     z.string().min(1),
+  from:     z.enum(['Javi', 'Lali']),
+  to:       z.enum(['Javi', 'Lali']),
+});
+
+export function parsePayments(raw: unknown[]): Payment[] {
+  const out: Payment[] = [];
+  for (const r of raw) {
+    const lenient = PaymentSchema.safeParse(r);
+    if (!lenient.success) { reportAnomaly('Pago', r, lenient.error); continue; }
+    out.push(lenient.data as Payment);
+    const strict = PaymentStrict.safeParse(r);
+    if (!strict.success) reportAnomaly('Pago', r, strict.error);
+  }
+  return out;
+}
+
+export function checkPaymentForWrite(p: Payment): void {
+  const r = PaymentStrict.safeParse(p);
+  if (!r.success) reportAnomaly('Pago', p, r.error);
 }

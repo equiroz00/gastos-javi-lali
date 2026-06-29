@@ -3,7 +3,7 @@
 // onSnapshot de Firestore (en App.tsx) con datos ya validados por Zod; estos
 // hooks solo LEEN de esa caché y se re-renderizan en vivo cuando cambia.
 import { useQuery } from '@tanstack/react-query';
-import type { Expense } from '../types';
+import type { Expense, Payment } from '../types';
 
 export function useExpenses(): Expense[] {
   const { data } = useQuery<Expense[]>({
@@ -11,6 +11,15 @@ export function useExpenses(): Expense[] {
     // No-op: los datos no vienen de acá sino del onSnapshot vía setQueryData.
     queryFn: () => Promise.resolve([] as Expense[]),
     initialData: [] as Expense[],
+  });
+  return data;
+}
+
+export function usePayments(): Payment[] {
+  const { data } = useQuery<Payment[]>({
+    queryKey: ['payments'],
+    queryFn: () => Promise.resolve([] as Payment[]),
+    initialData: [] as Payment[],
   });
   return data;
 }

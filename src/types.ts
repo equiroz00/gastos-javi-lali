@@ -109,7 +109,6 @@ export interface AppState {
 
   // Data (expenses vive en la caché de TanStack Query, no acá)
   plans: Plan[];
-  payments: Payment[];
   settings: Settings;
   customCats: string[];
 

@@ -9,7 +9,7 @@ import {
 } from '../lib/helpers.js';
 import { DEFAULT_CATS } from '../constants.js';
 import { queryClient } from '../lib/queryClient';
-import { checkExpenseForWrite } from '../lib/schemas';
+import { checkExpenseForWrite, checkPaymentForWrite } from '../lib/schemas';
 import type {
   AppState, Expense, Plan, Payment, Settings,
   Currency, UserName,
@@ -32,6 +32,8 @@ export const activityLogDoc = (id: string)  => doc(db, 'activityLog', id);
 // Las escrituras son optimistas; el onSnapshot reconcilia luego con setQueryData.
 const getExps = (): Expense[] => queryClient.getQueryData<Expense[]>(['expenses']) ?? [];
 const setExps = (next: Expense[]): void => { queryClient.setQueryData<Expense[]>(['expenses'], next); };
+const getPays = (): Payment[] => queryClient.getQueryData<Payment[]>(['payments']) ?? [];
+const setPays = (next: Payment[]): void => { queryClient.setQueryData<Payment[]>(['payments'], next); };
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 export function runMigrationIfNeeded(onDone: () => void): void {
@@ -96,7 +98,6 @@ interface AppActions {
   setAuthDenied:  (v: boolean) => void;
   setLoading:     (v: boolean) => void;
   setPlans:       (ps: Plan[])        => void;
-  setPayments:    (pays: Payment[])   => void;
   setSettings:    (s: Settings)       => void;
   setCustomCats:  (cats: string[])    => void;
   setUserTheme:   (theme: string)     => void;
@@ -135,7 +136,6 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   authDenied:     false,
   loading:        true,
   plans:          [],
-  payments:       [],
   settings:       { periods: [], theme: 'default', font: 'Nunito' },
   customCats:     [],
   userTheme:      'default',
@@ -157,7 +157,6 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   // Data setters
   setPlans:      ps   => set({ plans: ps }),
-  setPayments:   pays => set({ payments: pays }),
   setSettings:   s    => set({ settings: s }),
   setCustomCats: cats => set({ customCats: cats }),
 
@@ -377,14 +376,16 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   confirmPayment: paymentData => {
     const state = get();
-    set({ payments: [...state.payments, paymentData], payModal: null });
+    checkPaymentForWrite(paymentData);
+    setPays([...getPays(), paymentData]);
+    set({ payModal: null });
     setDoc(paymentDoc(paymentData.id), paymentData).catch(reportWriteError('confirmPayment'));
     state.showMsg('✓ Pago registrado correctamente.');
   },
 
   deletePayment: id => {
     const state = get();
-    set({ payments: state.payments.filter(p => p.id !== id) });
+    setPays(getPays().filter(p => p.id !== id));
     deleteDoc(paymentDoc(id)).catch(reportWriteError('deletePayment'));
     state.showMsg('✓ Pago eliminado.');
   },
