@@ -5,7 +5,7 @@ import { C, F, MONO, PENDING_PER, SP, FS } from '../constants';
 import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
-import { useExpenses } from '../lib/queries';
+import { useExpenses, usePayments } from '../lib/queries';
 import { Card, DonutRing } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense, Payment, Period, Currency } from '../types';
@@ -392,7 +392,7 @@ export default function Dashboard() {
   const expenses          = useExpenses();
   const settings          = useAppStore(s => s.settings);
   const plans             = useAppStore(s => s.plans);
-  const payments          = useAppStore(s => s.payments);
+  const payments          = usePayments();
   const requestDelete     = useAppStore(s => s.requestDelete);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
 
