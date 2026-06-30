@@ -2,7 +2,7 @@
 > Ordenado por impacto real sobre la experiencia y solidez del producto.
 > Cada sprint está pensado para una sesión de trabajo.
 
-> **Última actualización:** 25/06/2026 · Ver [Registro de cambios](#registro-de-cambios) al final.
+> **Última actualización:** 30/06/2026 · Ver [Registro de cambios](#registro-de-cambios) al final.
 
 ---
 
@@ -95,7 +95,7 @@ No son features de usuario, son infraestructura que sostiene todo lo de abajo. S
 | Herramienta | Para qué | Prioridad |
 |-------------|----------|-----------|
 | **Sentry** | Visibilidad de errores en producción (qué falló, en qué dispositivo, con stack trace). Gratis. | ✅ Hecho (PR #4) |
-| **TanStack Query + Zod** | Caché/sincronización de datos de Firestore + validación tipada. Ataca de raíz los bugs recurrentes de scoping de períodos. | 🔴 Alta |
+| **TanStack Query + Zod** | Caché/sincronización de datos de Firestore + validación tipada. Ataca de raíz los bugs recurrentes de scoping de períodos. | ✅ Hecho (PRs #8–#13) |
 | **Storybook** | Catálogo vivo de componentes para domar el sistema de temas/fuentes. | 🟠 Media |
 | **Playwright** | Tests E2E de la lógica de períodos (ej: que un pago no se aplique a todos los períodos). | 🟠 Media |
 | **Biome** | Lint + formato todo-en-uno, más rápido que ESLint + Prettier. | 🟡 Baja |
@@ -143,7 +143,7 @@ HECHO      Sprints 1–8  ██████████ Seguridad → CI/CD    
 PENDIENTE  Sprint 9     ████       Capacitor (nativo)   ⛔ bloqueado (sin Mac)
 (original) Sprint 10    ████       Accesibilidad + PWA
 
-FASE 2     Tooling      ██████████ Sentry ✅, TanStack Query+Zod, Storybook…
+FASE 2     Tooling      ██████████ Sentry ✅, TanStack Query+Zod ✅, Storybook…
            Sprint 11    ██████████ Esquema de datos unificado   ← base
            Sprint 12    ██████████ Gastos privados
            Sprint 13    ████████   División entre N personas
@@ -154,6 +154,11 @@ FASE 2     Tooling      ██████████ Sentry ✅, TanStack Quer
 ---
 
 ## Registro de cambios
+
+**30/06/2026 — Migración a TanStack Query + Zod completa (Claude)**
+- Las **4 colecciones** de Firestore (`expenses`, `payments`, `plans`, `settings` + `customCats`) migradas a **TanStack Query** (datos remotos) con **validación Zod** en lectura y escritura; Zustand queda solo para estado de UI. Las anomalías de datos quedan visibles en Sentry.
+- El `onSnapshot` de Firestore sigue siendo la fuente en vivo: valida con Zod y alimenta la caché con `setQueryData`. Las escrituras son optimistas con guard Zod antes de tocar Firestore.
+- Entregado en **PRs #8 y #10** (expenses lectura/escritura), **#11** (payments), **#12** (plans), **#13** (settings); más **#9** que de yapa corrigió el bug de reasignación de períodos (los gastos "Sin período" se reubican solos al definir el período).
 
 **25/06/2026 — Sentry hecho + restauración de docs (Claude)**
 - **Sentry integrado** (primer ítem de tooling): `@sentry/react` + `@sentry/vite-plugin`, privacidad-first (sin PII, sin Session Replay, `beforeSend` que limpia, sin datos de gastos). Mergeado en el **PR #4**. Verificación de eventos en el dashboard: pendiente tras el deploy.

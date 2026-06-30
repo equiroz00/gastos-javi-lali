@@ -5,7 +5,7 @@ import { C, F, MONO, PENDING_PER, SP, FS } from '../constants';
 import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
-import { useExpenses, usePayments, usePlans } from '../lib/queries';
+import { useExpenses, usePayments, usePlans, useSettings } from '../lib/queries';
 import { Card, DonutRing } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense, Payment, Period, Currency } from '../types';
@@ -390,7 +390,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
 export default function Dashboard() {
   const isDesktop = useIsDesktop();
   const expenses          = useExpenses();
-  const settings          = useAppStore(s => s.settings);
+  const settings          = useSettings();
   const plans             = usePlans();
   const payments          = usePayments();
   const requestDelete     = useAppStore(s => s.requestDelete);

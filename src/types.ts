@@ -107,9 +107,7 @@ export interface AppState {
   authDenied: boolean;
   loading: boolean;
 
-  // Data (expenses/plans viven en la caché de TanStack Query, no acá)
-  settings: Settings;
-  customCats: string[];
+  // Datos remotos (expenses/plans/payments/settings/customCats): TanStack Query.
 
   // Per-user preferences
   userTheme: string;

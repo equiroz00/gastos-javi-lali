@@ -11,7 +11,7 @@ import {
 import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP, FS } from '../constants';
 import { fmtS, fmt, safeN, catEm, catLb, normCat, pctChange, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
-import { useExpenses } from '../lib/queries';
+import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
 import { Card, ScrollFilter, ChartSelector } from './ui';
 import type { Expense, Currency } from '../types';
 
@@ -369,8 +369,8 @@ function TopGastos({ filtered, cur }: { filtered: Expense[]; cur: Currency }) {
 export default function Stats() {
   const isDesktop  = useIsDesktop();
   const expenses   = useExpenses();
-  const settings   = useAppStore(s => s.settings);
-  const customCats = useAppStore(s => s.customCats);
+  const settings   = useSettings();
+  const customCats = useCustomCats();
 
   const allCatsFull = [...DEFAULT_CATS, ...(customCats || [])];
   const configPeriods = settings.periods || [];

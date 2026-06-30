@@ -5,10 +5,11 @@ import { C, F, THEMES, FONTS, coerceTheme, coerceFont, SP, FS } from '../constan
 import useAppStore from '../store/useAppStore';
 import { Card } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
+import { useSettings } from '../lib/queries';
 
 export default function Settings() {
   const isDesktop           = useIsDesktop();
-  const settings            = useAppStore(s => s.settings);
+  const settings            = useSettings();
   const saveSettings        = useAppStore(s => s.saveSettings);
   const exportCSV           = useAppStore(s => s.exportCSV);
   const currentUser         = useAppStore(s => s.currentUser);

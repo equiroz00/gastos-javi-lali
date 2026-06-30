@@ -36,6 +36,10 @@ const getPays = (): Payment[] => queryClient.getQueryData<Payment[]>(['payments'
 const setPays = (next: Payment[]): void => { queryClient.setQueryData<Payment[]>(['payments'], next); };
 const getPlans = (): Plan[] => queryClient.getQueryData<Plan[]>(['plans']) ?? [];
 const setPlans = (next: Plan[]): void => { queryClient.setQueryData<Plan[]>(['plans'], next); };
+const getCfg = (): Settings => queryClient.getQueryData<Settings>(['settings']) ?? { periods: [], theme: 'default', font: 'Nunito' };
+const setCfg = (next: Settings): void => { queryClient.setQueryData<Settings>(['settings'], next); };
+const getCats = (): string[] => queryClient.getQueryData<string[]>(['customCats']) ?? [];
+const setCats = (next: string[]): void => { queryClient.setQueryData<string[]>(['customCats'], next); };
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 export function runMigrationIfNeeded(onDone: () => void): void {
@@ -99,8 +103,6 @@ interface AppActions {
   setCurrentUser: (u: UserName | null) => void;
   setAuthDenied:  (v: boolean) => void;
   setLoading:     (v: boolean) => void;
-  setSettings:    (s: Settings)       => void;
-  setCustomCats:  (cats: string[])    => void;
   setUserTheme:   (theme: string)     => void;
   setUserFont:    (font: string)      => void;
   saveUserPreferences: (theme: string, font: string) => void;
@@ -136,8 +138,6 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   currentUser:    null,
   authDenied:     false,
   loading:        true,
-  settings:       { periods: [], theme: 'default', font: 'Nunito' },
-  customCats:     [],
   userTheme:      'default',
   userFont:       'Nunito',
   activityLog:    [] as ActivityEntry[],
@@ -154,10 +154,6 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   setCurrentUser: u => set({ currentUser: u }),
   setAuthDenied:  v => set({ authDenied: v }),
   setLoading:     v => set({ loading: v }),
-
-  // Data setters
-  setSettings:   s    => set({ settings: s }),
-  setCustomCats: cats => set({ customCats: cats }),
 
   // Per-user preferences
   setUserTheme: theme => set({ userTheme: theme }),
@@ -228,7 +224,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   // Expense actions
   handleAdd: expense => {
     const state = get();
-    const allCats = DEFAULT_CATS.concat(state.customCats);
+    const allCats = DEFAULT_CATS.concat(getCats());
     const s = sanitize({ ...expense, id: genId() }, allCats);
     checkExpenseForWrite(s);
     setExps([s, ...getExps()]);
@@ -240,7 +236,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   handleAddMultiple: exps => {
     const state = get();
-    const allCats = DEFAULT_CATS.concat(state.customCats);
+    const allCats = DEFAULT_CATS.concat(getCats());
     const sanitized = exps.map(e => sanitize(e, allCats));
     const batch = writeBatch(db);
     sanitized.forEach(s => { checkExpenseForWrite(s); batch.set(expenseDoc(s.id), s); });
@@ -254,7 +250,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   handleEdit: expense => {
     const state = get();
-    const allCats = DEFAULT_CATS.concat(state.customCats);
+    const allCats = DEFAULT_CATS.concat(getCats());
     const s = sanitize(expense, allCats);
     checkExpenseForWrite(s);
     setExps(getExps().map(e => e.id === s.id ? s : e));
@@ -282,7 +278,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const paid = paidInstallments || 0;
     const installmentAmount = Math.round(safeN(formData.amount) / numInstallments);
     const amts = calcAmts(installmentAmount, formData.responsible);
-    const startPeriod = manualStartPeriod || getPeriod(formData.date, state.settings.periods);
+    const startPeriod = manualStartPeriod || getPeriod(formData.date, getCfg().periods);
     const plan: Plan = {
       id: genId('plan'),
       description: formData.description,
@@ -302,7 +298,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       laliAmount: amts.laliAmount,
       createdAt: new Date().toISOString(),
     };
-    const installments = generatePlanExpenses(plan, state.settings.periods);
+    const installments = generatePlanExpenses(plan, getCfg().periods);
     const batch = writeBatch(db);
     checkPlanForWrite(plan);
     batch.set(planDoc(plan.id), plan);
@@ -321,7 +317,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     const paid = paidInstallments || 0;
     const installmentAmount = Math.round(safeN(formData.amount) / numInstallments);
     const amts = calcAmts(installmentAmount, formData.responsible);
-    const startPeriod = manualStartPeriod || getPeriod(formData.date, state.settings.periods);
+    const startPeriod = manualStartPeriod || getPeriod(formData.date, getCfg().periods);
     const plan: Plan = {
       id: planId,
       description: formData.description,
@@ -342,7 +338,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       createdAt: existing?.createdAt || new Date().toISOString(),
     };
     const oldExps = getExps().filter(e => e.planId === planId);
-    const installments = generatePlanExpenses(plan, state.settings.periods);
+    const installments = generatePlanExpenses(plan, getCfg().periods);
     const newIds = new Set(installments.map(i => i.id));
     const batch = writeBatch(db);
     // Borrar solo las cuotas viejas que ya no existen (las que se mantienen se
@@ -393,9 +389,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   // Settings
   saveCustomCats: cats => {
-    const state = get();
-    set({ customCats: cats });
-    setDoc(settingsDoc(), { ...state.settings, customCats: cats })
+    setCats(cats);
+    setDoc(settingsDoc(), { ...getCfg(), customCats: cats })
       .catch(reportWriteError('saveCustomCats'));
   },
 
@@ -413,8 +408,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       batch.commit().catch(reportWriteError('saveSettings/expenses'));
     }
     setExps(updated);
-    set({ settings: s });
-    setDoc(settingsDoc(), { ...s, customCats: state.customCats })
+    setCfg(s);
+    setDoc(settingsDoc(), { ...s, customCats: getCats() })
       .catch(reportWriteError('saveSettings'));
     state.showMsg(changed.length > 0
       ? '✓ Guardado · ' + changed.length + ' gasto' + (changed.length !== 1 ? 's' : '') + ' reubicado' + (changed.length !== 1 ? 's' : '')
