@@ -3,6 +3,14 @@ export type Currency    = 'ARS' | 'USD' | 'EUR' | string;
 export type UserName    = 'Javi' | 'Lali';
 export type Responsible = 'Javi' | 'Lali' | 'Ambos';
 
+// ── Split normalizado (Sprint 11) ─────────────────────────────────────────────
+// Reemplaza el reparto hardcodeado a 2 personas (javiAmount/laliAmount). Preparado
+// para N participantes. `paidBy` = quién pagó; `splitAmong` = cómo se reparte.
+export type SplitStrategy = 'iguales' | 'montos' | 'porcentajes' | 'shares';
+export interface SplitEntry { participant: string; value?: number; } // value según strategy; ausente en 'iguales'
+export interface SplitAmong { strategy: SplitStrategy; entries: SplitEntry[]; }
+export type Visibility = 'compartido' | 'privado';
+
 export interface Expense {
   id: string;
   description: string;
@@ -17,6 +25,10 @@ export interface Expense {
   bank: string;
   javiAmount: number;
   laliAmount: number;
+  // ── Sprint 11 (opcionales durante la transición; obligatorios en PR C) ──
+  splitAmong?: SplitAmong;
+  visibilidad?: Visibility;
+  ownerId?: string;        // uid del dueño, solo si visibilidad === 'privado'
   notes?: string;
   createdBy?: UserName;
   createdAt?: string;
@@ -43,6 +55,10 @@ export interface Plan {
   category: string;
   javiAmount: number;
   laliAmount: number;
+  // ── Sprint 11 (opcionales durante la transición) ──
+  splitAmong?: SplitAmong;
+  visibilidad?: Visibility;
+  ownerId?: string;
   createdAt: string;
 }
 

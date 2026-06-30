@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
   round2, safeN, fmt, fmtS, todayStr, genId,
   catEm, catLb, normCat, sortByDate, pctChange, getWeekStart,
-  calcAmts, divideAmount, calcBal, calcNetBal, lastPayment, getPeriod,
+  calcAmts, divideAmount, resolveSplit, splitFromLegacy, calcBal, calcNetBal, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS } from '../constants';
@@ -204,6 +204,47 @@ describe('divideAmount', () => {
   it('porcentajes fuera de rango se recortan a 0–100', () => {
     expect(divideAmount(100, 150)).toEqual({ javiAmount: 100, laliAmount: 0 });
     expect(divideAmount(100, -20)).toEqual({ javiAmount: 0, laliAmount: 100 });
+  });
+});
+
+// ── Split normalizado ─────────────────────────────────────────────────────────
+describe('resolveSplit', () => {
+  it('iguales reparte en partes iguales', () => {
+    expect(resolveSplit(100, { strategy: 'iguales', entries: [{ participant: 'Javi' }, { participant: 'Lali' }] }))
+      .toEqual({ Javi: 50, Lali: 50 });
+  });
+  it('iguales con remanente: la última entry lo absorbe (suma exacta)', () => {
+    const r = resolveSplit(100, { strategy: 'iguales', entries: [{ participant: 'A' }, { participant: 'B' }, { participant: 'C' }] });
+    expect([r.A, r.B, r.C]).toEqual([33.33, 33.33, 33.34]);
+    expect(round2(r.A + r.B + r.C)).toBe(100);
+  });
+  it('montos usa los valores literales y la última cuadra el total', () => {
+    expect(resolveSplit(100, { strategy: 'montos', entries: [{ participant: 'Javi', value: 60 }, { participant: 'Lali', value: 40 }] }))
+      .toEqual({ Javi: 60, Lali: 40 });
+  });
+  it('porcentajes reparte por %', () => {
+    expect(resolveSplit(100, { strategy: 'porcentajes', entries: [{ participant: 'Javi', value: 70 }, { participant: 'Lali', value: 30 }] }))
+      .toEqual({ Javi: 70, Lali: 30 });
+  });
+  it('shares reparte proporcional a los pesos', () => {
+    expect(resolveSplit(90, { strategy: 'shares', entries: [{ participant: 'A', value: 2 }, { participant: 'B', value: 1 }] }))
+      .toEqual({ A: 60, B: 30 });
+  });
+  it('un solo participante recibe todo (caso gasto privado)', () => {
+    expect(resolveSplit(123.45, { strategy: 'iguales', entries: [{ participant: 'Javi' }] })).toEqual({ Javi: 123.45 });
+  });
+  it('suma exacta con centavos en cualquier estrategia', () => {
+    const r = resolveSplit(100.01, { strategy: 'porcentajes', entries: [{ participant: 'A', value: 33 }, { participant: 'B', value: 33 }, { participant: 'C', value: 34 }] });
+    expect(round2(r.A + r.B + r.C)).toBe(100.01);
+  });
+});
+
+describe('splitFromLegacy', () => {
+  it('convierte javiAmount/laliAmount a montos equivalentes', () => {
+    expect(splitFromLegacy(60, 40)).toEqual({ strategy: 'montos', entries: [{ participant: 'Javi', value: 60 }, { participant: 'Lali', value: 40 }] });
+  });
+  it('resolveSplit del split sintetizado reproduce los montos', () => {
+    expect(resolveSplit(100, splitFromLegacy(70, 30))).toEqual({ Javi: 70, Lali: 30 });
   });
 });
 

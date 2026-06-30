@@ -11,7 +11,7 @@ import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
 import {
-  runMigrationIfNeeded, pruneActivityLog, settingsDoc,
+  runMigrationIfNeeded, runSplitMigrationIfNeeded, pruneActivityLog, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc, activityLogCol,
 } from './store/useAppStore.js';
 import LoginScreen       from './components/LoginScreen';
@@ -101,6 +101,7 @@ export default function App() {
 
       runMigrationIfNeeded(() => {
         pruneActivityLog();
+        runSplitMigrationIfNeeded(); // backfill Sprint 11 (idempotente, no bloqueante)
         _unsubs.forEach(u => u()); _unsubs = [];
         const fired = { exp:false, plans:false, pay:false, cfg:false, prefs:false, log:false };
         const checkDone = () => {

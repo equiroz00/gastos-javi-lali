@@ -1,6 +1,6 @@
 // ── src/lib/helpers.ts ────────────────────────────────────────────────────────
 import { CUR_SYM, PENDING_PER } from '../constants';
-import type { Expense, Plan, Payment, Period, Currency, Responsible, UserName } from '../types';
+import type { Expense, Plan, Payment, Period, Currency, Responsible, UserName, SplitAmong } from '../types';
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 // Fecha local del dispositivo (no UTC): toISOString() devolvía la fecha de
@@ -105,6 +105,49 @@ export function divideAmount(total: number, javiPct: number): { javiAmount: numb
   if (pct <= 0)   return { javiAmount: 0, laliAmount: t };
   const javiAmount = round2(t * pct / 100);
   return { javiAmount, laliAmount: round2(t - javiAmount) };
+}
+
+// ── Split normalizado (Sprint 11) ─────────────────────────────────────────────
+// Resuelve el monto que le corresponde a cada participante según la estrategia.
+// Garantiza suma EXACTA a 2 decimales: la última entry absorbe el remanente de
+// redondeo (mismo patrón que divideAmount / generatePlanExpenses).
+export function resolveSplit(amount: number, split: SplitAmong): Record<string, number> {
+  const total = round2(safeN(amount));
+  const entries = (split && split.entries) ? split.entries : [];
+  const out: Record<string, number> = {};
+  if (!entries.length) return out;
+  const last = entries.length - 1;
+
+  if (split.strategy === 'montos') {
+    let assigned = 0;
+    entries.forEach((e, i) => {
+      if (i < last) { const v = round2(safeN(e.value)); out[e.participant] = v; assigned += v; }
+    });
+    out[entries[last].participant] = round2(total - assigned);
+    return out;
+  }
+
+  // iguales / porcentajes / shares → reparto proporcional por pesos
+  const weights = entries.map(e => split.strategy === 'iguales' ? 1 : safeN(e.value));
+  const totalW = weights.reduce((s, w) => s + w, 0) || 1;
+  let assigned = 0;
+  entries.forEach((e, i) => {
+    if (i < last) { const v = round2(total * weights[i] / totalW); out[e.participant] = v; assigned += v; }
+  });
+  out[entries[last].participant] = round2(total - assigned);
+  return out;
+}
+
+// Sintetiza el split normalizado desde los montos legacy (javiAmount/laliAmount).
+// Lo usan el parser de lectura (fallback de docs sin migrar) y la migración.
+export function splitFromLegacy(javiAmount: number, laliAmount: number): SplitAmong {
+  return {
+    strategy: 'montos',
+    entries: [
+      { participant: 'Javi', value: round2(safeN(javiAmount)) },
+      { participant: 'Lali', value: round2(safeN(laliAmount)) },
+    ],
+  };
 }
 
 export function calcBal(exps: Expense[]): number {
