@@ -5,7 +5,7 @@ import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS
 import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
-import { useExpenses } from '../lib/queries';
+import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
 import SplitModal from './SplitModal';
 import type { Expense, UserName, Responsible, Plan } from '../types';
 
@@ -37,8 +37,8 @@ interface AddEditExpenseProps {
 
 export default function AddEditExpense({ isEditMode = false, initialData = null, editingPlan = null }: AddEditExpenseProps) {
   const currentUser       = useAppStore(s => s.currentUser);
-  const settings          = useAppStore(s => s.settings);
-  const customCats        = useAppStore(s => s.customCats);
+  const settings          = useSettings();
+  const customCats        = useCustomCats();
   const expenses          = useExpenses();
   const saveCustomCats    = useAppStore(s => s.saveCustomCats);
   const handleAdd         = useAppStore(s => s.handleAdd);

@@ -4,7 +4,7 @@
 // y un schema estricto aparte detecta anomalías y las reporta a Sentry (solo
 // id + nombres de campo, NUNCA montos ni descripciones — privacidad).
 import { z } from 'zod';
-import type { Expense, Payment, Plan } from '../types';
+import type { Expense, Payment, Plan, Settings } from '../types';
 import { Sentry } from '../sentry';
 
 // ── Schema TOLERANTE (el que se usa para mostrar) ─────────────────────────────
@@ -164,4 +164,28 @@ export function parsePlans(raw: unknown[]): Plan[] {
 export function checkPlanForWrite(p: Plan): void {
   const r = PlanStrict.safeParse(p);
   if (!r.success) reportAnomaly('Plan', p, r.error);
+}
+
+// ── Configuración (doc settings/main: períodos + tema/fuente + categorías) ─────
+const PeriodSchema = z.object({
+  name:  z.string().catch(''),
+  start: z.string().catch(''),
+  end:   z.string().catch(''),
+});
+
+export const SettingsSchema = z.object({
+  periods: z.array(PeriodSchema).catch([]),
+  theme:   z.string().catch('default'),
+  font:    z.string().catch('Nunito'),
+});
+
+// El doc settings/main trae la config compartida + las categorías personalizadas.
+// Devuelve ambas por separado (espejan los dos caches: ['settings'] y ['customCats']).
+export function parseSettingsDoc(raw: unknown): { settings: Settings; customCats: string[] } {
+  const parsed = SettingsSchema.safeParse(raw);
+  if (!parsed.success) reportAnomaly('Config', raw, parsed.error);
+  const settings = (parsed.success ? parsed.data : { periods: [], theme: 'default', font: 'Nunito' }) as Settings;
+  const catsRaw = (raw && typeof raw === 'object') ? (raw as { customCats?: unknown }).customCats : undefined;
+  const customCats = z.array(z.string()).catch([]).parse(catsRaw);
+  return { settings, customCats };
 }

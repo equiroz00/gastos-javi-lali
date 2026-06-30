@@ -6,7 +6,7 @@ import { onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
 import { C, F, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
 import { queryClient } from './lib/queryClient';
-import { parseExpenses, parsePayments, parsePlans } from './lib/schemas';
+import { parseExpenses, parsePayments, parsePlans, parseSettingsDoc } from './lib/schemas';
 import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
@@ -65,8 +65,6 @@ export default function App() {
   const setCurrentUser    = useAppStore(s => s.setCurrentUser);
   const setAuthDenied     = useAppStore(s => s.setAuthDenied);
   const setLoading        = useAppStore(s => s.setLoading);
-  const setSettings       = useAppStore(s => s.setSettings);
-  const setCustomCats     = useAppStore(s => s.setCustomCats);
   const setUserTheme      = useAppStore(s => s.setUserTheme);
   const setUserFont       = useAppStore(s => s.setUserFont);
   const setActivityLog    = useAppStore(s => s.setActivityLog);
@@ -128,9 +126,9 @@ export default function App() {
 
         const u4 = onSnapshot(settingsDoc(), snap => {
           if (snap.exists()) {
-            const cfg = snap.data();
-            setSettings({ periods: cfg.periods || [], theme: cfg.theme || 'default', font: cfg.font || 'Nunito' } as Settings);
-            setCustomCats(cfg.customCats || []);
+            const { settings, customCats } = parseSettingsDoc(snap.data());
+            queryClient.setQueryData(['settings'], settings);
+            queryClient.setQueryData(['customCats'], customCats);
           }
           fired.cfg = true; checkDone();
         }, e => { console.error('settings:', e.code); fired.cfg = true; checkDone(); });
