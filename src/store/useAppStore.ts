@@ -5,7 +5,7 @@ import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc, getDocs, query,
 import { signOut } from 'firebase/auth';
 import {
   getPeriod, generatePlanExpenses, reassignExpensePeriods,
-  sanitize, calcAmts, safeN, catEm, fmt, genId,
+  sanitize, calcAmts, safeN, catEm, fmt, genId, splitFromLegacy,
 } from '../lib/helpers.js';
 import { DEFAULT_CATS } from '../constants.js';
 import { queryClient } from '../lib/queryClient';
@@ -75,6 +75,32 @@ export function pruneActivityLog(keep: number = 100): void {
       batch.commit().catch(e => console.error('Firestore [pruneActivityLog]:', e));
     })
     .catch(e => console.error('Firestore [pruneActivityLog]:', e));
+}
+
+// ── Migración Sprint 11: backfill de splitAmong + visibilidad ─────────────────
+// Idempotente. El parser ya sintetiza splitAmong en lectura; esto lo PERSISTE en
+// los docs (expenses/plans) para que las security rules —que requieren el campo
+// visibilidad— lo encuentren. Aditiva: no toca javiAmount/laliAmount.
+export async function runSplitMigrationIfNeeded(): Promise<void> {
+  try {
+    for (const col of [expensesCol(), plansCol()]) {
+      const snap = await getDocs(col);
+      const pending = snap.docs.filter(d => !d.data().splitAmong);
+      for (let i = 0; i < pending.length; i += 450) {
+        const batch = writeBatch(db);
+        pending.slice(i, i + 450).forEach(d => {
+          const data = d.data();
+          batch.update(d.ref, {
+            splitAmong: splitFromLegacy(safeN(data.javiAmount), safeN(data.laliAmount)),
+            visibilidad: 'compartido',
+          });
+        });
+        await batch.commit();
+      }
+    }
+  } catch (e) {
+    console.error('Firestore [runSplitMigrationIfNeeded]:', e);
+  }
 }
 
 // ── Error en escrituras ───────────────────────────────────────────────────────

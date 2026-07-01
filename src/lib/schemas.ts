@@ -6,6 +6,17 @@
 import { z } from 'zod';
 import type { Expense, Payment, Plan, Settings } from '../types';
 import { Sentry } from '../sentry';
+import { splitFromLegacy } from './helpers';
+
+// ── Split normalizado (Sprint 11) ─────────────────────────────────────────────
+const SplitEntrySchema = z.object({
+  participant: z.string(),
+  value:       z.coerce.number().optional(),
+});
+const SplitAmongSchema = z.object({
+  strategy: z.enum(['iguales', 'montos', 'porcentajes', 'shares']),
+  entries:  z.array(SplitEntrySchema),
+});
 
 // ── Schema TOLERANTE (el que se usa para mostrar) ─────────────────────────────
 // Cada campo cae a un default si falta o es inválido → un gasto real siempre
@@ -24,6 +35,9 @@ export const ExpenseSchema = z.object({
   bank:          z.string().catch(''),
   javiAmount:    z.coerce.number().catch(0),
   laliAmount:    z.coerce.number().catch(0),
+  splitAmong:    SplitAmongSchema.optional(),
+  visibilidad:   z.enum(['compartido', 'privado']).optional(),
+  ownerId:       z.string().optional(),
   notes:           z.string().optional(),
   createdBy:       z.enum(['Javi', 'Lali']).optional(),
   createdAt:       z.string().optional(),
@@ -65,7 +79,11 @@ export function parseExpenses(raw: unknown[]): Expense[] {
   for (const r of raw) {
     const lenient = ExpenseSchema.safeParse(r);
     if (!lenient.success) { reportAnomaly('Gasto', r, lenient.error); continue; }
-    out.push(lenient.data as Expense);
+    const e = lenient.data as Expense;
+    // Fallback de transición: docs sin migrar derivan el split de los montos viejos.
+    if (!e.splitAmong) e.splitAmong = splitFromLegacy(e.javiAmount, e.laliAmount);
+    if (!e.visibilidad) e.visibilidad = 'compartido';
+    out.push(e);
     const strict = ExpenseStrict.safeParse(r);
     if (!strict.success) reportAnomaly('Gasto', r, strict.error);
   }
@@ -136,6 +154,9 @@ export const PlanSchema = z.object({
   category:          z.string().catch(''),
   javiAmount:        z.coerce.number().catch(0),
   laliAmount:        z.coerce.number().catch(0),
+  splitAmong:        SplitAmongSchema.optional(),
+  visibilidad:       z.enum(['compartido', 'privado']).optional(),
+  ownerId:           z.string().optional(),
   createdAt:         z.string().catch(''),
 });
 
@@ -154,7 +175,10 @@ export function parsePlans(raw: unknown[]): Plan[] {
   for (const r of raw) {
     const lenient = PlanSchema.safeParse(r);
     if (!lenient.success) { reportAnomaly('Plan', r, lenient.error); continue; }
-    out.push(lenient.data as Plan);
+    const p = lenient.data as Plan;
+    if (!p.splitAmong) p.splitAmong = splitFromLegacy(p.javiAmount, p.laliAmount);
+    if (!p.visibilidad) p.visibilidad = 'compartido';
+    out.push(p);
     const strict = PlanStrict.safeParse(r);
     if (!strict.success) reportAnomaly('Plan', r, strict.error);
   }
