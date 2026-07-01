@@ -104,15 +104,16 @@ No son features de usuario, son infraestructura que sostiene todo lo de abajo. S
 
 ## ✨ Nuevas funcionalidades (orden de implementación recomendado)
 
-### 🔵 SPRINT 11 — Esquema de datos unificado (base de 12 y 13)
+### 🟢 SPRINT 11 — Esquema de datos unificado (base de 12 y 13) — ✅ Hecho (falta C2)
 **Objetivo:** Rediseñar el esquema del gasto **una sola vez** para soportar tanto gastos compartidos-con-split como gastos privados.
 **Por qué primero:** los Sprints 12 y 13 tocan el mismo campo del modelo. Si se hacen por separado, se migra Firestore dos veces.
 **Incluye:** campo de `visibilidad` (compartido/privado) + bloque de split normalizado (`paidBy` + `splitAmong` con estrategia: iguales / montos / porcentajes / shares) + reglas de seguridad que lo respalden.
+**Estado:** ✅ Entregado en **PRs #14** (esquema + migración), **#15** (balance a `resolveSplit`, excluye privados) y **#16** (privados + dual-query + reglas). Pendiente **C2**: el selector visual de las 4 estrategias en el SplitModal (el split de 2 personas ya produce `montos` exacto; falta solo la UI). **Acción manual pendiente:** desplegar las nuevas `firestore.rules` y verificar la privacidad con las dos cuentas.
 
 ### 🔵 SPRINT 12 — Gastos individuales / privados
 **Objetivo:** Que la app también sea un tracker personal; gastos visibles solo para quien los carga.
 **Punto crítico:** la privacidad se impone en las **Firestore Security Rules** (`resource.data.ownerId == request.auth.uid`), NUNCA solo ocultando en la UI.
-**Extra:** dashboard personal ("¿cuánto gasté *yo* este mes?" = gastos privados + mi mitad de los compartidos).
+**Ya hecho en Sprint 11:** el campo `visibilidad`/`ownerId`, las reglas (`canSee`/`canOwn`), la dual-query y el toggle Compartido/Privado. **Lo que queda para 12:** el **dashboard personal** ("¿cuánto gasté *yo* este mes?" = gastos privados + mi mitad de los compartidos) y pulir la experiencia de privados.
 
 ### 🔵 SPRINT 13 — División entre N personas
 **Objetivo:** Repartir gastos entre 1…n personas, no solo Javi/Lali.
@@ -144,8 +145,8 @@ PENDIENTE  Sprint 9     ████       Capacitor (nativo)   ⛔ bloqueado (s
 (original) Sprint 10    ████       Accesibilidad + PWA
 
 FASE 2     Tooling      ██████████ Sentry ✅, TanStack Query+Zod ✅, Storybook…
-           Sprint 11    ██████████ Esquema de datos unificado   ← base
-           Sprint 12    ██████████ Gastos privados
+           Sprint 11    ██████████ Esquema de datos unificado   ✅ (falta C2)
+           Sprint 12    ████████   Gastos privados (base ✅ en S11; falta dashboard personal)
            Sprint 13    ████████   División entre N personas
            Sprint 14    ████████   Lector de facturas (OCR) + mapa
            Sprint 15    ██████     Promociones bancarias
@@ -154,6 +155,12 @@ FASE 2     Tooling      ██████████ Sentry ✅, TanStack Quer
 ---
 
 ## Registro de cambios
+
+**30/06/2026 — Sprint 11: esquema unificado (split normalizado + gastos privados) (Claude)**
+- **Split normalizado:** cada gasto/plan lleva `splitAmong` (estrategias `iguales`/`montos`/`porcentajes`/`shares`, preparado para N personas) + `visibilidad` (`compartido`/`privado`) + `ownerId`. `resolveSplit` reemplaza a `javiAmount`/`laliAmount` como fuente del reparto en toda la capa de cálculo; el balance Javi↔Lali **excluye los privados**.
+- **Gastos privados:** toggle Compartido/Privado en el formulario (un privado es 100% del dueño, con `ownerId` = uid real de auth). Privacidad impuesta en **Firestore Security Rules** (`canSee`/`canOwn`): un privado solo lo ve/edita su dueño. Lectura con **dual-query** (compartidos + mis privados) porque, con reglas estrictas, una query sin filtro fallaría entera para el otro usuario.
+- **Migración única y aditiva:** backfill idempotente de `splitAmong` + `visibilidad` en los docs existentes; además el parser Zod **sintetiza** `splitAmong` desde los montos viejos para cualquier doc sin migrar.
+- Entregado en **PRs #14** (capa de datos + migración), **#15** (balance/displays a `resolveSplit`, excluye privados) y **#16** (privados + dual-query + reglas). **Pendiente C2:** selector visual de las 4 estrategias en el SplitModal. **Acción manual:** desplegar `firestore.rules` y verificar la privacidad con las 2 cuentas.
 
 **30/06/2026 — Migración a TanStack Query + Zod completa (Claude)**
 - Las **4 colecciones** de Firestore (`expenses`, `payments`, `plans`, `settings` + `customCats`) migradas a **TanStack Query** (datos remotos) con **validación Zod** en lectura y escritura; Zustand queda solo para estado de UI. Las anomalías de datos quedan visibles en Sentry.
