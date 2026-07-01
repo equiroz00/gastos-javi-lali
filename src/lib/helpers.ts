@@ -119,11 +119,10 @@ export function resolveSplit(amount: number, split: SplitAmong): Record<string, 
   const last = entries.length - 1;
 
   if (split.strategy === 'montos') {
-    let assigned = 0;
-    entries.forEach((e, i) => {
-      if (i < last) { const v = round2(safeN(e.value)); out[e.participant] = v; assigned += v; }
-    });
-    out[entries[last].participant] = round2(total - assigned);
+    // Montos explícitos: se respetan literales (no se redistribuye remanente; el
+    // que reparte es responsable de que sumen el total). Reproduce exacto los
+    // montos legacy vía splitFromLegacy.
+    entries.forEach(e => { out[e.participant] = round2(safeN(e.value)); });
     return out;
   }
 
@@ -150,8 +149,19 @@ export function splitFromLegacy(javiAmount: number, laliAmount: number): SplitAm
   };
 }
 
+// Monto resuelto por participante para un gasto, usando su splitAmong (o el
+// sintetizado desde los montos legacy si aún no está). Reemplaza leer
+// e.javiAmount / e.laliAmount directamente.
+export function expenseResolved(e: Expense): Record<string, number> {
+  return resolveSplit(safeN(e.amount), e.splitAmong ?? splitFromLegacy(e.javiAmount, e.laliAmount));
+}
+
 export function calcBal(exps: Expense[]): number {
-  return exps.reduce((b, e) => e.paidBy === 'Javi' ? b + safeN(e.laliAmount) : b - safeN(e.javiAmount), 0);
+  return exps.reduce((b, e) => {
+    if (e.visibilidad === 'privado') return b; // los privados no generan deuda entre los dos
+    const r = expenseResolved(e);
+    return e.paidBy === 'Javi' ? b + safeN(r['Lali']) : b - safeN(r['Javi']);
+  }, 0);
 }
 
 export function calcNetBal(exps: Expense[], payments: Payment[], currency: Currency): number {

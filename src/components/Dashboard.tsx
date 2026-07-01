@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil } from 'lucide-react';
 import { C, F, MONO, PENDING_PER, SP, FS } from '../constants';
-import { fmt, fmtS, safeN, calcNetBal, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
+import { fmt, fmtS, safeN, calcNetBal, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, usePayments, usePlans, useSettings } from '../lib/queries';
@@ -89,12 +89,13 @@ function ActivePlans() {
 // ── ¿Quién pagó más? — movida desde Stats al Inicio ─────────────────────────────
 // Calcula sobre los gastos del período en la moneda primaria.
 function WhoPaidMore({ periodExps, cur }: { periodExps: Expense[]; cur: Currency }) {
-  const curExps  = periodExps.filter(e => (e.currency || 'ARS') === cur);
+  // Solo gastos compartidos: los privados no entran en la comparación entre los dos.
+  const curExps  = periodExps.filter(e => (e.currency || 'ARS') === cur && e.visibilidad !== 'privado');
   const total    = curExps.reduce((s, e) => s + safeN(e.amount), 0);
   const javiPaid = curExps.filter(e => e.paidBy === 'Javi').reduce((s, e) => s + safeN(e.amount), 0);
   const laliPaid = curExps.filter(e => e.paidBy === 'Lali').reduce((s, e) => s + safeN(e.amount), 0);
-  const javiResp = curExps.reduce((s, e) => s + safeN(e.javiAmount), 0);
-  const laliResp = curExps.reduce((s, e) => s + safeN(e.laliAmount), 0);
+  const javiResp = curExps.reduce((s, e) => s + safeN(expenseResolved(e)['Javi']), 0);
+  const laliResp = curExps.reduce((s, e) => s + safeN(expenseResolved(e)['Lali']), 0);
 
   const javiPct = total > 0 ? Math.round(javiPaid / total * 100) : 0;
   const laliPct = total > 0 ? 100 - javiPct : 0;
@@ -197,13 +198,14 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
 
   function balData(c: Currency): BalData {
     const netBal = calcNetBal(periodExps, filteredPayments, c);
-    const curExps = periodExps.filter(e => (e.currency || 'ARS') === c);
+    // Solo compartidos: el saldo entre los dos no incluye gastos privados.
+    const curExps = periodExps.filter(e => (e.currency || 'ARS') === c && e.visibilidad !== 'privado');
     return {
       netBal, noDebt: Math.abs(netBal) < 1, laliOwes: netBal > 0,
       javiPaid: curExps.filter(e => e.paidBy === 'Javi').reduce((s, e) => s + safeN(e.amount), 0),
       laliPaid: curExps.filter(e => e.paidBy === 'Lali').reduce((s, e) => s + safeN(e.amount), 0),
-      javiOwes: curExps.reduce((s, e) => s + safeN(e.javiAmount), 0),
-      laliOwes2: curExps.reduce((s, e) => s + safeN(e.laliAmount), 0),
+      javiOwes: curExps.reduce((s, e) => s + safeN(expenseResolved(e)['Javi']), 0),
+      laliOwes2: curExps.reduce((s, e) => s + safeN(expenseResolved(e)['Lali']), 0),
       payAdj: filteredPayments.filter(p => (p.currency || 'ARS') === c),
       total: byCur[c] ? byCur[c].total : 0,
     };

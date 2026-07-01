@@ -9,7 +9,7 @@ import {
   AreaChart, Area,
 } from 'recharts';
 import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP, FS } from '../constants';
-import { fmtS, fmt, safeN, catEm, catLb, normCat, pctChange, sortByDate } from '../lib/helpers';
+import { fmtS, fmt, safeN, catEm, catLb, normCat, pctChange, sortByDate, expenseResolved } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
 import { Card, ScrollFilter, ChartSelector } from './ui';
@@ -443,8 +443,9 @@ export default function Stats() {
   filtered.forEach(e => {
     const k = e.period || 'Sin período';
     if (!byP[k]) byP[k] = { period:k, javi:0, lali:0 };
-    byP[k].javi += safeN(e.javiAmount);
-    byP[k].lali += safeN(e.laliAmount);
+    const r = expenseResolved(e);
+    byP[k].javi += safeN(r['Javi']);
+    byP[k].lali += safeN(r['Lali']);
   });
   const perData = Object.values(byP);
 
