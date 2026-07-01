@@ -2,12 +2,13 @@
 import React, { useState } from 'react';
 import { Plus, X, Pencil, AlertTriangle } from 'lucide-react';
 import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId } from '../lib/helpers';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
 import SplitModal from './SplitModal';
-import type { Expense, UserName, Responsible, Plan } from '../types';
+import { auth } from '../firebase.js';
+import type { Expense, UserName, Responsible, Plan, Visibility } from '../types';
 
 // Estado del formulario: como Expense pero con amount editable como string.
 interface FormState {
@@ -24,6 +25,7 @@ interface FormState {
   customCurrency?: string;
   javiAmount: number;
   laliAmount: number;
+  visibilidad: Visibility;
   notes?: string;
   createdBy?: UserName;
   createdAt?: string;
@@ -57,7 +59,8 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     return {
       date: todayStr(), description: '', amount: '', category: allCats[0] || DEFAULT_CATS[0],
       paymentMethod: PAY_METHODS[0], bank: BANKS[0], paidBy: (currentUser || 'Javi') as UserName,
-      responsible: 'Ambos', currency: 'ARS', customCurrency: '', javiAmount: 0, laliAmount: 0, notes: '',
+      responsible: 'Ambos', currency: 'ARS', customCurrency: '', javiAmount: 0, laliAmount: 0,
+      visibilidad: 'compartido', notes: '',
     };
   }
 
@@ -68,7 +71,8 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       id: p.id, date: p.startDate, description: p.description, amount: String(p.totalAmount),
       category: p.category, paymentMethod: p.paymentMethod, bank: p.bank, paidBy: p.paidBy,
       responsible: p.responsible, currency: isBase ? p.currency : 'Otra',
-      customCurrency: isBase ? '' : String(p.currency), javiAmount: 0, laliAmount: 0, notes: '',
+      customCurrency: isBase ? '' : String(p.currency), javiAmount: 0, laliAmount: 0,
+      visibilidad: 'compartido', notes: '',
     };
   }
 
@@ -220,14 +224,28 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   }
 
   function buildBase(id: string): Expense {
+    const currency = form.currency === 'Otra' ? (form.customCurrency || 'ARS') : form.currency;
+    const period = getPeriod(form.date, periods);
+    if (form.visibilidad === 'privado') {
+      // Gasto privado: 100% del dueño, no se comparte ni entra al balance.
+      // ownerId = uid real de auth (debe coincidir con request.auth.uid en las reglas).
+      const owner = (currentUser || 'Javi') as UserName;
+      return {
+        ...form, id, amount: totalAmt, currency, period,
+        paidBy: owner, responsible: owner as Responsible,
+        javiAmount: owner === 'Javi' ? totalAmt : 0,
+        laliAmount: owner === 'Lali' ? totalAmt : 0,
+        splitAmong: { strategy: 'iguales', entries: [{ participant: owner }] },
+        visibilidad: 'privado',
+        ownerId: auth.currentUser?.uid,
+      } as Expense;
+    }
     return {
-      ...form,
-      id,
-      amount: totalAmt,
-      javiAmount: javiAmt,
-      laliAmount: laliAmt,
-      currency: form.currency === 'Otra' ? (form.customCurrency || 'ARS') : form.currency,
-      period: getPeriod(form.date, periods),
+      ...form, id, amount: totalAmt,
+      javiAmount: javiAmt, laliAmount: laliAmt,
+      currency, period,
+      splitAmong: splitFromLegacy(javiAmt, laliAmt),
+      visibilidad: 'compartido',
     } as Expense;
   }
 
@@ -349,6 +367,30 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     </div>
   ) : null;
 
+  // ── Visibilidad + split (un gasto privado no se divide) ────────────────────
+  const visibilidadToggle = !isPlanEdit ? (
+    <>
+      <Lbl>Visibilidad</Lbl>
+      <div style={{ display:'flex', gap:'0.5rem' }}>
+        <SegBtn active={form.visibilidad !== 'privado'} color={C.navy} onClick={() => set('visibilidad', 'compartido')}>Compartido</SegBtn>
+        <SegBtn active={form.visibilidad === 'privado'} color={C.accent} onClick={() => { set('visibilidad', 'privado'); setUseCuotas(false); setIsRetro(false); }}>Privado</SegBtn>
+      </div>
+      {form.visibilidad === 'privado' && (
+        <p style={{ fontSize:'0.68rem', color:C.textMuted, margin:'0.4rem 0 0', lineHeight:1.4 }}>
+          🔒 Solo vos lo vas a ver. No entra en el balance ni en la comparación con {currentUser === 'Javi' ? 'Lali' : 'Javi'}.
+        </p>
+      )}
+    </>
+  ) : null;
+
+  const splitSection = (
+    <>
+      {visibilidadToggle}
+      {form.visibilidad !== 'privado' && splitButton}
+      {form.visibilidad !== 'privado' && splitPreview}
+    </>
+  );
+
   // ── Queue section ─────────────────────────────────────────────────────────
   const queueSection = queue.length > 0 ? (
     <div style={{ marginTop:'0.75rem', background:C.bg, borderRadius:'0.85rem', border:'1px solid '+C.border, overflow:'hidden' }}>
@@ -433,8 +475,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         </div>
       )}
 
-      {splitButton}
-      {splitPreview}
+      {splitSection}
       {queueSection}
 
       <button onClick={submit} style={{ width:'100%', padding:'1rem', background:C.gradMain, color:C.white, border:'none', borderRadius:'1rem', fontWeight:900, fontSize:'1rem', cursor:'pointer', fontFamily:F, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', marginTop:'1rem' }}>{btnLabel}</button>
@@ -527,13 +568,12 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         style={{ width:'100%', border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.5rem 0.75rem', fontSize:'0.85rem', outline:'none', fontFamily:F, color:C.navy, background:C.surface, boxSizing:'border-box', resize:'vertical', minHeight:'60px', lineHeight:'1.4' }}
       />
 
-      {splitButton}
-      {splitPreview}
+      {splitSection}
 
       {!isEditMode && (
         <>
-          {/* El toggle único/cuotas no se muestra al editar un plan: ya es un plan */}
-          {!isPlanEdit && (
+          {/* El toggle único/cuotas no se muestra al editar un plan ni en gastos privados */}
+          {!isPlanEdit && form.visibilidad !== 'privado' && (
             <>
               <Lbl>¿Pago en cuotas?</Lbl>
               <div style={{ display:'flex', gap:'0.5rem' }}>

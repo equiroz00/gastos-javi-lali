@@ -14,9 +14,32 @@ service cloud.firestore {
            ];
     }
 
+    // ── Privacidad de gastos (Sprint 11) ──────────────────────────────────────
+    // Un gasto privado (visibilidad == 'privado') solo lo ve/edita su dueño
+    // (ownerId == uid). Un gasto compartido lo ven ambos. Se usa != 'privado'
+    // (no == 'compartido') a propósito: un doc sin el campo se trata como
+    // compartido → nunca queda inaccesible por falta de migración.
+    function canSee(d) {
+      return d.visibilidad != 'privado' || d.ownerId == request.auth.uid;
+    }
+    function canOwn(d) {
+      return d.visibilidad != 'privado' || d.ownerId == request.auth.uid;
+    }
+    // Nota (hardening futuro): hoy un miembro podría convertir un gasto compartido
+    // en privado y "ocultárselo" al otro. Aceptable entre pareja; se endurece si
+    // hace falta comparando resource.data.visibilidad con request.resource.data.
+
     // ── Colecciones de la app ─────────────────────────────────────────────────
-    match /expenses/{id}        { allow read, write: if isCouple(); }
-    match /plans/{id}           { allow read, write: if isCouple(); }
+    match /expenses/{id} {
+      allow read:           if isCouple() && canSee(resource.data);
+      allow create:         if isCouple() && canOwn(request.resource.data);
+      allow update, delete: if isCouple() && canSee(resource.data) && canOwn(request.resource.data);
+    }
+    match /plans/{id} {
+      allow read:           if isCouple() && canSee(resource.data);
+      allow create:         if isCouple() && canOwn(request.resource.data);
+      allow update, delete: if isCouple() && canSee(resource.data) && canOwn(request.resource.data);
+    }
     match /payments/{id}        { allow read, write: if isCouple(); }
     match /settings/{id}        { allow read, write: if isCouple(); }
     match /userPreferences/{id} { allow read, write: if isCouple(); }
