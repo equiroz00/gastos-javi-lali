@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { Loader2, Home, Plus, BarChart2, ClipboardList, Settings2, LogOut, Wallet } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
 import { C, F, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
 import { queryClient } from './lib/queryClient';
@@ -108,12 +108,25 @@ export default function App() {
           if (fired.exp && fired.plans && fired.pay && fired.cfg && fired.prefs && fired.log) setLoading(false);
         };
 
-        const u1 = onSnapshot(expensesCol(), snap => {
-          // Validación Zod en el borde + caché de TanStack Query (única fuente de los gastos).
-          const exps = parseExpenses(snap.docs.map(d => d.data()));
-          queryClient.setQueryData(['expenses'], exps);
+        // Lectura de gastos con dual-query (Sprint 11): las reglas restringen los
+        // gastos privados a su dueño, así que una query SIN filtro fallaría entera
+        // para el otro usuario (Firestore no filtra por permisos). Se leen por
+        // separado —compartidos + mis privados— y se mergean en la misma caché.
+        // Los conjuntos son disjuntos (los compartidos no tienen ownerId).
+        let sharedExps: Expense[] = [];
+        let ownPrivateExps: Expense[] = [];
+        const applyExpenses = () => queryClient.setQueryData(['expenses'], [...sharedExps, ...ownPrivateExps]);
+
+        const u1a = onSnapshot(query(expensesCol(), where('visibilidad', '==', 'compartido')), snap => {
+          sharedExps = parseExpenses(snap.docs.map(d => d.data()));
+          applyExpenses();
           fired.exp = true; checkDone();
-        }, e => { console.error('expenses:', e.code); fired.exp = true; checkDone(); });
+        }, e => { console.error('expenses(compartidos):', e.code); fired.exp = true; checkDone(); });
+
+        const u1b = onSnapshot(query(expensesCol(), where('ownerId', '==', firebaseUser.uid)), snap => {
+          ownPrivateExps = parseExpenses(snap.docs.map(d => d.data()));
+          applyExpenses();
+        }, e => { console.error('expenses(privados):', e.code); });
 
         const u2 = onSnapshot(plansCol(), snap => {
           queryClient.setQueryData(['plans'], parsePlans(snap.docs.map(d => d.data())));
@@ -150,7 +163,7 @@ export default function App() {
           fired.log = true; checkDone();
         }, e => { console.error('activityLog:', e.code); fired.log = true; checkDone(); });
 
-        _unsubs = [u1, u2, u3, u4, u5, u6];
+        _unsubs = [u1a, u1b, u2, u3, u4, u5, u6];
       });
     });
     _unsubAuth = unsubAuth;
@@ -174,7 +187,7 @@ export default function App() {
   // ── Edit mode (both mobile and desktop use same form) ──────────────────────
   if (editingExpense) return (
     <div style={{ minHeight:'100vh', background:C.bg, maxWidth: isDesktop ? 'min(760px, 100%)' : SHELL_MAXW, margin:'0 auto', fontFamily:F, overflowY:'auto' }}>
-      <AddEditExpense isEditMode initialData={{ ...editingExpense, amount: String(editingExpense.amount) }} />
+      <AddEditExpense isEditMode initialData={{ ...editingExpense, amount: String(editingExpense.amount), visibilidad: editingExpense.visibilidad ?? 'compartido' }} />
     </div>
   );
 

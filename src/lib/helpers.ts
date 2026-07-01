@@ -1,6 +1,6 @@
 // ── src/lib/helpers.ts ────────────────────────────────────────────────────────
 import { CUR_SYM, PENDING_PER } from '../constants';
-import type { Expense, Plan, Payment, Period, Currency, Responsible, UserName, SplitAmong } from '../types';
+import type { Expense, Plan, Payment, Period, Currency, Responsible, UserName, SplitAmong, Visibility } from '../types';
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 // Fecha local del dispositivo (no UTC): toISOString() devolvía la fecha de
@@ -225,6 +225,10 @@ export function generatePlanExpenses(plan: Plan, periods: Period[]): Expense[] {
       installmentNum: cuotaNum,
       numInstallments: plan.numInstallments,
       fromPlan: true,
+      // Cada cuota hereda el reparto (montos de esa cuota) y la visibilidad del plan.
+      splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
+      visibilidad: plan.visibilidad ?? 'compartido',
+      ...(plan.visibilidad === 'privado' && plan.ownerId ? { ownerId: plan.ownerId } : {}),
     });
   }
   return result;
@@ -266,7 +270,8 @@ export function sanitize(e: Partial<Expense>, cats: string[]): Expense {
   const paidBy: UserName = (e.paidBy === 'Javi' || String(e.paidBy) === 'Edinson') ? 'Javi' : 'Lali';
   const responsible: Responsible = (['Javi', 'Lali', 'Ambos'] as Responsible[]).includes(e.responsible as Responsible)
     ? (e.responsible as Responsible) : 'Ambos';
-  return {
+  const visibilidad: Visibility = e.visibilidad === 'privado' ? 'privado' : 'compartido';
+  const out = {
     ...e,
     id: String(e.id || ''),
     description: String(e.description || ''),
@@ -281,5 +286,11 @@ export function sanitize(e: Partial<Expense>, cats: string[]): Expense {
     period: String(e.period || 'Sin período'),
     paymentMethod: String(e.paymentMethod || ''),
     bank: String(e.bank || ''),
+    visibilidad,
+    splitAmong: e.splitAmong ?? splitFromLegacy(safeN(e.javiAmount), safeN(e.laliAmount)),
   } as Expense;
+  // ownerId solo tiene sentido en gastos privados; en compartidos se quita.
+  if (visibilidad === 'privado' && e.ownerId) out.ownerId = e.ownerId;
+  else delete out.ownerId;
+  return out;
 }

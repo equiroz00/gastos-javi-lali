@@ -322,6 +322,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       category: formData.category,
       javiAmount: amts.javiAmount,
       laliAmount: amts.laliAmount,
+      splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
+      visibilidad: 'compartido',
       createdAt: new Date().toISOString(),
     };
     const installments = generatePlanExpenses(plan, getCfg().periods);
@@ -361,6 +363,8 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       category: formData.category,
       javiAmount: amts.javiAmount,
       laliAmount: amts.laliAmount,
+      splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
+      visibilidad: 'compartido',
       createdAt: existing?.createdAt || new Date().toISOString(),
     };
     const oldExps = getExps().filter(e => e.planId === planId);

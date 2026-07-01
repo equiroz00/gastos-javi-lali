@@ -252,6 +252,22 @@ describe('splitFromLegacy', () => {
   });
 });
 
+describe('sanitize · visibilidad + splitAmong (Sprint 11)', () => {
+  it('gasto sin campos nuevos → compartido con splitAmong sintetizado, sin ownerId', () => {
+    const s = sanitize(exp({ javiAmount: 60, laliAmount: 40 }), DEFAULT_CATS);
+    expect(s.visibilidad).toBe('compartido');
+    expect(s.splitAmong).toEqual({ strategy: 'montos', entries: [{ participant: 'Javi', value: 60 }, { participant: 'Lali', value: 40 }] });
+    expect(s.ownerId).toBeUndefined();
+  });
+  it('privado conserva ownerId; compartido lo quita', () => {
+    const priv = sanitize({ ...exp(), visibilidad: 'privado', ownerId: 'uid-javi' }, DEFAULT_CATS);
+    expect(priv.visibilidad).toBe('privado');
+    expect(priv.ownerId).toBe('uid-javi');
+    const shared = sanitize({ ...exp(), visibilidad: 'compartido', ownerId: 'uid-javi' }, DEFAULT_CATS);
+    expect(shared.ownerId).toBeUndefined();
+  });
+});
+
 // ── Balance ───────────────────────────────────────────────────────────────────
 // Convención: balance positivo = Lali le debe a Javi.
 describe('calcBal', () => {
