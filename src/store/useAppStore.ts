@@ -5,7 +5,7 @@ import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc, getDocs, query,
 import { signOut } from 'firebase/auth';
 import {
   getPeriod, generatePlanExpenses, reassignExpensePeriods,
-  sanitize, calcAmts, safeN, catEm, fmt, genId, splitFromLegacy,
+  sanitize, calcAmts, safeN, catEm, fmt, genId, splitFromLegacy, expenseResolved,
 } from '../lib/helpers.js';
 import { DEFAULT_CATS } from '../constants.js';
 import { queryClient } from '../lib/queryClient';
@@ -453,11 +453,14 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     });
     if (!filtered.length) { state.showMsg('No hay gastos en ese rango.'); return; }
     const header = ['Fecha','Descripción','Monto','Moneda','Categoría','Medio de Pago','Banco','Pagó','Responsable','Monto Javi','Monto Lali','Período'];
-    const rows = [header, ...filtered.map(e => [
-      e.date, e.description, safeN(e.amount), e.currency || 'ARS',
-      e.category || '', e.paymentMethod || '', e.bank || '',
-      e.paidBy, e.responsible, safeN(e.javiAmount), safeN(e.laliAmount), e.period || '',
-    ])];
+    const rows = [header, ...filtered.map(e => {
+      const r = expenseResolved(e);
+      return [
+        e.date, e.description, safeN(e.amount), e.currency || 'ARS',
+        e.category || '', e.paymentMethod || '', e.bank || '',
+        e.paidBy, e.responsible, safeN(r['Javi']), safeN(r['Lali']), e.period || '',
+      ];
+    })];
     const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
     const dataStr = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
     const a = document.createElement('a');

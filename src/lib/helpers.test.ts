@@ -218,9 +218,13 @@ describe('resolveSplit', () => {
     expect([r.A, r.B, r.C]).toEqual([33.33, 33.33, 33.34]);
     expect(round2(r.A + r.B + r.C)).toBe(100);
   });
-  it('montos usa los valores literales y la última cuadra el total', () => {
+  it('montos usa los valores literales', () => {
     expect(resolveSplit(100, { strategy: 'montos', entries: [{ participant: 'Javi', value: 60 }, { participant: 'Lali', value: 40 }] }))
       .toEqual({ Javi: 60, Lali: 40 });
+  });
+  it('montos respeta los valores aunque no sumen el total (no redistribuye)', () => {
+    expect(resolveSplit(100, { strategy: 'montos', entries: [{ participant: 'Javi', value: 10 }, { participant: 'Lali', value: 10 }] }))
+      .toEqual({ Javi: 10, Lali: 10 });
   });
   it('porcentajes reparte por %', () => {
     expect(resolveSplit(100, { strategy: 'porcentajes', entries: [{ participant: 'Javi', value: 70 }, { participant: 'Lali', value: 30 }] }))
@@ -251,6 +255,16 @@ describe('splitFromLegacy', () => {
 // ── Balance ───────────────────────────────────────────────────────────────────
 // Convención: balance positivo = Lali le debe a Javi.
 describe('calcBal', () => {
+  it('ignora los gastos privados (no generan deuda entre los dos)', () => {
+    const compartido = exp({ paidBy: 'Javi', javiAmount: 50, laliAmount: 50 });
+    const privado = exp({ id: 'e2', paidBy: 'Javi', amount: 200, javiAmount: 200, laliAmount: 0, visibilidad: 'privado', ownerId: 'javi-uid' });
+    expect(calcBal([compartido, privado])).toBe(50); // solo cuenta el compartido (Lali debe 50)
+  });
+  it('usa splitAmong cuando está presente, no los montos legacy', () => {
+    const e = exp({ paidBy: 'Javi', javiAmount: 0, laliAmount: 0,
+      splitAmong: { strategy: 'porcentajes', entries: [{ participant: 'Javi', value: 30 }, { participant: 'Lali', value: 70 }] } });
+    expect(calcBal([e])).toBe(70); // Javi pagó; Lali debe su 70% de 100
+  });
   it('si Javi paga un gasto compartido, Lali le debe su mitad', () => {
     const bal = calcBal([exp({ paidBy: 'Javi', javiAmount: 50, laliAmount: 50 })]);
     expect(bal).toBe(50);

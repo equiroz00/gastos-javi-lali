@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Pencil, Trash2, Clock } from 'lucide-react';
 import { C, F, MONO, PENDING_PER } from '../constants';
-import { fmt, safeN, catLb } from '../lib/helpers';
+import { fmt, safeN, catLb, expenseResolved } from '../lib/helpers';
 import { CatIcon } from './ui';
 import type { Expense } from '../types';
 
@@ -22,6 +22,7 @@ interface ExpenseRowProps {
 
 function ExpenseRow({ expense: e, open, onToggle, onDelete, onEdit }: ExpenseRowProps) {
   const cur = e.currency || 'ARS';
+  const r = expenseResolved(e);
   return (
     <div style={{ borderBottom:'1px solid '+C.beige }}>
       <div onClick={onToggle} style={{ display:'flex', alignItems:'center', gap:'0.75rem', padding:'0.65rem 1rem', cursor:'pointer', background:open ? C.bg : C.surface }}>
@@ -52,7 +53,7 @@ function ExpenseRow({ expense: e, open, onToggle, onDelete, onEdit }: ExpenseRow
         </div>
         <div style={{ textAlign:'right', flexShrink:0 }}>
           <div style={{ fontWeight:800, color:C.navy, fontSize:'0.9rem', fontFamily:MONO }}>{fmt(safeN(e.amount), cur)}</div>
-          <div style={{ fontSize:'0.62rem', color:C.textMuted, fontFamily:MONO }}>J:{fmt(safeN(e.javiAmount), cur)} / L:{fmt(safeN(e.laliAmount), cur)}</div>
+          <div style={{ fontSize:'0.62rem', color:C.textMuted, fontFamily:MONO }}>J:{fmt(safeN(r['Javi']), cur)} / L:{fmt(safeN(r['Lali']), cur)}</div>
         </div>
       </div>
       {open && !e.fromPlan && (
