@@ -11,7 +11,7 @@ import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
 import {
-  runMigrationIfNeeded, runSplitMigrationIfNeeded, pruneActivityLog, settingsDoc,
+  runMigrationIfNeeded, pruneActivityLog, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc, activityLogCol,
 } from './store/useAppStore.js';
 import LoginScreen       from './components/LoginScreen';
@@ -101,7 +101,9 @@ export default function App() {
 
       runMigrationIfNeeded(() => {
         pruneActivityLog();
-        runSplitMigrationIfNeeded(); // backfill Sprint 11 (idempotente, no bloqueante)
+        // La migración de backfill (runSplitMigrationIfNeeded) se retiró: ya completó
+        // su trabajo y su lectura de la colección SIN filtro es denegada por las
+        // reglas estrictas apenas existe un gasto privado del otro usuario.
         _unsubs.forEach(u => u()); _unsubs = [];
         const fired = { exp:false, plans:false, pay:false, cfg:false, prefs:false, log:false };
         const checkDone = () => {
