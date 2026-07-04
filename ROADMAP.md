@@ -2,7 +2,7 @@
 > Ordenado por impacto real sobre la experiencia y solidez del producto.
 > Cada sprint está pensado para una sesión de trabajo.
 
-> **Última actualización:** 30/06/2026 · Ver [Registro de cambios](#registro-de-cambios) al final.
+> **Última actualización:** 04/07/2026 · Ver [Registro de cambios](#registro-de-cambios) al final.
 
 ---
 
@@ -110,10 +110,10 @@ No son features de usuario, son infraestructura que sostiene todo lo de abajo. S
 **Incluye:** campo de `visibilidad` (compartido/privado) + bloque de split normalizado (`paidBy` + `splitAmong` con estrategia: iguales / montos / porcentajes / shares) + reglas de seguridad que lo respalden.
 **Estado:** ✅ Entregado en **PRs #14** (esquema + migración), **#15** (balance a `resolveSplit`, excluye privados) y **#16** (privados + dual-query + reglas). Pendiente **C2**: el selector visual de las 4 estrategias en el SplitModal (el split de 2 personas ya produce `montos` exacto; falta solo la UI). **Acción manual pendiente:** desplegar las nuevas `firestore.rules` y verificar la privacidad con las dos cuentas.
 
-### 🔵 SPRINT 12 — Gastos individuales / privados
+### 🟢 SPRINT 12 — Gastos individuales / privados — ✅ Hecho
 **Objetivo:** Que la app también sea un tracker personal; gastos visibles solo para quien los carga.
 **Punto crítico:** la privacidad se impone en las **Firestore Security Rules** (`resource.data.ownerId == request.auth.uid`), NUNCA solo ocultando en la UI.
-**Ya hecho en Sprint 11:** el campo `visibilidad`/`ownerId`, las reglas (`canSee`/`canOwn`), la dual-query y el toggle Compartido/Privado. **Lo que queda para 12:** el **dashboard personal** ("¿cuánto gasté *yo* este mes?" = gastos privados + mi mitad de los compartidos) y pulir la experiencia de privados.
+**Hecho:** en Sprint 11 la base (`visibilidad`/`ownerId`, reglas `canSee`/`canOwn`, dual-query, toggle Compartido/Privado) + los fixes de privacidad (borrado y fuga por el feed de actividad, PR #18); y en Sprint 12 la **pestaña "Personal"** ("¿cuánto gasté *yo*?" = privados propios + mi parte de los compartidos vía `resolveSplit`; PR #19).
 
 ### 🔵 SPRINT 13 — División entre N personas
 **Objetivo:** Repartir gastos entre 1…n personas, no solo Javi/Lali.
@@ -146,7 +146,7 @@ PENDIENTE  Sprint 9     ████       Capacitor (nativo)   ⛔ bloqueado (s
 
 FASE 2     Tooling      ██████████ Sentry ✅, TanStack Query+Zod ✅, Storybook…
            Sprint 11    ██████████ Esquema de datos unificado   ✅ (falta C2)
-           Sprint 12    ████████   Gastos privados (base ✅ en S11; falta dashboard personal)
+           Sprint 12    ██████████ Gastos privados + pestaña Personal   ✅
            Sprint 13    ████████   División entre N personas
            Sprint 14    ████████   Lector de facturas (OCR) + mapa
            Sprint 15    ██████     Promociones bancarias
@@ -155,6 +155,11 @@ FASE 2     Tooling      ██████████ Sentry ✅, TanStack Quer
 ---
 
 ## Registro de cambios
+
+**04/07/2026 — Sprint 12: pestaña Personal + fixes de privacidad (Claude)**
+- **Pestaña "Personal"** (PR #19): vista dedicada "¿cuánto gasté *yo* este ciclo?" = gastos privados propios (completos) + mi parte de los compartidos (reparto real vía `resolveSplit`). Titular con total + variación vs. ciclo anterior, desglose privado/compartido y por categoría. Nuevo tab (ícono billetera) en la nav mobile y el sidebar desktop.
+- **Fixes de privacidad tras probar con 2 cuentas** (PR #18): (a) el borrado estaba roto para *todos* los gastos —la regla de `delete` invocaba `canOwn(request.resource.data)` que en un delete es null—, ahora `delete` solo exige `canSee`; (b) los privados se filtraban por el feed compartido `activityLog` (el otro veía la *notificación* con descripción/monto), ahora `_logActivity` los omite; (c) se retiró la migración `runSplitMigrationIfNeeded` (lectura sin filtro que las reglas estrictas deniegan).
+- **C2 diferido a Sprint 13:** el selector visual de las 4 estrategias de split se hará con N personas, donde 'shares' cobra sentido.
 
 **30/06/2026 — Sprint 11: esquema unificado (split normalizado + gastos privados) (Claude)**
 - **Split normalizado:** cada gasto/plan lleva `splitAmong` (estrategias `iguales`/`montos`/`porcentajes`/`shares`, preparado para N personas) + `visibilidad` (`compartido`/`privado`) + `ownerId`. `resolveSplit` reemplaza a `javiAmount`/`laliAmount` como fuente del reparto en toda la capa de cálculo; el balance Javi↔Lali **excluye los privados**.
