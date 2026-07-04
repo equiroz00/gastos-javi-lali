@@ -18,6 +18,7 @@ import LoginScreen       from './components/LoginScreen';
 import Dashboard         from './components/Dashboard';
 import AddEditExpense    from './components/AddEditExpense';
 import History           from './components/History';
+import PersonalScreen    from './components/PersonalScreen';
 import SettingsScreen    from './components/Settings';
 import { useIsDesktop }  from './lib/useIsDesktop';
 
@@ -46,6 +47,7 @@ const TABS: Tab[] = [
   { id:'dashboard', icon:<Home          size={20} strokeWidth={1.8} />, label:'Inicio'    },
   { id:'stats',     icon:<BarChart2     size={20} strokeWidth={1.8} />, label:'Stats'     },
   { id:'add',       icon:<Plus          size={26} strokeWidth={2.5} />, label:'Agregar'   },
+  { id:'personal',  icon:<Wallet        size={20} strokeWidth={1.8} />, label:'Personal'  },
   { id:'history',   icon:<ClipboardList size={20} strokeWidth={1.8} />, label:'Historial' },
   { id:'settings',  icon:<Settings2     size={20} strokeWidth={1.8} />, label:'Config'    },
 ];
@@ -243,6 +245,7 @@ export default function App() {
       {view === 'dashboard' && <Dashboard />}
       {view === 'add'       && <AddEditExpense />}
       {view === 'stats'     && <React.Suspense fallback={statsFallback}><Stats /></React.Suspense>}
+      {view === 'personal'  && <PersonalScreen />}
       {view === 'history'   && <History />}
       {view === 'settings'  && <SettingsScreen />}
     </>
