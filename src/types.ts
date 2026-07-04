@@ -18,7 +18,7 @@ export interface Expense {
   currency: Currency;
   date: string;
   period: string;
-  paidBy: UserName;
+  paidBy: string;          // participante que pagó (Javi/Lali o una etiqueta, Sprint 13)
   responsible: Responsible;
   category: string;
   paymentMethod: string;
@@ -48,7 +48,7 @@ export interface Plan {
   startPeriod: string;
   startDate: string;
   currency: Currency;
-  paidBy: UserName;
+  paidBy: string;          // Sprint 13: cualquier participante
   responsible: Responsible;
   paymentMethod: string;
   bank: string;
@@ -67,8 +67,8 @@ export interface Payment {
   date: string;
   amount: number;
   currency: Currency;
-  from: UserName;
-  to: UserName;
+  from: string;            // Sprint 13: cualquier participante
+  to: string;
   period?: string;
   registeredAt: string;
 }
