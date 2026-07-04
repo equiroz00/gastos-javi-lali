@@ -33,12 +33,18 @@ service cloud.firestore {
     match /expenses/{id} {
       allow read:           if isCouple() && canSee(resource.data);
       allow create:         if isCouple() && canOwn(request.resource.data);
-      allow update, delete: if isCouple() && canSee(resource.data) && canOwn(request.resource.data);
+      allow update:         if isCouple() && canSee(resource.data) && canOwn(request.resource.data);
+      // En delete NO existe request.resource (dato entrante) → nunca se llama a
+      // canOwn(null). Basta con poder VER el doc: un privado solo lo borra su dueño.
+      allow delete:         if isCouple() && canSee(resource.data);
     }
     match /plans/{id} {
       allow read:           if isCouple() && canSee(resource.data);
       allow create:         if isCouple() && canOwn(request.resource.data);
-      allow update, delete: if isCouple() && canSee(resource.data) && canOwn(request.resource.data);
+      allow update:         if isCouple() && canSee(resource.data) && canOwn(request.resource.data);
+      // En delete NO existe request.resource (dato entrante) → nunca se llama a
+      // canOwn(null). Basta con poder VER el doc: un privado solo lo borra su dueño.
+      allow delete:         if isCouple() && canSee(resource.data);
     }
     match /payments/{id}        { allow read, write: if isCouple(); }
     match /settings/{id}        { allow read, write: if isCouple(); }

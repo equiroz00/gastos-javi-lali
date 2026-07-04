@@ -109,7 +109,11 @@ export async function runSplitMigrationIfNeeded(): Promise<void> {
 function reportWriteError(op: string) {
   return (err: unknown) => {
     console.error('Firestore [' + op + ']:', err);
-    useAppStore.getState().showMsg('⚠ No se pudo sincronizar con la nube. Revisá tu conexión e intentá de nuevo.');
+    const code = (err && typeof err === 'object' && 'code' in err) ? String((err as { code: unknown }).code) : '';
+    const msg = code === 'permission-denied'
+      ? '⚠ La nube rechazó la operación (permiso denegado). Puede ser una regla de seguridad.'
+      : '⚠ No se pudo sincronizar con la nube. Revisá tu conexión e intentá de nuevo.';
+    useAppStore.getState().showMsg(msg);
   };
 }
 
@@ -234,6 +238,9 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   _logActivity: (action: 'add' | 'edit' | 'delete', expense: Expense) => {
     const state = get();
     if (!state.currentUser) return;
+    // Los gastos privados NO van al feed compartido de actividad: fugaría la
+    // descripción y el monto al otro usuario (que no debe ver el gasto).
+    if (expense.visibilidad === 'privado') return;
     const entry: ActivityEntry = {
       id: genId('log'),
       action,
