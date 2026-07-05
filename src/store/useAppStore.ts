@@ -157,7 +157,7 @@ interface AppActions {
   handleAddPlan:       (formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
   handleEditPlan:      (planId: string, formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
   handleCancelPlan:    (planId: string) => void;
-  openPaymentModal:    (currency: Currency, netBal: number, period?: string) => void;
+  openPaymentModal:    (from: string, to: string, amount: number, currency: Currency, period?: string) => void;
   confirmPayment:      (paymentData: Payment) => void;
   deletePayment:       (id: string) => void;
   saveCustomCats:      (cats: string[]) => void;
@@ -409,7 +409,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   // Payment actions
-  openPaymentModal: (currency, netBal, period?) => set({ payModal: { currency, netBal, period } }),
+  openPaymentModal: (from, to, amount, currency, period?) => set({ payModal: { from, to, amount: Math.abs(amount), currency, period } }),
 
   confirmPayment: paymentData => {
     const state = get();
