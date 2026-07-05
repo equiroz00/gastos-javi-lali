@@ -167,13 +167,13 @@ export default function Settings() {
     <Card>
       <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.4rem', fontSize:'0.95rem' }}><Download size={16} strokeWidth={2.2} color={C.accent} />Exportar gastos a CSV</h3>
       <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.5rem' }}>
-        <div style={{ flex:1 }}>
+        <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:'0.72rem', color:C.textMuted, marginBottom:'0.2rem', fontWeight:700 }}>Desde</div>
-          <input type="date" style={inp} value={csvFrom} onChange={e => setCsvFrom(e.target.value)} />
+          <input type="date" style={{ ...inp, minWidth:0 }} value={csvFrom} onChange={e => setCsvFrom(e.target.value)} />
         </div>
-        <div style={{ flex:1 }}>
+        <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:'0.72rem', color:C.textMuted, marginBottom:'0.2rem', fontWeight:700 }}>Hasta</div>
-          <input type="date" style={inp} value={csvTo} onChange={e => setCsvTo(e.target.value)} />
+          <input type="date" style={{ ...inp, minWidth:0 }} value={csvTo} onChange={e => setCsvTo(e.target.value)} />
         </div>
       </div>
       <button
@@ -193,8 +193,8 @@ export default function Settings() {
         <p style={{ fontSize:'0.75rem', color:C.textMuted, marginBottom:'0.4rem', fontWeight:700 }}>Agregar período:</p>
         <input style={{ ...inp, marginBottom:'0.4rem' }} value={np.name} onChange={e => { setNp(p => ({ ...p, name:e.target.value })); setPeriodError(''); }} placeholder="Ej: Mar-Abr 2026" />
         <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.4rem' }}>
-          <input type="date" style={{ ...inp, flex:1 } as any} value={np.start} onChange={e => { setNp(p => ({ ...p, start:e.target.value })); setPeriodError(''); }} />
-          <input type="date" style={{ ...inp, flex:1 } as any} value={np.end}   onChange={e => { setNp(p => ({ ...p, end:e.target.value }));   setPeriodError(''); }} />
+          <input type="date" style={{ ...inp, flex:1, minWidth:0 } as any} value={np.start} onChange={e => { setNp(p => ({ ...p, start:e.target.value })); setPeriodError(''); }} />
+          <input type="date" style={{ ...inp, flex:1, minWidth:0 } as any} value={np.end}   onChange={e => { setNp(p => ({ ...p, end:e.target.value }));   setPeriodError(''); }} />
         </div>
         {periodError && <p style={{ color:C.danger, fontSize:'0.75rem', margin:'0 0 0.4rem', fontWeight:600 }}>⚠ {periodError}</p>}
         <button onClick={addPeriod} style={{ width:'100%', padding:'0.5rem', background:C.navy, color:C.onNavy, border:'none', borderRadius:'0.6rem', fontWeight:700, fontSize:'0.85rem', cursor:'pointer', fontFamily:F }}>
