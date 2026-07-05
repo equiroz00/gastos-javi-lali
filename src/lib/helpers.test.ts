@@ -242,6 +242,10 @@ describe('resolveSplit', () => {
     const r = resolveSplit(100.01, { strategy: 'porcentajes', entries: [{ participant: 'A', value: 33 }, { participant: 'B', value: 33 }, { participant: 'C', value: 34 }] });
     expect(round2(r.A + r.B + r.C)).toBe(100.01);
   });
+  it('proporcional sin pesos cargados (todos 0) → equitativo, no todo al último', () => {
+    expect(resolveSplit(100, { strategy: 'porcentajes', entries: [{ participant: 'Javi', value: 0 }, { participant: 'Lali', value: 0 }] }))
+      .toEqual({ Javi: 50, Lali: 50 });
+  });
 });
 
 describe('splitFromLegacy', () => {

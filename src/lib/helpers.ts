@@ -127,8 +127,10 @@ export function resolveSplit(amount: number, split: SplitAmong): Record<string, 
   }
 
   // iguales / porcentajes / shares → reparto proporcional por pesos
-  const weights = entries.map(e => split.strategy === 'iguales' ? 1 : safeN(e.value));
-  const totalW = weights.reduce((s, w) => s + w, 0) || 1;
+  let weights = entries.map(e => split.strategy === 'iguales' ? 1 : safeN(e.value));
+  let totalW = weights.reduce((s, w) => s + w, 0);
+  // Sin pesos cargados (todos 0) → reparto equitativo, NO todo al último.
+  if (totalW <= 0) { weights = entries.map(() => 1); totalW = entries.length; }
   let assigned = 0;
   entries.forEach((e, i) => {
     if (i < last) { const v = round2(total * weights[i] / totalW); out[e.participant] = v; assigned += v; }

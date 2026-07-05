@@ -292,7 +292,7 @@ export default function Settings() {
           {fontCard}
         </div>
         {sharedBanner}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'start' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'stretch' }}>
           {periodsCard}
           {peopleCard}
           {csvCard}

@@ -51,6 +51,22 @@ export default function SplitModal({ amount, currency, participants, paidBy: ini
     setSelected(sel => sel.includes(p) ? (sel.length > 1 ? sel.filter(x => x !== p) : sel) : [...sel, p]);
   }
 
+  // Al elegir una estrategia, precargo valores sensatos (50/50, 1 y 1, montos
+  // iguales) para que el preview arranque bien en vez de en cero.
+  function pickStrategy(s: SplitStrategy) {
+    setStrategy(s);
+    if (s === 'iguales') return;
+    const n = selected.length || 1;
+    const per = Math.floor(100 / n);
+    const next: Record<string, string> = {};
+    selected.forEach((p, i) => {
+      next[p] = s === 'montos'      ? String(round2(total / n))
+              : s === 'porcentajes' ? String(i === n - 1 ? 100 - per * (n - 1) : per)
+              : '1'; // shares
+    });
+    setValues(next);
+  }
+
   // Aviso de consistencia según la estrategia.
   const sumValues = selected.reduce((s, p) => s + safeN(values[p]), 0);
   let hint = '';
@@ -112,13 +128,39 @@ export default function SplitModal({ amount, currency, participants, paidBy: ini
           {STRATS.map(s => {
             const active = strategy === s.key;
             return (
-              <button key={s.key} onClick={() => setStrategy(s.key)}
+              <button key={s.key} onClick={() => pickStrategy(s.key)}
                 style={{ flex: 1, padding: '0.45rem 0', borderRadius: '0.7rem', border: '1.5px solid ' + (active ? C.navy : C.border), background: active ? C.navy : 'transparent', color: active ? C.onNavy : C.navy, fontWeight: active ? 800 : 600, fontSize: '0.8rem', cursor: 'pointer', fontFamily: F }}>
                 {s.label}
               </button>
             );
           })}
         </div>
+
+        {/* Ayuda de la estrategia */}
+        {strategy !== 'iguales' && (
+          <p style={{ fontSize: '0.68rem', color: C.textMuted, margin: '-0.6rem 0 0.9rem', lineHeight: 1.35 }}>
+            {strategy === 'montos'      && 'Monto exacto de cada uno (deben sumar el total).'}
+            {strategy === 'porcentajes' && 'Porcentaje de cada uno (idealmente suman 100).'}
+            {strategy === 'shares'      && 'Partes relativas: ej. 2 y 1 → uno paga 2/3 y el otro 1/3.'}
+          </p>
+        )}
+
+        {/* Barra deslizante para el caso clásico de 2 personas en % */}
+        {selected.length === 2 && strategy === 'porcentajes' && (() => {
+          const a = selected[0], b = selected[1];
+          const pa = Math.max(0, Math.min(100, Math.round(safeN(values[a]))));
+          const sliderBg = `linear-gradient(to right, ${C.navy} 0%, ${C.navy} ${pa}%, ${C.accent} ${pa}%, ${C.accent} 100%)`;
+          return (
+            <div style={{ marginBottom: '1rem' }}>
+              <style>{`.split-slider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;outline:none;cursor:pointer}.split-slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid ${C.navy};box-shadow:0 2px 6px rgba(0,0,0,.2);cursor:pointer}.split-slider::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid ${C.navy};cursor:pointer}`}</style>
+              <input type="range" min={0} max={100} value={pa} className="split-slider" style={{ background: sliderBg }}
+                onChange={e => { const v = Number(e.target.value); setValues(prev => ({ ...prev, [a]: String(v), [b]: String(100 - v) })); }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: C.textMuted, marginTop: '0.35rem', fontWeight: 700 }}>
+                <span>{a} · {pa}%</span><span>{b} · {100 - pa}%</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Filas por participante: input (según estrategia) + monto resuelto */}
         <div style={{ background: C.bg, borderRadius: '0.9rem', border: '1px solid ' + C.border, padding: '0.5rem 0.75rem', marginBottom: '0.6rem' }}>
