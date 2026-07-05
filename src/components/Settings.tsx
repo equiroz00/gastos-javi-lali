@@ -1,11 +1,11 @@
 // ── components/Settings.tsx ───────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown } from 'lucide-react';
+import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown, Users, X } from 'lucide-react';
 import { C, F, THEMES, FONTS, coerceTheme, coerceFont, SP, FS } from '../constants';
 import useAppStore from '../store/useAppStore';
 import { Card } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
-import { useSettings } from '../lib/queries';
+import { useSettings, usePeople } from '../lib/queries';
 
 export default function Settings() {
   const isDesktop           = useIsDesktop();
@@ -16,8 +16,12 @@ export default function Settings() {
   const userTheme           = useAppStore(s => s.userTheme);
   const userFont            = useAppStore(s => s.userFont);
   const saveUserPreferences  = useAppStore(s => s.saveUserPreferences);
+  const people               = usePeople();
+  const savePeople           = useAppStore(s => s.savePeople);
 
   const [periods, setPeriods]         = useState(settings.periods || []);
+  const [newPerson, setNewPerson]     = useState('');
+  const [personError, setPersonError] = useState('');
   const [np, setNp]                   = useState({ name:'', start:'', end:'' });
   const [periodError, setPeriodError] = useState('');
   const [saved, setSaved]             = useState(false);
@@ -52,6 +56,16 @@ export default function Settings() {
     const next = periods.filter(x => x.name !== name);
     setPeriods(next);
     saveSettings({ ...settings, periods: next });
+  }
+
+  function addPerson() {
+    const name = newPerson.trim();
+    if (!name) return;
+    if (['Javi', 'Lali', ...people].some(p => p.toLowerCase() === name.toLowerCase())) {
+      setPersonError('Esa persona ya existe.'); return;
+    }
+    savePeople([...people, name]);
+    setNewPerson(''); setPersonError('');
   }
 
   function save() {
@@ -215,6 +229,48 @@ export default function Settings() {
     </Card>
   );
 
+  // ── Personas card (etiquetas para dividir entre N) ──────────────────────────
+  const chipBase: React.CSSProperties = {
+    display:'inline-flex', alignItems:'center', gap:'0.3rem', padding:'0.3rem 0.6rem',
+    borderRadius:'999px', fontSize:'0.78rem', fontWeight:700, fontFamily:F,
+  };
+  const peopleCard = (
+    <Card>
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.4rem', fontSize:'0.95rem' }}>
+        <Users size={16} strokeWidth={2.2} color={C.accent} />Personas
+      </h3>
+      <p style={{ fontSize:'0.72rem', color:C.textMuted, margin:'0 0 0.75rem', lineHeight:1.4 }}>
+        Etiquetas para dividir gastos con más gente (amigos, familia). Javi y Lali ya están; agregá el resto y después elegilos al repartir un gasto.
+      </p>
+      <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.5rem' }}>
+        <input
+          style={inp}
+          value={newPerson}
+          onChange={e => { setNewPerson(e.target.value); setPersonError(''); }}
+          onKeyDown={e => { if (e.key === 'Enter') addPerson(); }}
+          placeholder="Nombre (ej. Caro)"
+        />
+        <button onClick={addPerson} style={{ flexShrink:0, padding:'0.5rem 0.9rem', background:C.navy, color:C.onNavy, border:'none', borderRadius:'0.6rem', fontWeight:700, fontSize:'0.82rem', cursor:'pointer', fontFamily:F }}>Agregar</button>
+      </div>
+      {personError && <p style={{ color:C.danger, fontSize:'0.7rem', margin:'0 0 0.5rem' }}>⚠ {personError}</p>}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem' }}>
+        {['Javi', 'Lali'].map(p => (
+          <span key={p} style={{ ...chipBase, background:C.bg, border:'1px solid '+C.border, color:C.textMuted }}>{p}</span>
+        ))}
+        {people.map(p => (
+          <span key={p} style={{ ...chipBase, background:C.accent+'1A', border:'1px solid '+C.accent, color:C.navy }}>
+            {p}
+            <button onClick={() => savePeople(people.filter(x => x !== p))} title={'Quitar ' + p}
+              style={{ background:'none', border:'none', cursor:'pointer', color:C.accent, display:'flex', padding:0, alignItems:'center' }}>
+              <X size={13} strokeWidth={2.5} />
+            </button>
+          </span>
+        ))}
+        {!people.length && <span style={{ fontSize:'0.72rem', color:C.textMuted, alignSelf:'center' }}>Todavía no agregaste a nadie más.</span>}
+      </div>
+    </Card>
+  );
+
   const saveBtn = (
     <button
       onClick={save}
@@ -238,6 +294,7 @@ export default function Settings() {
         {sharedBanner}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'start' }}>
           {periodsCard}
+          {peopleCard}
           {csvCard}
         </div>
         {saveBtn}
@@ -251,6 +308,7 @@ export default function Settings() {
       <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>
       {sharedBanner}
       {periodsCard}
+      {peopleCard}
       {csvCard}
       {appearanceBanner}
       {themeCard}

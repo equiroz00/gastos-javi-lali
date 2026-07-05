@@ -2,13 +2,13 @@
 import React, { useState } from 'react';
 import { Plus, X, Pencil, AlertTriangle } from 'lucide-react';
 import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy } from '../lib/helpers';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
-import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
+import { useExpenses, useSettings, useCustomCats, usePeople } from '../lib/queries';
 import SplitModal from './SplitModal';
 import { auth } from '../firebase.js';
-import type { Expense, UserName, Responsible, Plan, Visibility } from '../types';
+import type { Expense, UserName, Responsible, Plan, Visibility, SplitAmong } from '../types';
 
 // Estado del formulario: como Expense pero con amount editable como string.
 interface FormState {
@@ -26,6 +26,7 @@ interface FormState {
   javiAmount: number;
   laliAmount: number;
   visibilidad: Visibility;
+  splitAmong?: SplitAmong;
   notes?: string;
   createdBy?: UserName;
   createdAt?: string;
@@ -42,6 +43,8 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const settings          = useSettings();
   const customCats        = useCustomCats();
   const expenses          = useExpenses();
+  const people            = usePeople();
+  const participants      = allParticipants(people);
   const saveCustomCats    = useAppStore(s => s.saveCustomCats);
   const handleAdd         = useAppStore(s => s.handleAdd);
   const handleAddMultiple = useAppStore(s => s.handleAddMultiple);
@@ -148,11 +151,15 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         ? 'Guardar ' + (queue.length + 1) + ' gastos ✓'
         : 'Guardar gasto ✓';
 
-  // Derive displayed split amounts — use stored values if manually set, else calculate
+  // Reparto resuelto por participante (fuente de verdad: splitAmong del modal).
+  const splitResolved = form.splitAmong ? resolveSplit(totalAmt, form.splitAmong) : null;
   let javiAmt = safeN(form.javiAmount);
   let laliAmt = safeN(form.laliAmount);
-  // If both are 0 (new form) derive from responsible
-  if (javiAmt === 0 && laliAmt === 0 && totalAmt > 0) {
+  if (splitResolved) {
+    javiAmt = safeN(splitResolved['Javi']);
+    laliAmt = safeN(splitResolved['Lali']);
+  } else if (javiAmt === 0 && laliAmt === 0 && totalAmt > 0) {
+    // Sin split explícito (form nuevo): 50/50 por defecto.
     const derived = calcAmts(totalAmt, form.responsible);
     javiAmt = derived.javiAmount;
     laliAmt = derived.laliAmount;
@@ -160,7 +167,10 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const javiPct = totalAmt > 0 ? Math.round(javiAmt / totalAmt * 100) : 50;
 
   // Split button summary label
-  const splitSummary = ' ' + form.paidBy + ' · ' + javiPct + '% / ' + (100 - javiPct) + '%';
+  const splitN = form.splitAmong?.entries?.length ?? 2;
+  const splitSummary = splitN > 2
+    ? ' ' + form.paidBy + ' pagó · entre ' + splitN
+    : ' ' + form.paidBy + ' · ' + javiPct + '% / ' + (100 - javiPct) + '%';
 
   const inpStyle = (extra?: React.CSSProperties): React.CSSProperties => ({
     width:'100%', border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.75rem',
@@ -183,8 +193,8 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     set('category', cat); setNewCatName(''); setShowNewCat(false);
   }
 
-  function onSplitConfirm(paidBy: string, javiAmount: number, laliAmount: number, responsible: string) {
-    setForm(f => ({ ...f, paidBy: paidBy as UserName, javiAmount, laliAmount, responsible: responsible as Responsible }));
+  function onSplitConfirm(paidBy: string, splitAmong: SplitAmong) {
+    setForm(f => ({ ...f, paidBy, splitAmong }));
     setShowSplitModal(false);
   }
 
@@ -244,7 +254,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       ...form, id, amount: totalAmt,
       javiAmount: javiAmt, laliAmount: laliAmt,
       currency, period,
-      splitAmong: splitFromLegacy(javiAmt, laliAmt),
+      splitAmong: form.splitAmong ?? splitFromLegacy(javiAmt, laliAmt),
       visibilidad: 'compartido',
     } as Expense;
   }
@@ -353,7 +363,13 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   );
 
   // ── Split preview ─────────────────────────────────────────────────────────
-  const splitPreview = showSplit ? (
+  const splitPreview = !showSplit ? null : splitResolved ? (
+    <div style={{ marginTop:'0.4rem', padding:'0.5rem 0.7rem', background:C.bg, borderRadius:'0.65rem', border:'1px solid '+C.border, display:'flex', flexWrap:'wrap', gap:'0.3rem 0.9rem' }}>
+      {Object.entries(splitResolved).map(([p, v]) => (
+        <span key={p} style={{ fontSize:'0.72rem', color:C.navy }}>{p}: <strong style={{ fontFamily:MONO }}>{fmt(safeN(v), cur)}</strong></span>
+      ))}
+    </div>
+  ) : (
     <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.4rem', padding:'0.5rem 0.6rem', background:C.bg, borderRadius:'0.65rem', border:'1px solid '+C.border }}>
       <div style={{ flex:1, textAlign:'center' }}>
         <div style={{ fontSize:'0.65rem', color:C.textMuted }}>Javi</div>
@@ -365,7 +381,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         <div style={{ fontWeight:800, color:C.accent, fontSize:'0.85rem' }}>{fmt(laliAmt, cur)}</div>
       </div>
     </div>
-  ) : null;
+  );
 
   // ── Visibilidad + split (un gasto privado no se divide) ────────────────────
   const visibilidadToggle = !isPlanEdit ? (
@@ -670,9 +686,9 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         <SplitModal
           amount={totalAmt}
           currency={cur}
+          participants={participants}
           paidBy={form.paidBy}
-          javiAmount={javiAmt}
-          laliAmount={laliAmt}
+          splitAmong={form.splitAmong}
           onConfirm={onSplitConfirm}
           onCancel={() => setShowSplitModal(false)}
         />

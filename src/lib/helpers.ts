@@ -172,6 +172,12 @@ export function calcNetBal(exps: Expense[], payments: Payment[], currency: Curre
   return gross + adj;
 }
 
+// Universo de participantes: los dos titulares (implícitos) + las etiquetas de
+// Config. Se usa para los selectores de la UI (quién pagó / entre quiénes).
+export function allParticipants(people: string[] = []): string[] {
+  return ['Javi', 'Lali', ...people.filter(p => p && p !== 'Javi' && p !== 'Lali')];
+}
+
 // ── Grafo de deudas N personas (Sprint 13) ────────────────────────────────────
 // Saldo neto por participante en una moneda. Positivo = le deben; negativo = debe.
 // Los privados NO generan deuda entre participantes (se excluyen). La suma da ≈ 0.
