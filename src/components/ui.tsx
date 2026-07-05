@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { C, F, CHART_TYPES } from '../constants';
-import { fmt, safeN, catLb, todayStr, genId } from '../lib/helpers';
+import { fmt, safeN, catLb, todayStr, genId, allParticipants } from '../lib/helpers';
+import { usePeople } from '../lib/queries';
 import useAppStore from '../store/useAppStore';
 
 // ── Category → Lucide icon mapping (keyword based, with fallback) ─────────────
@@ -234,19 +235,22 @@ export function PaymentModal() {
   const payModal       = useAppStore(s => s.payModal);
   const setPayModal    = useAppStore(s => s.setPayModal);
   const confirmPayment = useAppStore(s => s.confirmPayment);
+  const people         = usePeople();
+  const participants   = allParticipants(people);
   // Hooks must always be called unconditionally — before any early return
   const currency = (payModal && payModal.currency) || 'ARS';
-  const netBal   = (payModal && payModal.netBal) || 0;
-  const absAmt   = Math.abs(netBal);
-  const debtor   = netBal > 0 ? 'Lali' : 'Javi';
-  const creditor = netBal > 0 ? 'Javi' : 'Lali';
+  const [from, setFrom] = useState('Lali');
+  const [to, setTo]     = useState('Javi');
   const [amt, setAmt]   = useState('');
   const [date, setDate] = useState(todayStr());
   const [err, setErr]   = useState('');
-  // Sync amount when modal opens/changes
+  // Precarga desde la transferencia sugerida al abrir/cambiar el modal.
   useEffect(() => {
     if (payModal) {
-      setAmt(absAmt > 0 ? String(Math.round(absAmt)) : '');
+      setFrom(payModal.from || 'Lali');
+      setTo(payModal.to || 'Javi');
+      const a = Math.abs(safeN(payModal.amount));
+      setAmt(a > 0 ? String(Math.round(a)) : '');
       setErr('');
     }
   }, [payModal]);
@@ -254,9 +258,10 @@ export function PaymentModal() {
 
   function submit() {
     if (!amt || parseFloat(amt) <= 0) { setErr('Ingresá un monto válido.'); return; }
+    if (from === to) { setErr('Elegí dos personas distintas.'); return; }
     confirmPayment({
       id: genId('pay'), date, amount: parseFloat(amt), currency,
-      from: debtor, to: creditor, period: payModal!.period || undefined,
+      from, to, period: payModal!.period || undefined,
       registeredAt: new Date().toISOString(),
     });
   }
@@ -269,10 +274,21 @@ export function PaymentModal() {
         <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:900, color:C.navy, fontSize:'1rem', margin:'0 0 0.25rem' }}>
           <ArrowRightLeft size={17} strokeWidth={2.3} color={C.accent} />Registrar pago
         </h3>
-        <p style={{ fontSize:'0.8rem', color:C.textMuted, margin:'0 0 1rem' }}>
-          <span style={{ fontWeight:800, color:netBal > 0 ? C.accent : C.navy }}>{debtor}</span> le paga a{' '}
-          <span style={{ fontWeight:800, color:netBal > 0 ? C.navy : C.accent }}>{creditor}</span>
-        </p>
+        <div style={{ display:'flex', gap:'0.5rem', alignItems:'flex-end', margin:'0 0 1rem' }}>
+          <div style={{ flex:1 }}>
+            <label style={{ fontSize:'0.72rem', color:C.textMuted, fontWeight:700, display:'block', marginBottom:'0.25rem' }}>Paga</label>
+            <select value={from} onChange={e => setFrom(e.target.value)} style={{ ...inp, cursor:'pointer' }}>
+              {participants.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <span style={{ paddingBottom:'0.6rem', color:C.textMuted, fontWeight:700 }}>→</span>
+          <div style={{ flex:1 }}>
+            <label style={{ fontSize:'0.72rem', color:C.textMuted, fontWeight:700, display:'block', marginBottom:'0.25rem' }}>a</label>
+            <select value={to} onChange={e => setTo(e.target.value)} style={{ ...inp, cursor:'pointer' }}>
+              {participants.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
         <label style={{ fontSize:'0.8rem', color:C.textMuted, fontWeight:700, display:'block', marginBottom:'0.3rem' }}>Monto ({currency})</label>
         <input
           style={{ ...inp, borderColor:err ? '#c0314f' : C.border, marginBottom:'0.1rem' }}

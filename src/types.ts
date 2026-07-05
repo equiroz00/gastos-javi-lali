@@ -93,7 +93,9 @@ export interface ToastData {
 
 export interface PayModalData {
   currency: Currency;
-  netBal: number;
+  from: string;
+  to: string;
+  amount: number;    // monto sugerido de la transferencia
   period?: string;
 }
 

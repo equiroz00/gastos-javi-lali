@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil } from 'lucide-react';
 import { C, F, MONO, PENDING_PER, SP, FS } from '../constants';
-import { fmt, fmtS, safeN, calcNetBal, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
+import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, usePayments, usePlans, useSettings } from '../lib/queries';
@@ -170,10 +170,11 @@ interface UnifiedHeaderProps {
   allExpenses: Expense[];
 }
 
+interface Transfer { from: string; to: string; amount: number; }
 interface BalData {
-  netBal: number; noDebt: boolean; laliOwes: boolean;
-  javiPaid: number; laliPaid: number;
-  javiOwes: number; laliOwes2: number;
+  noDebt: boolean;
+  balances: Record<string, number>;
+  transfers: Transfer[];
   payAdj: Payment[]; total: number;
 }
 
@@ -196,16 +197,23 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
   const curs = Object.keys(byCur).sort((a, b) => byCur[b].total - byCur[a].total);
   const count = periodExps.length;
 
+  // Grafo de deudas: computeBalances ya excluye privados y filtra por moneda.
+  const payPeriod = selPeriod === 'Todos' ? undefined : selPeriod;
+  const settleBtn = (t: Transfer, c: string, primary?: boolean) => (
+    <button onClick={() => openPaymentModal(t.from, t.to, t.amount, c, payPeriod)}
+      style={primary
+        ? { display:'flex', alignItems:'center', justifyContent:'center', gap:'0.4rem', background:C.accent, border:'none', borderRadius:'0.8rem', padding:'0.55rem 0.9rem', color:C.white, fontWeight:800, fontSize:'0.8rem', cursor:'pointer', fontFamily:F, whiteSpace:'nowrap' }
+        : { display:'flex', alignItems:'center', gap:'0.3rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.6rem', padding:'0.35rem 0.6rem', color:C.accent, fontWeight:700, fontSize:'0.72rem', cursor:'pointer', fontFamily:F, whiteSpace:'nowrap' }}>
+      <ArrowRightLeft size={13} strokeWidth={2.2} />Registrar
+    </button>
+  );
+
   function balData(c: Currency): BalData {
-    const netBal = calcNetBal(periodExps, filteredPayments, c);
-    // Solo compartidos: el saldo entre los dos no incluye gastos privados.
-    const curExps = periodExps.filter(e => (e.currency || 'ARS') === c && e.visibilidad !== 'privado');
+    const balances = computeBalances(periodExps, filteredPayments, c);
+    const transfers = simplifyDebts(balances);
     return {
-      netBal, noDebt: Math.abs(netBal) < 1, laliOwes: netBal > 0,
-      javiPaid: curExps.filter(e => e.paidBy === 'Javi').reduce((s, e) => s + safeN(e.amount), 0),
-      laliPaid: curExps.filter(e => e.paidBy === 'Lali').reduce((s, e) => s + safeN(e.amount), 0),
-      javiOwes: curExps.reduce((s, e) => s + safeN(expenseResolved(e)['Javi']), 0),
-      laliOwes2: curExps.reduce((s, e) => s + safeN(expenseResolved(e)['Lali']), 0),
+      noDebt: transfers.length === 0,
+      balances, transfers,
       payAdj: filteredPayments.filter(p => (p.currency || 'ARS') === c),
       total: byCur[c] ? byCur[c].total : 0,
     };
@@ -263,21 +271,16 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
   function secondaryRow(c: string) {
     const d = balData(c);
     return (
-      <div key={c} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.6rem 0', borderTop:'1px solid '+C.border }}>
-        <div>
-          <div style={{ fontSize:'0.68rem', color:C.textMuted, fontWeight:600 }}>Balance {c}</div>
-          {d.noDebt
-            ? <div style={{ fontSize:'0.95rem', fontWeight:800, color:C.navy }}>Al día</div>
-            : <div style={{ fontSize:'0.95rem', fontWeight:800, color:C.navy, fontFamily:MONO }}>{fmt(d.netBal, c)}</div>}
-        </div>
-        {!d.noDebt && (
-          <button
-            onClick={() => openPaymentModal(c, d.netBal, selPeriod === 'Todos' ? undefined : selPeriod)}
-            style={{ display:'flex', alignItems:'center', gap:'0.3rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.6rem', padding:'0.35rem 0.6rem', color:C.accent, fontWeight:700, fontSize:'0.72rem', cursor:'pointer', fontFamily:F }}
-          >
-            <ArrowRightLeft size={13} strokeWidth={2.2} />Pagar
-          </button>
-        )}
+      <div key={c} style={{ padding:'0.6rem 0', borderTop:'1px solid '+C.border }}>
+        <div style={{ fontSize:'0.68rem', color:C.textMuted, fontWeight:600, marginBottom:'0.25rem' }}>Balance {c}</div>
+        {d.noDebt
+          ? <div style={{ fontSize:'0.9rem', fontWeight:800, color:C.navy }}>Al día</div>
+          : d.transfers.map((t, i) => (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.5rem', padding:'0.2rem 0' }}>
+                <span style={{ fontSize:'0.8rem', color:C.navy }}><strong>{t.from}</strong> → <strong>{t.to}</strong> <span style={{ fontFamily:MONO, fontWeight:700 }}>{fmt(t.amount, c)}</span></span>
+                {settleBtn(t, c)}
+              </div>
+            ))}
       </div>
     );
   }
@@ -287,17 +290,17 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
     const d = balData(c);
     return (
       <div key={'det_' + c} style={{ marginTop:'0.75rem', paddingTop:'0.75rem', borderTop:'1px dashed '+C.border }}>
-        <div style={{ fontSize:'0.66rem', color:C.textMuted, fontWeight:700, marginBottom:'0.5rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Detalle {c}</div>
-        <div style={{ display:'flex', gap:'0.5rem', marginBottom:'0.5rem' }}>
-          <div style={{ flex:1, background:C.bg, borderRadius:'0.7rem', padding:'0.55rem', border:'1px solid '+C.border }}>
-            <div style={{ fontSize:'0.62rem', color:C.textMuted, marginBottom:'0.15rem' }}>Javi pagó</div>
-            <div style={{ fontWeight:800, color:C.navy, fontFamily:MONO, fontSize:'0.82rem' }}>{fmt(d.javiPaid, c)}</div>
-          </div>
-          <div style={{ flex:1, background:C.bg, borderRadius:'0.7rem', padding:'0.55rem', border:'1px solid '+C.border }}>
-            <div style={{ fontSize:'0.62rem', color:C.textMuted, marginBottom:'0.15rem' }}>Lali pagó</div>
-            <div style={{ fontWeight:800, color:C.navy, fontFamily:MONO, fontSize:'0.82rem' }}>{fmt(d.laliPaid, c)}</div>
-          </div>
-        </div>
+        <div style={{ fontSize:'0.66rem', color:C.textMuted, fontWeight:700, marginBottom:'0.5rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Saldos {c}</div>
+        {Object.keys(d.balances).length === 0
+          ? <div style={{ fontSize:'0.78rem', color:C.textMuted, marginBottom:'0.5rem' }}>Todos en cero.</div>
+          : <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom:'0.5rem' }}>
+              {Object.entries(d.balances).sort((a, b) => b[1] - a[1]).map(([p, v]) => (
+                <div key={p} style={{ background:C.bg, borderRadius:'0.6rem', padding:'0.4rem 0.6rem', border:'1px solid '+C.border, fontSize:'0.75rem' }}>
+                  <span style={{ color:C.navy, fontWeight:700 }}>{p}</span>{' '}
+                  <span style={{ fontFamily:MONO, fontWeight:800, color: v >= 0 ? C.ok : C.danger }}>{v >= 0 ? '+' : ''}{fmt(v, c)}</span>
+                </div>
+              ))}
+            </div>}
         {d.payAdj.length > 0 && (
           <div style={{ background:C.bg, borderRadius:'0.7rem', padding:'0.5rem 0.7rem', border:'1px solid '+C.border }}>
             <div style={{ fontSize:'0.66rem', color:C.textMuted, fontWeight:700, marginBottom:'0.3rem' }}>Pagos registrados</div>
@@ -337,7 +340,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
         </div>
       </div>
 
-      {/* Hero balance (primary currency) */}
+      {/* Hero: saldos por persona / cómo saldar (moneda primaria) */}
       <div style={{ marginBottom:'0.85rem' }}>
         <div style={{ fontSize:'0.68rem', color:C.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>Balance{curs.length > 1 ? ' ' + primary : ''}</div>
         {pd.noDebt ? (
@@ -347,38 +350,37 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
             </div>
             <span style={{ fontSize:'1.3rem', fontWeight:800, color:C.navy }}>¡Al día!</span>
           </div>
-        ) : (
+        ) : pd.transfers.length === 1 ? (
           <>
-            <div style={{ fontSize:'0.82rem', color:C.textMuted, marginTop:'0.1rem', fontWeight:500 }}>{(pd.laliOwes ? 'Lali' : 'Javi')} le debe a {(pd.laliOwes ? 'Javi' : 'Lali')}</div>
-            <div style={{ fontSize:FS.hero, fontWeight:800, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05, marginTop:'0.1rem' }}>{fmt(pd.netBal, primary)}</div>
+            <div style={{ fontSize:'0.82rem', color:C.textMuted, marginTop:'0.1rem', fontWeight:500 }}>{pd.transfers[0].from} le debe a {pd.transfers[0].to}</div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.6rem', marginTop:'0.1rem' }}>
+              <div style={{ fontSize:FS.hero, fontWeight:800, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05 }}>{fmt(pd.transfers[0].amount, primary)}</div>
+              {settleBtn(pd.transfers[0], primary, true)}
+            </div>
           </>
+        ) : (
+          <div style={{ marginTop:'0.4rem' }}>
+            <div style={{ fontSize:'0.72rem', color:C.textMuted, fontWeight:700, marginBottom:'0.3rem' }}>Para quedar a mano:</div>
+            {pd.transfers.map((t, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.5rem', padding:'0.4rem 0', borderTop: i ? '1px solid '+C.border : 'none' }}>
+                <span style={{ fontSize:'0.88rem', color:C.navy, fontWeight:600 }}>
+                  <strong>{t.from}</strong> → <strong>{t.to}</strong>{' '}
+                  <span style={{ fontFamily:MONO, fontWeight:800 }}>{fmt(t.amount, primary)}</span>
+                </span>
+                {settleBtn(t, primary)}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Action row: register + detail toggle */}
-      {!pd.noDebt ? (
-        <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
-          <button
-            onClick={() => openPaymentModal(primary, pd.netBal, selPeriod === 'Todos' ? undefined : selPeriod)}
-            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'0.4rem', background:C.accent, border:'none', borderRadius:'0.8rem', padding:'0.65rem', color:C.white, fontWeight:800, fontSize:'0.85rem', cursor:'pointer', fontFamily:F }}
-          >
-            <ArrowRightLeft size={16} strokeWidth={2.4} />Registrar pago
-          </button>
-          <button
-            onClick={() => setExpanded(!expanded)}
-            style={{ display:'flex', alignItems:'center', gap:'0.25rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.8rem', padding:'0.65rem 0.7rem', color:C.textMuted, fontWeight:600, fontSize:'0.75rem', cursor:'pointer', fontFamily:F }}
-          >
-            Detalle<ChevronDown size={14} strokeWidth={2.2} style={{ transform:expanded ? 'rotate(180deg)' : 'none', transition:'transform 0.2s' }} />
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.25rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.8rem', padding:'0.55rem', color:C.textMuted, fontWeight:600, fontSize:'0.75rem', cursor:'pointer', fontFamily:F }}
-        >
-          Ver detalle<ChevronDown size={14} strokeWidth={2.2} style={{ transform:expanded ? 'rotate(180deg)' : 'none', transition:'transform 0.2s' }} />
-        </button>
-      )}
+      {/* Detalle */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.25rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.8rem', padding:'0.55rem', color:C.textMuted, fontWeight:600, fontSize:'0.75rem', cursor:'pointer', fontFamily:F }}
+      >
+        Ver detalle<ChevronDown size={14} strokeWidth={2.2} style={{ transform:expanded ? 'rotate(180deg)' : 'none', transition:'transform 0.2s' }} />
+      </button>
 
       {/* Secondary currencies */}
       {curs.length > 1 && <div style={{ marginTop:'0.6rem' }}>{curs.slice(1).map(secondaryRow)}</div>}
