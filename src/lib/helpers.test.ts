@@ -5,7 +5,8 @@ import { describe, it, expect } from 'vitest';
 import {
   round2, safeN, fmt, fmtS, todayStr, genId,
   catEm, catLb, normCat, sortByDate, pctChange, getWeekStart,
-  calcAmts, divideAmount, resolveSplit, splitFromLegacy, calcBal, calcNetBal, lastPayment, getPeriod,
+  calcAmts, divideAmount, resolveSplit, splitFromLegacy, calcBal, calcNetBal,
+  computeBalances, simplifyDebts, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS } from '../constants';
@@ -329,6 +330,57 @@ describe('calcNetBal', () => {
   it('gastos sin moneda cuentan como ARS', () => {
     const exps = [exp({ paidBy: 'Javi', javiAmount: 50, laliAmount: 50, currency: undefined as never })];
     expect(calcNetBal(exps, [], 'ARS')).toBe(50);
+  });
+});
+
+// ── Grafo de deudas N personas ────────────────────────────────────────────────
+const igual = (...ps: string[]) => ({ strategy: 'iguales' as const, entries: ps.map(participant => ({ participant })) });
+
+describe('computeBalances', () => {
+  it('2 personas: el pagador queda acreedor por la parte del otro', () => {
+    const exps = [exp({ paidBy: 'Javi', amount: 100, splitAmong: igual('Javi', 'Lali') })];
+    expect(computeBalances(exps, [], 'ARS')).toEqual({ Javi: 50, Lali: -50 });
+  });
+  it('3 personas iguales: pagador acreedor, los otros deudores', () => {
+    const exps = [exp({ paidBy: 'Javi', amount: 120, splitAmong: igual('Javi', 'Lali', 'Caro') })];
+    expect(computeBalances(exps, [], 'ARS')).toEqual({ Javi: 80, Lali: -40, Caro: -40 });
+  });
+  it('excluye los gastos privados', () => {
+    const exps = [exp({ paidBy: 'Javi', amount: 100, visibilidad: 'privado', ownerId: 'x', splitAmong: igual('Javi') })];
+    expect(computeBalances(exps, [], 'ARS')).toEqual({});
+  });
+  it('filtra por moneda', () => {
+    const exps = [exp({ paidBy: 'Javi', amount: 100, currency: 'USD', splitAmong: igual('Javi', 'Lali') })];
+    expect(computeBalances(exps, [], 'ARS')).toEqual({});
+  });
+  it('los pagos saldan la deuda', () => {
+    const exps = [exp({ paidBy: 'Javi', amount: 100, splitAmong: igual('Javi', 'Lali') })];
+    const pays = [pay({ from: 'Lali', to: 'Javi', amount: 50 })];
+    expect(computeBalances(exps, pays, 'ARS')).toEqual({});
+  });
+});
+
+describe('simplifyDebts', () => {
+  it('sin saldos → sin transferencias', () => {
+    expect(simplifyDebts({})).toEqual([]);
+    expect(simplifyDebts({ Javi: 0, Lali: 0 })).toEqual([]);
+  });
+  it('una deuda simple → una transferencia', () => {
+    expect(simplifyDebts({ Javi: 50, Lali: -50 })).toEqual([{ from: 'Lali', to: 'Javi', amount: 50 }]);
+  });
+  it('un deudor y dos acreedores → 2 transferencias que suman la deuda', () => {
+    const t = simplifyDebts({ Javi: 30, Lali: 30, Caro: -60 });
+    expect(t.length).toBe(2);
+    expect(t.every(x => x.from === 'Caro')).toBe(true);
+    expect(t.reduce((s, x) => s + x.amount, 0)).toBe(60);
+  });
+  it('deja todos los saldos en 0 y usa ≤ n−1 transferencias', () => {
+    const bal: Record<string, number> = { A: 50, B: 20, C: -30, D: -40 };
+    const t = simplifyDebts(bal);
+    expect(t.length).toBeLessThanOrEqual(3); // n = 4
+    const settled: Record<string, number> = { ...bal };
+    t.forEach(({ from, to, amount }) => { settled[from] += amount; settled[to] -= amount; });
+    Object.values(settled).forEach(v => expect(Math.abs(v)).toBeLessThan(0.01));
   });
 });
 

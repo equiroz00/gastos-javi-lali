@@ -172,6 +172,51 @@ export function calcNetBal(exps: Expense[], payments: Payment[], currency: Curre
   return gross + adj;
 }
 
+// ── Grafo de deudas N personas (Sprint 13) ────────────────────────────────────
+// Saldo neto por participante en una moneda. Positivo = le deben; negativo = debe.
+// Los privados NO generan deuda entre participantes (se excluyen). La suma da ≈ 0.
+export function computeBalances(exps: Expense[], payments: Payment[], currency: Currency): Record<string, number> {
+  const bal: Record<string, number> = {};
+  const add = (p: string, v: number) => { if (p) bal[p] = round2((bal[p] || 0) + v); };
+
+  for (const e of exps) {
+    if (e.visibilidad === 'privado') continue;
+    if ((e.currency || 'ARS') !== currency) continue;
+    add(e.paidBy, safeN(e.amount));                    // el que pagó adelantó el total
+    const resolved = expenseResolved(e);               // cada uno debe su parte
+    for (const p of Object.keys(resolved)) add(p, -safeN(resolved[p]));
+  }
+  for (const p of payments || []) {
+    if ((p.currency || 'ARS') !== currency) continue;
+    add(p.from, safeN(p.amount));                      // quien paga reduce su deuda
+    add(p.to, -safeN(p.amount));                       // a quien le pagan se le debe menos
+  }
+  for (const k of Object.keys(bal)) if (Math.abs(bal[k]) < 0.01) delete bal[k];
+  return bal;
+}
+
+// Minimiza transferencias para saldar (estilo Splitwise): empareja el mayor
+// acreedor con el mayor deudor y salda el mínimo entre ambos, repitiendo.
+// Produce ≤ n−1 transferencias que dejan todos los saldos en 0.
+export function simplifyDebts(balances: Record<string, number>): Array<{ from: string; to: string; amount: number }> {
+  const creditors = Object.entries(balances).filter(([, v]) => v > 0.005).map(([p, v]) => ({ p, v: round2(v) }));
+  const debtors   = Object.entries(balances).filter(([, v]) => v < -0.005).map(([p, v]) => ({ p, v: round2(-v) }));
+  creditors.sort((a, b) => b.v - a.v);
+  debtors.sort((a, b) => b.v - a.v);
+
+  const out: Array<{ from: string; to: string; amount: number }> = [];
+  let i = 0, j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const pay = round2(Math.min(debtors[i].v, creditors[j].v));
+    if (pay > 0) out.push({ from: debtors[i].p, to: creditors[j].p, amount: pay });
+    debtors[i].v   = round2(debtors[i].v - pay);
+    creditors[j].v = round2(creditors[j].v - pay);
+    if (debtors[i].v < 0.01) i++;
+    if (creditors[j].v < 0.01) j++;
+  }
+  return out;
+}
+
 export function lastPayment(payments: Payment[], currency: Currency): Payment | null {
   const inCur = (payments || []).filter(p => (p.currency || 'ARS') === currency);
   if (!inCur.length) return null;

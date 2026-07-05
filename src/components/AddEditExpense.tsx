@@ -19,7 +19,7 @@ interface FormState {
   category: string;
   paymentMethod: string;
   bank: string;
-  paidBy: UserName;
+  paidBy: string;
   responsible: Responsible;
   currency: string;
   customCurrency?: string;

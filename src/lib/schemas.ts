@@ -28,7 +28,7 @@ export const ExpenseSchema = z.object({
   currency:      z.string().catch('ARS'),
   date:          z.string().catch(''),
   period:        z.string().catch('Sin período'),
-  paidBy:        z.enum(['Javi', 'Lali']).catch('Javi'),
+  paidBy:        z.string().min(1).catch('Javi'),
   responsible:   z.enum(['Javi', 'Lali', 'Ambos']).catch('Ambos'),
   category:      z.string().catch(''),
   paymentMethod: z.string().catch(''),
@@ -56,7 +56,7 @@ const ExpenseStrict = z.object({
   currency:    z.string().min(1),
   date:        z.string().min(1),
   period:      z.string().min(1),
-  paidBy:      z.enum(['Javi', 'Lali']),
+  paidBy:      z.string().min(1),
   responsible: z.enum(['Javi', 'Lali', 'Ambos']),
 });
 
@@ -104,8 +104,8 @@ export const PaymentSchema = z.object({
   date:         z.string().catch(''),
   amount:       z.coerce.number().catch(0),
   currency:     z.string().catch('ARS'),
-  from:         z.enum(['Javi', 'Lali']).catch('Lali'),
-  to:           z.enum(['Javi', 'Lali']).catch('Javi'),
+  from:         z.string().min(1).catch('Lali'),
+  to:           z.string().min(1).catch('Javi'),
   period:       z.string().optional(),
   registeredAt: z.string().catch(''),
 });
@@ -115,8 +115,8 @@ const PaymentStrict = z.object({
   amount:   z.number(),
   currency: z.string().min(1),
   date:     z.string().min(1),
-  from:     z.enum(['Javi', 'Lali']),
-  to:       z.enum(['Javi', 'Lali']),
+  from:     z.string().min(1),
+  to:       z.string().min(1),
 });
 
 export function parsePayments(raw: unknown[]): Payment[] {
@@ -147,7 +147,7 @@ export const PlanSchema = z.object({
   startPeriod:       z.string().catch(''),
   startDate:         z.string().catch(''),
   currency:          z.string().catch('ARS'),
-  paidBy:            z.enum(['Javi', 'Lali']).catch('Javi'),
+  paidBy:            z.string().min(1).catch('Javi'),
   responsible:       z.enum(['Javi', 'Lali', 'Ambos']).catch('Ambos'),
   paymentMethod:     z.string().catch(''),
   bank:              z.string().catch(''),
@@ -166,7 +166,7 @@ const PlanStrict = z.object({
   numInstallments: z.number(),
   startPeriod:     z.string().min(1),
   currency:        z.string().min(1),
-  paidBy:          z.enum(['Javi', 'Lali']),
+  paidBy:          z.string().min(1),
   responsible:     z.enum(['Javi', 'Lali', 'Ambos']),
 });
 
