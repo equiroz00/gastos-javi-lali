@@ -127,8 +127,10 @@ export function resolveSplit(amount: number, split: SplitAmong): Record<string, 
   }
 
   // iguales / porcentajes / shares → reparto proporcional por pesos
-  const weights = entries.map(e => split.strategy === 'iguales' ? 1 : safeN(e.value));
-  const totalW = weights.reduce((s, w) => s + w, 0) || 1;
+  let weights = entries.map(e => split.strategy === 'iguales' ? 1 : safeN(e.value));
+  let totalW = weights.reduce((s, w) => s + w, 0);
+  // Sin pesos cargados (todos 0) → reparto equitativo, NO todo al último.
+  if (totalW <= 0) { weights = entries.map(() => 1); totalW = entries.length; }
   let assigned = 0;
   entries.forEach((e, i) => {
     if (i < last) { const v = round2(total * weights[i] / totalW); out[e.participant] = v; assigned += v; }
@@ -170,6 +172,12 @@ export function calcNetBal(exps: Expense[], payments: Payment[], currency: Curre
     .filter(p => (p.currency || 'ARS') === currency)
     .reduce((sum, p) => p.from === 'Lali' ? sum - safeN(p.amount) : sum + safeN(p.amount), 0);
   return gross + adj;
+}
+
+// Universo de participantes: los dos titulares (implícitos) + las etiquetas de
+// Config. Se usa para los selectores de la UI (quién pagó / entre quiénes).
+export function allParticipants(people: string[] = []): string[] {
+  return ['Javi', 'Lali', ...people.filter(p => p && p !== 'Javi' && p !== 'Lali')];
 }
 
 // ── Grafo de deudas N personas (Sprint 13) ────────────────────────────────────

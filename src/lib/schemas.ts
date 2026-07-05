@@ -205,11 +205,13 @@ export const SettingsSchema = z.object({
 
 // El doc settings/main trae la config compartida + las categorías personalizadas.
 // Devuelve ambas por separado (espejan los dos caches: ['settings'] y ['customCats']).
-export function parseSettingsDoc(raw: unknown): { settings: Settings; customCats: string[] } {
+export function parseSettingsDoc(raw: unknown): { settings: Settings; customCats: string[]; people: string[] } {
   const parsed = SettingsSchema.safeParse(raw);
   if (!parsed.success) reportAnomaly('Config', raw, parsed.error);
   const settings = (parsed.success ? parsed.data : { periods: [], theme: 'default', font: 'Nunito' }) as Settings;
   const catsRaw = (raw && typeof raw === 'object') ? (raw as { customCats?: unknown }).customCats : undefined;
   const customCats = z.array(z.string()).catch([]).parse(catsRaw);
-  return { settings, customCats };
+  const peopleRaw = (raw && typeof raw === 'object') ? (raw as { people?: unknown }).people : undefined;
+  const people = z.array(z.string()).catch([]).parse(peopleRaw);
+  return { settings, customCats, people };
 }

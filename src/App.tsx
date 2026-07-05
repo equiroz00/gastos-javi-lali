@@ -144,9 +144,10 @@ export default function App() {
 
         const u4 = onSnapshot(settingsDoc(), snap => {
           if (snap.exists()) {
-            const { settings, customCats } = parseSettingsDoc(snap.data());
+            const { settings, customCats, people } = parseSettingsDoc(snap.data());
             queryClient.setQueryData(['settings'], settings);
             queryClient.setQueryData(['customCats'], customCats);
+            queryClient.setQueryData(['people'], people);
           }
           fired.cfg = true; checkDone();
         }, e => { console.error('settings:', e.code); fired.cfg = true; checkDone(); });

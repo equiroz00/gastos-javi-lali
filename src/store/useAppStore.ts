@@ -40,6 +40,8 @@ const getCfg = (): Settings => queryClient.getQueryData<Settings>(['settings']) 
 const setCfg = (next: Settings): void => { queryClient.setQueryData<Settings>(['settings'], next); };
 const getCats = (): string[] => queryClient.getQueryData<string[]>(['customCats']) ?? [];
 const setCats = (next: string[]): void => { queryClient.setQueryData<string[]>(['customCats'], next); };
+const getPeople = (): string[] => queryClient.getQueryData<string[]>(['people']) ?? [];
+const setPeople = (next: string[]): void => { queryClient.setQueryData<string[]>(['people'], next); };
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 export function runMigrationIfNeeded(onDone: () => void): void {
@@ -159,6 +161,7 @@ interface AppActions {
   confirmPayment:      (paymentData: Payment) => void;
   deletePayment:       (id: string) => void;
   saveCustomCats:      (cats: string[]) => void;
+  savePeople:          (people: string[]) => void;
   saveSettings:        (s: Settings)    => void;
   exportCSV:           (from: string, to: string) => void;
 }
@@ -427,8 +430,16 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   // Settings
   saveCustomCats: cats => {
     setCats(cats);
-    setDoc(settingsDoc(), { ...getCfg(), customCats: cats })
+    setDoc(settingsDoc(), { ...getCfg(), customCats: cats, people: getPeople() })
       .catch(reportWriteError('saveCustomCats'));
+  },
+
+  // Personas (etiquetas) para dividir entre N. Se guardan junto al resto de la
+  // config (el doc settings/main se reescribe entero, hay que re-adjuntar todo).
+  savePeople: people => {
+    setPeople(people);
+    setDoc(settingsDoc(), { ...getCfg(), customCats: getCats(), people })
+      .catch(reportWriteError('savePeople'));
   },
 
   saveSettings: s => {
@@ -446,7 +457,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     }
     setExps(updated);
     setCfg(s);
-    setDoc(settingsDoc(), { ...s, customCats: getCats() })
+    setDoc(settingsDoc(), { ...s, customCats: getCats(), people: getPeople() })
       .catch(reportWriteError('saveSettings'));
     state.showMsg(changed.length > 0
       ? '✓ Guardado · ' + changed.length + ' gasto' + (changed.length !== 1 ? 's' : '') + ' reubicado' + (changed.length !== 1 ? 's' : '')

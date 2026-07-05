@@ -52,3 +52,14 @@ export function useCustomCats(): string[] {
   });
   return data;
 }
+
+// Personas extra (etiquetas) para dividir gastos entre N (Sprint 13). Javi/Lali
+// son implícitos; acá van solo las etiquetas. Se guardan en settings/main.
+export function usePeople(): string[] {
+  const { data } = useQuery<string[]>({
+    queryKey: ['people'],
+    queryFn: () => Promise.resolve([] as string[]),
+    initialData: [] as string[],
+  });
+  return data;
+}
