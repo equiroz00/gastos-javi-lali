@@ -2,7 +2,7 @@
 > Ordenado por impacto real sobre la experiencia y solidez del producto.
 > Cada sprint está pensado para una sesión de trabajo.
 
-> **Última actualización:** 04/07/2026 · Ver [Registro de cambios](#registro-de-cambios) al final.
+> **Última actualización:** 05/07/2026 · Ver [Registro de cambios](#registro-de-cambios) al final.
 
 ---
 
@@ -104,22 +104,23 @@ No son features de usuario, son infraestructura que sostiene todo lo de abajo. S
 
 ## ✨ Nuevas funcionalidades (orden de implementación recomendado)
 
-### 🟢 SPRINT 11 — Esquema de datos unificado (base de 12 y 13) — ✅ Hecho (falta C2)
+### 🟢 SPRINT 11 — Esquema de datos unificado (base de 12 y 13) — ✅ Hecho
 **Objetivo:** Rediseñar el esquema del gasto **una sola vez** para soportar tanto gastos compartidos-con-split como gastos privados.
 **Por qué primero:** los Sprints 12 y 13 tocan el mismo campo del modelo. Si se hacen por separado, se migra Firestore dos veces.
 **Incluye:** campo de `visibilidad` (compartido/privado) + bloque de split normalizado (`paidBy` + `splitAmong` con estrategia: iguales / montos / porcentajes / shares) + reglas de seguridad que lo respalden.
-**Estado:** ✅ Entregado en **PRs #14** (esquema + migración), **#15** (balance a `resolveSplit`, excluye privados) y **#16** (privados + dual-query + reglas). Pendiente **C2**: el selector visual de las 4 estrategias en el SplitModal (el split de 2 personas ya produce `montos` exacto; falta solo la UI). **Acción manual pendiente:** desplegar las nuevas `firestore.rules` y verificar la privacidad con las dos cuentas.
+**Estado:** ✅ Entregado en **PRs #14** (esquema + migración), **#15** (balance a `resolveSplit`, excluye privados) y **#16** (privados + dual-query + reglas). Reglas desplegadas y privacidad verificada con las 2 cuentas. C2 (selector visual de las 4 estrategias) quedó completado en Sprint 13.
 
 ### 🟢 SPRINT 12 — Gastos individuales / privados — ✅ Hecho
 **Objetivo:** Que la app también sea un tracker personal; gastos visibles solo para quien los carga.
 **Punto crítico:** la privacidad se impone en las **Firestore Security Rules** (`resource.data.ownerId == request.auth.uid`), NUNCA solo ocultando en la UI.
 **Hecho:** en Sprint 11 la base (`visibilidad`/`ownerId`, reglas `canSee`/`canOwn`, dual-query, toggle Compartido/Privado) + los fixes de privacidad (borrado y fuga por el feed de actividad, PR #18); y en Sprint 12 la **pestaña "Personal"** ("¿cuánto gasté *yo*?" = privados propios + mi parte de los compartidos vía `resolveSplit`; PR #19).
 
-### 🔵 SPRINT 13 — División entre N personas
+### 🟢 SPRINT 13 — División entre N personas — ✅ Hecho
 **Objetivo:** Repartir gastos entre 1…n personas, no solo Javi/Lali.
 **El trabajo real** no es la UI sino la matemática: el saldo deja de ser un número y pasa a ser un **grafo de deudas**.
 **Incluye:** algoritmo de **simplificación de deudas** (minimizar transferencias, como Splitwise).
 **Decisión de arranque:** las personas extra son **etiquetas** para repartir (no usuarios con cuenta). Cubre el 90% del uso real con una fracción del esfuerzo.
+**Estado:** ✅ Entregado en **PRs #21** (núcleo: `computeBalances` + `simplifyDebts`), **#22** (personas en Config + SplitModal N con las 4 estrategias — cierra **C2**) y **#23** (Inicio con saldos por persona + liquidación mínima + PaymentModal generalizado). Cualquier participante puede ser quien pagó.
 
 ### 🔵 SPRINT 14 — Lector de facturas (OCR) + ubicación
 **Objetivo:** Foto del ticket → la app extrae comercio, total, fecha, CUIT, ítems; el usuario solo corrige lo mal leído (human-in-the-loop).
@@ -145,9 +146,9 @@ PENDIENTE  Sprint 9     ████       Capacitor (nativo)   ⛔ bloqueado (s
 (original) Sprint 10    ████       Accesibilidad + PWA
 
 FASE 2     Tooling      ██████████ Sentry ✅, TanStack Query+Zod ✅, Storybook…
-           Sprint 11    ██████████ Esquema de datos unificado   ✅ (falta C2)
+           Sprint 11    ██████████ Esquema de datos unificado   ✅
            Sprint 12    ██████████ Gastos privados + pestaña Personal   ✅
-           Sprint 13    ████████   División entre N personas
+           Sprint 13    ██████████ División entre N personas         ✅
            Sprint 14    ████████   Lector de facturas (OCR) + mapa
            Sprint 15    ██████     Promociones bancarias
 ```
@@ -155,6 +156,12 @@ FASE 2     Tooling      ██████████ Sentry ✅, TanStack Quer
 ---
 
 ## Registro de cambios
+
+**05/07/2026 — Sprint 13: división entre N personas (grafo de deudas) (Claude)**
+- **Núcleo de saldos** (PR #21): `computeBalances` (saldo neto por participante, excluye privados, filtra por moneda) + `simplifyDebts` (transferencias mínimas estilo Splitwise, ≤ n−1 movimientos que saldan exacto). Tipos ensanchados (`paidBy`/`from`/`to` de `UserName` a `string`), **sin migración de Firestore**. +9 tests.
+- **Personas + reparto N** (PR #22): sección "Personas" en Config (etiquetas; `savePeople`/`usePeople` en `settings/main`); `SplitModal` reescrito para N participantes con las 4 estrategias (iguales/montos/porcentajes/shares) — **cierra C2** — con precarga sensata, ayudas por estrategia y la barra de % para el caso de 2 personas.
+- **Inicio: saldos + liquidación** (PR #23): la tarjeta de Inicio muestra el saldo por persona y las **transferencias mínimas** ("cómo saldar"), cada una con botón para registrar el pago; `PaymentModal` generalizado (from/to entre cualquier participante). + fix de inputs de fecha en Config.
+- Las personas extra son **etiquetas** (no cuentas con login). Cualquier participante puede figurar como quien pagó.
 
 **04/07/2026 — Sprint 12: pestaña Personal + fixes de privacidad (Claude)**
 - **Pestaña "Personal"** (PR #19): vista dedicada "¿cuánto gasté *yo* este ciclo?" = gastos privados propios (completos) + mi parte de los compartidos (reparto real vía `resolveSplit`). Titular con total + variación vs. ciclo anterior, desglose privado/compartido y por categoría. Nuevo tab (ícono billetera) en la nav mobile y el sidebar desktop.
