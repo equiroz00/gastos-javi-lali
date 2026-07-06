@@ -1,6 +1,6 @@
 // ── components/Stats.tsx ──────────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { BarChart3, TrendingUp, Trophy, CreditCard, Layers } from 'lucide-react';
+import { BarChart3, TrendingUp, Trophy, CreditCard, Layers, Calendar } from 'lucide-react';
 import { CatIcon } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import {
@@ -14,6 +14,8 @@ import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
 import { Card, ScrollFilter, ChartSelector } from './ui';
 import type { Expense, Currency } from '../types';
+
+const PERSONALIZADO = 'Personalizado';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface CatRow  { label: string; emoji: string; value: number; pct: number; }
@@ -386,8 +388,12 @@ export default function Stats() {
   const [cur, setCur]       = useState<Currency>('ARS');
   const [catChart, setCatChart] = useState('Torta');
   const [pmChart, setPmChart]   = useState('Tabla');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo]     = useState('');
 
-  const byPer    = period === 'Todos' ? expenses : expenses.filter(e => e.period === period);
+  const byPer = period === PERSONALIZADO
+    ? expenses.filter(e => e.date && (!customFrom || e.date >= customFrom) && (!customTo || e.date <= customTo))
+    : period === 'Todos' ? expenses : expenses.filter(e => e.period === period);
   const filtered = byPer.filter(e => (e.currency || 'ARS') === cur && e.period !== PENDING_PER);
 
   // Gastos del período anterior (para "Categorías vs período anterior")
@@ -400,10 +406,48 @@ export default function Stats() {
     }
   }
 
+  const inp: React.CSSProperties = {
+    width:'100%', border:'1px solid '+C.border, borderRadius:'0.6rem',
+    padding:'0.5rem 0.75rem', fontSize:'0.85rem', outline:'none',
+    boxSizing:'border-box', fontFamily:F, color:C.navy, background:C.surface,
+  };
+
+  function setThisMonth() {
+    const d = new Date();
+    const y = d.getFullYear(), m = d.getMonth();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    setCustomFrom(y + '-' + pad(m + 1) + '-01');
+    setCustomTo(y + '-' + pad(m + 1) + '-' + pad(lastDay));
+  }
+
   const filters = (
     <>
-      <ScrollFilter items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />
+      <ScrollFilter items={['Todos', ...allPeriodNames, PERSONALIZADO]} selected={period} onSelect={setPeriod} />
       {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={(c: string) => setCur(c as Currency)} />}
+      {period === PERSONALIZADO && (
+        <Card style={{ marginBottom:'0.6rem' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, fontSize:'0.85rem', marginBottom:'0.5rem' }}>
+            <Calendar size={15} strokeWidth={2.2} color={C.accent} />Rango personalizado
+          </div>
+          <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.5rem' }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:'0.72rem', color:C.textMuted, marginBottom:'0.2rem', fontWeight:700 }}>Desde</div>
+              <input type="date" style={{ ...inp, minWidth:0 }} value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:'0.72rem', color:C.textMuted, marginBottom:'0.2rem', fontWeight:700 }}>Hasta</div>
+              <input type="date" style={{ ...inp, minWidth:0 }} value={customTo} onChange={e => setCustomTo(e.target.value)} />
+            </div>
+          </div>
+          <button
+            onClick={setThisMonth}
+            style={{ width:'100%', padding:'0.5rem', background:'transparent', color:C.navy, border:'1px solid '+C.border, borderRadius:'0.65rem', fontWeight:700, fontSize:'0.78rem', cursor:'pointer', fontFamily:F }}
+          >
+            Este mes
+          </button>
+        </Card>
+      )}
     </>
   );
 
