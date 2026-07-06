@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -38,6 +39,8 @@ export const db = initializeFirestore(app, {
 });
 export const auth     = getAuth(app);
 export const provider = new GoogleAuthProvider();
+// Fotos de tickets/facturas (Sprint 14) — reglas en storage.rules.
+export const storage  = getStorage(app);
 
 // Nota: dataDoc (appdata/main) ya no se exporta.
 // Las referencias a colecciones se construyen en App.jsx con collection(db, '...').

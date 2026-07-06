@@ -1,13 +1,16 @@
 // ── components/AddEditExpense.tsx ─────────────────────────────────────────────
-import React, { useState } from 'react';
-import { Plus, X, Pencil, AlertTriangle } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin } from 'lucide-react';
 import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
 import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats, usePeople } from '../lib/queries';
 import SplitModal from './SplitModal';
-import { auth } from '../firebase.js';
+import { auth, storage } from '../firebase.js';
+import { ref, uploadBytes } from 'firebase/storage';
+import { ReciboSchema, type ReciboExtraido } from '../lib/receiptSchema';
+import { placeTypeToCategory } from '../lib/placeCategory';
 import type { Expense, UserName, Responsible, Plan, Visibility, SplitAmong } from '../types';
 
 // Estado del formulario: como Expense pero con amount editable como string.
@@ -97,12 +100,153 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const [queue, setQueue]                 = useState<Expense[]>([]);
   const [dupWarning, setDupWarning]       = useState<Expense | null>(null);
 
+  // ── Escaneo de facturas (Sprint 14) — human-in-the-loop: nada se auto-guarda,
+  // solo se precarga el form y se marcan los campos para que se revisen. ──────
+  const fileInputRef                = useRef<HTMLInputElement>(null);
+  const [scanning, setScanning]     = useState(false);
+  const [scanError, setScanError]   = useState('');
+  const [autoFilled, setAutoFilled] = useState<Set<string>>(new Set());
+  const [scanExtra, setScanExtra]   = useState<{ cuit: string | null; items: ReciboExtraido['items'] } | null>(null);
+
+  function clearAutoFilled(field: string) {
+    setAutoFilled(af => {
+      if (!af.has(field)) return af;
+      const next = new Set(af);
+      next.delete(field);
+      return next;
+    });
+  }
+
+  function downscaleImage(file: File): Promise<{ blob: Blob; base64: string }> {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const maxW  = 1600;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        URL.revokeObjectURL(url);
+        if (!ctx) { reject(new Error('El navegador no soporta procesar la imagen.')); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => {
+          if (!blob) { reject(new Error('No se pudo procesar la imagen.')); return; }
+          const reader = new FileReader();
+          reader.onload  = () => resolve({ blob, base64: String(reader.result).split(',')[1] || '' });
+          reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+          reader.readAsDataURL(blob);
+        }, 'image/jpeg', 0.8);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo abrir la imagen.')); };
+      img.src = url;
+    });
+  }
+
+  async function handleReceiptFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setScanError('');
+    setScanExtra(null);
+    setScanning(true);
+    try {
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('Sesión no válida — volvé a iniciar sesión.');
+      const { blob, base64 } = await downscaleImage(file);
+
+      // La subida a Storage queda como respaldo del original; no bloquea la lectura.
+      uploadBytes(ref(storage, 'receipts/' + uid + '/' + Date.now() + '.jpg'), blob)
+        .catch(err => console.error('Error subiendo la foto a Storage:', err));
+
+      const idToken = await auth.currentUser?.getIdToken();
+      const resp = await fetch('/api/parse-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + idToken },
+        body: JSON.stringify({ imageBase64: base64, mimeType: 'image/jpeg' }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.error || 'No se pudo leer la factura.');
+      }
+      const data = ReciboSchema.parse(await resp.json());
+
+      const filled = new Set<string>();
+      setForm(f => {
+        const next = { ...f };
+        if (data.comercio) { next.description = data.comercio; filled.add('description'); }
+        if (data.total)    { next.amount = String(data.total);  filled.add('amount'); }
+        if (data.fecha)    { next.date = data.fecha;             filled.add('date'); }
+        return next;
+      });
+      setAutoFilled(filled);
+      setScanExtra({ cuit: data.cuit, items: data.items });
+      if (!filled.size) setScanError('No se pudo leer ningún dato de la foto — completá el formulario a mano.');
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'No se pudo leer la factura.');
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  // ── Comercios cercanos (Sprint 14 — ubicación) ─────────────────────────────
+  const [locating, setLocating]         = useState(false);
+  const [locError, setLocError]         = useState('');
+  const [nearbyPlaces, setNearbyPlaces] = useState<Array<{ nombre: string; types: string[] }>>([]);
+
+  async function handleNearby() {
+    setLocError('');
+    setNearbyPlaces([]);
+    if (!('geolocation' in navigator)) {
+      setLocError('Este navegador no soporta geolocalización.');
+      return;
+    }
+    setLocating(true);
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 })
+      );
+      const idToken = await auth.currentUser?.getIdToken();
+      const resp = await fetch('/api/nearby-places', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + idToken },
+        body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.error || 'No se pudieron buscar comercios cercanos.');
+      }
+      const data = await resp.json();
+      const places = Array.isArray(data.places) ? data.places : [];
+      setNearbyPlaces(places);
+      if (!places.length) setLocError('No se encontraron comercios cerca.');
+    } catch (err) {
+      // GeolocationPositionError no hereda de Error: se detecta por sus campos.
+      if (err && typeof err === 'object' && 'code' in err && 'PERMISSION_DENIED' in err) {
+        setLocError('No se pudo obtener tu ubicación — revisá el permiso del navegador.');
+      } else {
+        setLocError(err instanceof Error ? err.message : 'No se pudieron buscar comercios cercanos.');
+      }
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  function onNearbySelect(p: { nombre: string; types: string[] }) {
+    const cat = placeTypeToCategory(p.types);
+    setForm(f => ({ ...f, description: p.nombre, category: cat || f.category }));
+    clearAutoFilled('description');
+    setNearbyPlaces([]);
+  }
+
   // ── Autocomplete ──────────────────────────────────────────────────────────
   const [acSuggestions, setAcSuggestions] = useState<Expense[]>([]);
 
   function onDescriptionChange(val: string) {
     set('description', val);
     setErrors({});
+    clearAutoFilled('description');
     const q = val.trim().toLowerCase();
     if (q.length < 2) { setAcSuggestions([]); return; }
     // Deduplicate by description — keep the most recent occurrence of each
@@ -202,6 +346,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   function onAmountChange(val: string) {
     setForm(f => ({ ...f, amount: val, javiAmount: 0, laliAmount: 0 }));
     setErrors({});
+    clearAutoFilled('amount');
     const n = Math.round(safeN(val));
     if (n <= 0) { setDupWarning(null); return; }
     const cur2 = BASE_CURS.indexOf(form.currency) >= 0 ? form.currency : (form.customCurrency || 'ARS');
@@ -340,13 +485,17 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const descField = (showError: boolean) => (
     <div style={{ position:'relative' }}>
       <input
-        style={inpStyle({ borderColor: showError && errors.description ? '#c0314f' : C.border })}
+        style={inpStyle({
+          borderColor: showError && errors.description ? '#c0314f' : autoFilled.has('description') ? '#fde047' : C.border,
+          background:  autoFilled.has('description') ? '#fef9c3' : C.surface,
+        })}
         value={form.description}
         onChange={e => onDescriptionChange(e.target.value)}
         onBlur={() => setTimeout(() => setAcSuggestions([]), 150)}
         placeholder="Ej: Almuerzo en Lo de Juan"
         autoComplete="off"
       />
+      {autoFilled.has('description') && <p style={{ fontSize:'0.68rem', color:'#92400e', margin:'0.2rem 0 0' }}>Leído de la foto — revisá antes de guardar.</p>}
       {acDropdown}
     </div>
   );
@@ -432,18 +581,92 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const step1 = (
     <div>
       <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'1rem' }}>{isPlanEdit ? 'Editar plan — Lo esencial' : 'Paso 1 de 2 — Lo esencial'}</div>
+
+      {!isEditMode && !isPlanEdit && (
+        <div style={{ marginBottom:'1rem' }}>
+          <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }} onChange={handleReceiptFile} />
+          <div style={{ display:'flex', gap:'0.4rem' }}>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={scanning}
+              style={{ flex:1, padding:'0.7rem', background:'transparent', border:'1px dashed '+C.accent, borderRadius:'0.85rem', color:C.accent, fontWeight:700, fontSize:'0.85rem', cursor:scanning ? 'default' : 'pointer', fontFamily:F, display:'flex', alignItems:'center', justifyContent:'center', gap:'0.4rem', opacity:scanning ? 0.7 : 1 }}
+            >
+              {scanning
+                ? <Loader2 size={16} strokeWidth={2.2} style={{ animation:'spin 1s linear infinite' }} />
+                : <Camera size={16} strokeWidth={2.2} />}
+              {scanning ? 'Leyendo…' : 'Escanear factura'}
+            </button>
+            <button
+              onClick={handleNearby}
+              disabled={locating}
+              style={{ flex:1, padding:'0.7rem', background:'transparent', border:'1px dashed '+C.accent, borderRadius:'0.85rem', color:C.accent, fontWeight:700, fontSize:'0.85rem', cursor:locating ? 'default' : 'pointer', fontFamily:F, display:'flex', alignItems:'center', justifyContent:'center', gap:'0.4rem', opacity:locating ? 0.7 : 1 }}
+            >
+              {locating
+                ? <Loader2 size={16} strokeWidth={2.2} style={{ animation:'spin 1s linear infinite' }} />
+                : <MapPin size={16} strokeWidth={2.2} />}
+              {locating ? 'Buscando…' : 'Comercios cerca'}
+            </button>
+          </div>
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          {scanError && <p style={{ color:C.danger, fontSize:'0.72rem', margin:'0.4rem 0 0', textAlign:'center' }}>⚠ {scanError}</p>}
+          {locError && <p style={{ color:C.danger, fontSize:'0.72rem', margin:'0.4rem 0 0', textAlign:'center' }}>⚠ {locError}</p>}
+          {nearbyPlaces.length > 0 && (
+            <div style={{ marginTop:'0.5rem', background:C.bg, border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.6rem 0.85rem' }}>
+              <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, marginBottom:'0.35rem' }}>¿Dónde estás? Tocá para completar:</div>
+              <div style={{ display:'flex', gap:'0.35rem', flexWrap:'wrap' }}>
+                {nearbyPlaces.map((p, i) => {
+                  const cat = placeTypeToCategory(p.types);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => onNearbySelect(p)}
+                      style={{ padding:'0.35rem 0.7rem', borderRadius:'999px', border:'1px solid '+C.border, background:C.surface, color:C.navy, fontSize:'0.75rem', fontWeight:600, cursor:'pointer', fontFamily:F, display:'inline-flex', alignItems:'center', gap:'0.3rem' }}
+                    >
+                      {p.nombre}{cat && <span style={{ color:C.textMuted, fontSize:'0.68rem' }}>· {cat}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {scanExtra && (scanExtra.cuit || (scanExtra.items && scanExtra.items.length > 0)) && (
+            <div style={{ marginTop:'0.5rem', background:C.bg, border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.6rem 0.85rem' }}>
+              {scanExtra.cuit && (
+                <div style={{ fontSize:'0.72rem', color:C.textMuted }}>CUIT detectado: <strong style={{ color:C.navy }}>{scanExtra.cuit}</strong> (no se guarda)</div>
+              )}
+              {scanExtra.items && scanExtra.items.length > 0 && (
+                <div style={{ marginTop:scanExtra.cuit ? '0.4rem' : 0 }}>
+                  <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, marginBottom:'0.2rem' }}>Ítems leídos (para verificar el total):</div>
+                  {scanExtra.items.map((it, i) => (
+                    <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:'0.72rem', color:C.navy, padding:'0.1rem 0' }}>
+                      <span>{it.descripcion}</span>
+                      <span style={{ fontFamily:MONO }}>{fmt(it.monto, cur)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <Lbl>Descripción</Lbl>
       {descField(true)}
       {errors.description && <p style={{ color:C.danger, fontSize:'0.7rem', margin:'0.15rem 0 0' }}>⚠ {errors.description}</p>}
       <Lbl>Monto total</Lbl>
       <input
-        style={inpStyle({ borderColor: errors.amount ? '#c0314f' : C.border, background:C.accent + '12', fontSize:FS.amount, fontWeight:800, textAlign:'center', fontFamily:MONO, padding:'0.85rem', letterSpacing:'-0.02em' })}
+        style={inpStyle({
+          borderColor: errors.amount ? '#c0314f' : autoFilled.has('amount') ? '#fde047' : C.border,
+          background:  autoFilled.has('amount') ? '#fef9c3' : C.accent + '12',
+          fontSize:FS.amount, fontWeight:800, textAlign:'center', fontFamily:MONO, padding:'0.85rem', letterSpacing:'-0.02em',
+        })}
         type="number"
         value={form.amount}
         onChange={e => { onAmountChange(e.target.value); setErrors({}); }}
         placeholder="0"
       />
       {errors.amount && <p style={{ color:C.danger, fontSize:'0.7rem', margin:'0.15rem 0 0' }}>⚠ {errors.amount}</p>}
+      {autoFilled.has('amount') && <p style={{ fontSize:'0.68rem', color:'#92400e', margin:'0.15rem 0 0', textAlign:'center' }}>Leído de la foto — revisá antes de guardar.</p>}
 
       {/* ── Duplicate warning ── */}
       {dupWarning && (
@@ -484,7 +707,16 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       )}
 
       <Lbl>Fecha</Lbl>
-      <input style={inpStyle()} type="date" value={form.date} onChange={e => set('date', e.target.value)} />
+      <input
+        style={inpStyle({
+          borderColor: autoFilled.has('date') ? '#fde047' : C.border,
+          background:  autoFilled.has('date') ? '#fef9c3' : C.surface,
+        })}
+        type="date"
+        value={form.date}
+        onChange={e => { set('date', e.target.value); clearAutoFilled('date'); }}
+      />
+      {autoFilled.has('date') && <p style={{ fontSize:'0.68rem', color:'#92400e', margin:'0.15rem 0 0' }}>Leído de la foto — revisá antes de guardar.</p>}
       {periods.length > 0 && (
         <div style={{ textAlign:'center', fontSize:'0.75rem', color:C.textMuted, marginTop:'0.5rem' }}>
           Período: <strong style={{ color:C.navy }}>{getPeriod(form.date, periods)}</strong>
