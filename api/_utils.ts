@@ -6,6 +6,12 @@
 // exige un ID token de Firebase válido y que el uid pertenezca a la pareja.
 // Sin esto, cualquiera que encuentre la URL podría gastar la cuota paga de las
 // APIs de Google.
+//
+// La verificación es criptográfica (firma RS256 contra los certificados
+// públicos de Google), como recomienda Firebase para servidores. NO se usa la
+// API key del proyecto: está restringida por HTTP referrer para el navegador,
+// y Google bloquea esa key en llamadas server-to-server (sin referer).
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 // Mismos UIDs que firestore.rules / storage.rules / USER_MAP en src/constants.ts.
 const ALLOWED_UIDS = new Set([
@@ -13,17 +19,26 @@ const ALLOWED_UIDS = new Set([
   'JjDJiAjLmVSc0WODsfvULRLT59s2', // Lali
 ]);
 
+const PROJECT_ID = 'gastos-javi-lali';
+
+// Claves públicas con las que Google firma los ID tokens de Firebase.
+// jose las cachea y renueva solo entre invocaciones calientes.
+const JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
+);
+
 export async function verifyCouple(idToken: string): Promise<boolean> {
-  const apiKey = process.env.FIREBASE_API_KEY;
-  if (!apiKey || !idToken) return false;
-  const resp = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) }
-  );
-  if (!resp.ok) return false;
-  const data = await resp.json();
-  const uid = data?.users?.[0]?.localId;
-  return typeof uid === 'string' && ALLOWED_UIDS.has(uid);
+  if (!idToken) return false;
+  try {
+    const { payload } = await jwtVerify(idToken, JWKS, {
+      issuer: `https://securetoken.google.com/${PROJECT_ID}`,
+      audience: PROJECT_ID,
+      algorithms: ['RS256'],
+    });
+    return typeof payload.sub === 'string' && ALLOWED_UIDS.has(payload.sub);
+  } catch {
+    return false;
+  }
 }
 
 export function bearerToken(authHeader: string | undefined): string {
