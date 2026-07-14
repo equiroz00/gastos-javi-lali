@@ -4,7 +4,9 @@
 // devuelve los comercios cercanos (Places API New, Nearby Search) para sugerir
 // descripción y categoría al cargar un gasto.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { verifyCouple, bearerToken } from './_utils';
+// Extensión .js explícita: el proyecto es ESM ("type": "module") y en runtime
+// Node no resuelve imports relativos sin extensión (FUNCTION_INVOCATION_FAILED).
+import { verifyCouple, bearerToken } from './_utils.js';
 
 interface PlaceSugerido {
   nombre: string;
