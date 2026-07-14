@@ -8,7 +8,7 @@
 // la pareja. Sin esto, cualquiera que encuentre la URL podría gastar la cuota
 // paga de Gemini.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ApiError } from '@google/genai';
 // Extensión .js explícita: el proyecto es ESM ("type": "module") y en runtime
 // Node no resuelve imports relativos sin extensión (FUNCTION_INVOCATION_FAILED).
 import { ReciboSchema } from '../src/lib/receiptSchema.js';
@@ -81,6 +81,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json(parsed.data);
   } catch (err) {
     console.error('parse-receipt error:', err);
+    // Errores de Gemini con causa accionable: mostrarlos claros en la app en vez
+    // del genérico (detectado cuando los créditos prepagos agotados devolvían
+    // "No se pudo leer la factura" sin pista de la causa real).
+    if (err instanceof ApiError) {
+      if (err.status === 429) {
+        res.status(503).json({ error: 'Se agotó el crédito o la cuota de Gemini — revisá la facturación en ai.studio/projects.' });
+        return;
+      }
+      if (err.status === 401 || err.status === 403) {
+        res.status(503).json({ error: 'La API key de Gemini no es válida o no tiene permisos — revisá GEMINI_API_KEY en Vercel.' });
+        return;
+      }
+    }
     res.status(500).json({ error: 'No se pudo leer la factura. Probá de nuevo.' });
   }
 }
