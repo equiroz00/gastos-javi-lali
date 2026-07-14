@@ -9,8 +9,10 @@
 // paga de Gemini.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
-import { ReciboSchema } from '../src/lib/receiptSchema';
-import { verifyCouple, bearerToken } from './_utils';
+// Extensión .js explícita: el proyecto es ESM ("type": "module") y en runtime
+// Node no resuelve imports relativos sin extensión (FUNCTION_INVOCATION_FAILED).
+import { ReciboSchema } from '../src/lib/receiptSchema.js';
+import { verifyCouple, bearerToken } from './_utils.js';
 
 const MAX_BASE64_CHARS = 15 * 1024 * 1024; // ~10-11MB de imagen decodificada
 
