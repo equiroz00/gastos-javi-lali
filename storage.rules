@@ -1,0 +1,32 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Acceso exclusivo para Javi y Lali ─────────────────────────────────────
+    // Mismos UIDs que firestore.rules y USER_MAP en src/constants.ts.
+    function isCouple() {
+      return request.auth != null
+        && request.auth.uid in [
+             'h0FlnAU3wabBCTztmPXdLyFW6R42',   // Javi
+             'JjDJiAjLmVSc0WODsfvULRLT59s2'    // Lali
+           ];
+    }
+
+    // ── Fotos de tickets/facturas (Sprint 14) ─────────────────────────────────
+    // Cada uno sube solo a su propia carpeta; ambos pueden leer (gasto compartido).
+    // Tope de 10MB e image/* — la app ya achica la foto client-side antes de subir,
+    // esto es una segunda barrera contra archivos gigantes o de otro tipo.
+    match /receipts/{uid}/{fileName} {
+      allow read:   if isCouple();
+      allow write:  if isCouple()
+                    && request.auth.uid == uid
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Bloquear cualquier otro archivo ────────────────────────────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

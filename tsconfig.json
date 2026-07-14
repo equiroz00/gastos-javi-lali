@@ -24,6 +24,6 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["src"],
+  "include": ["src", "api"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

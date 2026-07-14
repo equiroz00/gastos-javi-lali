@@ -122,11 +122,11 @@ No son features de usuario, son infraestructura que sostiene todo lo de abajo. S
 **Decisión de arranque:** las personas extra son **etiquetas** para repartir (no usuarios con cuenta). Cubre el 90% del uso real con una fracción del esfuerzo.
 **Estado:** ✅ Entregado en **PRs #21** (núcleo: `computeBalances` + `simplifyDebts`), **#22** (personas en Config + SplitModal N con las 4 estrategias — cierra **C2**) y **#23** (Inicio con saldos por persona + liquidación mínima + PaymentModal generalizado). Cualquier participante puede ser quien pagó.
 
-### 🔵 SPRINT 14 — Lector de facturas (OCR) + ubicación
+### 🟡 SPRINT 14 — Lector de facturas (OCR) + ubicación — código listo, falta verificar
 **Objetivo:** Foto del ticket → la app extrae comercio, total, fecha, CUIT, ítems; el usuario solo corrige lo mal leído (human-in-the-loop).
-**Enfoque recomendado:** modelo de **visión multimodal** que devuelve JSON estructurado (mejor que OCR de plantilla para tickets/facturas A-B-C argentinas), validado con **Zod**.
-**Seguridad:** la API de IA va detrás de una **función serverless** (Vercel/Cloud Function), nunca con la key en el cliente. Fotos en **Firebase Storage**, no en Firestore.
-**Mapa:** Geolocation API (dónde estás al cargar) + Google Places API (resolver el comercio extraído). Autocompletar categoría según el rubro del lugar.
+**Enfoque implementado:** **Gemini 2.5 Flash** (visión multimodal, JSON estructurado) detrás de una **función serverless de Vercel** (`api/parse-receipt.ts`, key nunca en el cliente), salida validada con **Zod** (`src/lib/receiptSchema.ts`) en servidor y cliente. Fotos en **Firebase Storage** (`storage.rules` con las mismas reglas de pareja). CUIT e ítems se muestran para verificar pero **no se persisten** (decisión: evitar otra migración de esquema).
+**Ubicación:** Geolocation API + **Places API (New)** vía `api/nearby-places.ts`; botón "Comercios cerca" que sugiere descripción + categoría según el rubro (`src/lib/placeCategory.ts`).
+**Pendiente para cerrar el sprint:** inicializar Storage en la consola ("Get Started") + `firebase deploy --only storage`; probar el flujo completo con fotos reales y las 2 cuentas.
 
 ### 🔵 SPRINT 15 — Promociones bancarias
 **Objetivo:** Resumir promos vigentes de *nuestras* tarjetas/bancos en una pestaña.
@@ -156,6 +156,14 @@ FASE 2     Tooling      ██████████ Sentry ✅, TanStack Quer
 ---
 
 ## Registro de cambios
+
+**05/07/2026 — Sprint 14: lector de facturas + ubicación (código) y stats con rango personalizado (Claude)**
+- **Stats por rango personalizado:** chip "Personalizado" en Estadísticas con Desde/Hasta + botón "Este mes" (mes calendario); filtra por `e.date` con la misma lógica que el export CSV. Cubre estadísticas por mes calendario o rango libre, independiente de los ciclos de tarjeta.
+- **Lector de facturas (OCR):** botón "Escanear factura" en el Paso 1 → foto achicada client-side (máx. 1600px) → respaldo en Storage (`receipts/{uid}/`) → `api/parse-receipt.ts` (Vercel) llama a **Gemini 2.5 Flash** y valida con Zod → descripción/monto/fecha precargados **marcados en ámbar** hasta que el usuario los revise (human-in-the-loop). CUIT e ítems solo se muestran, no se guardan.
+- **Comercios cerca:** botón junto al escáner; Geolocation API + `api/nearby-places.ts` (Places API New, Nearby Search) → chips con comercios cercanos que completan descripción + categoría según rubro (`placeTypeToCategory`, +5 tests). Fix: `Permissions-Policy` en `vercel.json` pasaba de `geolocation=()` (bloqueado) a `geolocation=(self)`.
+- **Seguridad:** ambas funciones serverless exigen ID token de Firebase de Javi/Lali (`api/_utils.ts`); las keys de Gemini/Places viven solo en env vars de Vercel. `storage.rules` nuevo con las reglas de pareja (10MB, solo imágenes, cada uid escribe en su carpeta).
+- **Deps:** `@google/genai` (se descartó `@google/generative-ai`, deprecado desde 2025) + `@vercel/node` (tipos). `firebase.json` ahora declara el target `storage`.
+- **Pendiente manual:** inicializar Storage en la consola, desplegar `storage.rules`, y probar el flujo con fotos y cuentas reales.
 
 **05/07/2026 — Sprint 13: división entre N personas (grafo de deudas) (Claude)**
 - **Núcleo de saldos** (PR #21): `computeBalances` (saldo neto por participante, excluye privados, filtra por moneda) + `simplifyDebts` (transferencias mínimas estilo Splitwise, ≤ n−1 movimientos que saldan exacto). Tipos ensanchados (`paidBy`/`from`/`to` de `UserName` a `string`), **sin migración de Firestore**. +9 tests.
