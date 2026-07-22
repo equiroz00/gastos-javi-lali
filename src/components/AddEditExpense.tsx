@@ -13,6 +13,13 @@ import { ReciboSchema, type ReciboExtraido } from '../lib/receiptSchema';
 import { placeTypeToCategory } from '../lib/placeCategory';
 import type { Expense, UserName, Responsible, Plan, Visibility, SplitAmong } from '../types';
 
+// Colores del estado "leído de la foto" (ámbar). Fijos en ambos temas: el fondo
+// es siempre amarillo claro, así que el texto va oscuro para que se lea. En tema
+// oscuro C.navy es casi blanco y quedaba blanco sobre amarillo (ilegible).
+const AMBER_BG     = '#fef9c3';
+const AMBER_BORDER = '#fde047';
+const AMBER_TEXT   = '#422006';
+
 // Estado del formulario: como Expense pero con amount editable como string.
 interface FormState {
   id?: string;
@@ -172,14 +179,19 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       }
       const data = ReciboSchema.parse(await resp.json());
 
+      // El set se calcula desde `data`, NO dentro del callback de setForm: React
+      // corre ese callback más tarde (fase de commit), así que si se chequeaba
+      // filled.size acá siempre daba 0 y mostraba el error falso aunque cargara.
       const filled = new Set<string>();
-      setForm(f => {
-        const next = { ...f };
-        if (data.comercio) { next.description = data.comercio; filled.add('description'); }
-        if (data.total)    { next.amount = String(data.total);  filled.add('amount'); }
-        if (data.fecha)    { next.date = data.fecha;             filled.add('date'); }
-        return next;
-      });
+      if (data.comercio) filled.add('description');
+      if (data.total)    filled.add('amount');
+      if (data.fecha)    filled.add('date');
+      setForm(f => ({
+        ...f,
+        ...(data.comercio ? { description: data.comercio } : {}),
+        ...(data.total    ? { amount: String(data.total) } : {}),
+        ...(data.fecha    ? { date: data.fecha }           : {}),
+      }));
       setAutoFilled(filled);
       setScanExtra({ cuit: data.cuit, items: data.items });
       if (!filled.size) setScanError('No se pudo leer ningún dato de la foto — completá el formulario a mano.');
@@ -486,8 +498,9 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     <div style={{ position:'relative' }}>
       <input
         style={inpStyle({
-          borderColor: showError && errors.description ? '#c0314f' : autoFilled.has('description') ? '#fde047' : C.border,
-          background:  autoFilled.has('description') ? '#fef9c3' : C.surface,
+          borderColor: showError && errors.description ? '#c0314f' : autoFilled.has('description') ? AMBER_BORDER : C.border,
+          background:  autoFilled.has('description') ? AMBER_BG : C.surface,
+          ...(autoFilled.has('description') ? { color: AMBER_TEXT } : {}),
         })}
         value={form.description}
         onChange={e => onDescriptionChange(e.target.value)}
@@ -656,8 +669,9 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       <Lbl>Monto total</Lbl>
       <input
         style={inpStyle({
-          borderColor: errors.amount ? '#c0314f' : autoFilled.has('amount') ? '#fde047' : C.border,
-          background:  autoFilled.has('amount') ? '#fef9c3' : C.accent + '12',
+          borderColor: errors.amount ? '#c0314f' : autoFilled.has('amount') ? AMBER_BORDER : C.border,
+          background:  autoFilled.has('amount') ? AMBER_BG : C.accent + '12',
+          ...(autoFilled.has('amount') ? { color: AMBER_TEXT } : {}),
           fontSize:FS.amount, fontWeight:800, textAlign:'center', fontFamily:MONO, padding:'0.85rem', letterSpacing:'-0.02em',
         })}
         type="number"
@@ -709,8 +723,9 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       <Lbl>Fecha</Lbl>
       <input
         style={inpStyle({
-          borderColor: autoFilled.has('date') ? '#fde047' : C.border,
-          background:  autoFilled.has('date') ? '#fef9c3' : C.surface,
+          borderColor: autoFilled.has('date') ? AMBER_BORDER : C.border,
+          background:  autoFilled.has('date') ? AMBER_BG : C.surface,
+          ...(autoFilled.has('date') ? { color: AMBER_TEXT } : {}),
         })}
         type="date"
         value={form.date}
