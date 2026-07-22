@@ -52,7 +52,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      // Alias 'latest', no una versión fija: Google retira los modelos versionados
+      // para cuentas nuevas (gemini-2.5-flash devolvía 404 "no longer available to
+      // new users"), y el alias siempre apunta al Flash estable vigente.
+      model: 'gemini-flash-latest',
       contents: [{
         role: 'user',
         parts: [
@@ -91,6 +94,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (err.status === 401 || err.status === 403) {
         res.status(503).json({ error: 'La API key de Gemini no es válida o no tiene permisos — revisá GEMINI_API_KEY en Vercel.' });
+        return;
+      }
+      if (err.status === 404) {
+        res.status(503).json({ error: 'El modelo de Gemini ya no está disponible — hay que actualizar el modelo en el servidor.' });
         return;
       }
     }
