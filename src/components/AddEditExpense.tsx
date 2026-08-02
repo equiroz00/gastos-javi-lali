@@ -2,10 +2,10 @@
 import React, { useRef, useState } from 'react';
 import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin } from 'lucide-react';
 import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants } from '../lib/helpers';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
-import { useExpenses, useSettings, useCustomCats, usePeople } from '../lib/queries';
+import { useExpenses, useSettings, useCustomCats, usePeople, useCustomPayMethods, useCustomBanks } from '../lib/queries';
 import SplitModal from './SplitModal';
 import { auth, storage } from '../firebase.js';
 import { ref, uploadBytes } from 'firebase/storage';
@@ -55,7 +55,11 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const expenses          = useExpenses();
   const people            = usePeople();
   const participants      = allParticipants(people);
+  const customPayMethods  = useCustomPayMethods();
+  const customBanks       = useCustomBanks();
   const saveCustomCats    = useAppStore(s => s.saveCustomCats);
+  const saveCustomPayMethods = useAppStore(s => s.saveCustomPayMethods);
+  const saveCustomBanks   = useAppStore(s => s.saveCustomBanks);
   const handleAdd         = useAppStore(s => s.handleAdd);
   const handleAddMultiple = useAppStore(s => s.handleAddMultiple);
   const handleEdit        = useAppStore(s => s.handleEdit);
@@ -98,6 +102,10 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [showNewCat, setShowNewCat]       = useState(false);
   const [newCatName, setNewCatName]       = useState('');
+  const [showNewPay, setShowNewPay]       = useState(false);
+  const [newPayName, setNewPayName]       = useState('');
+  const [showNewBank, setShowNewBank]     = useState(false);
+  const [newBankName, setNewBankName]     = useState('');
   const [useCuotas, setUseCuotas]         = useState(isPlanEdit);
   const [numCuotas, setNumCuotas]         = useState(editingPlan && !planIsCustom ? editingPlan.numInstallments : 12);
   const [customCuotas, setCustomCuotas]   = useState(editingPlan && planIsCustom ? String(editingPlan.numInstallments) : '');
@@ -290,6 +298,11 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   }
 
   const periods        = settings.periods || [];
+  // Opciones de los desplegables: base + las que agregó el usuario, alfabéticas.
+  // Se incluye el valor actual del gasto para que uno viejo (ej. 'TC Visa Laura'
+  // sin migrar, 'Efectivo', 'Banco Nación') no se cambie solo al editar.
+  const payOptions     = mergeOptions(PAY_METHODS, customPayMethods, form.paymentMethod);
+  const bankOptions    = mergeOptions(BANKS, customBanks, form.bank);
   const finalCuotas    = customCuotas ? (parseInt(customCuotas) || numCuotas) : numCuotas;
   const paidNum        = isRetro ? (parseInt(retroPaid) || 0) : 0;
   const remaining      = finalCuotas - paidNum;
@@ -338,6 +351,31 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     fontSize:'0.9rem', outline:'none', background:C.surface, boxSizing:'border-box',
     fontFamily:F, color:C.navy,
   };
+
+  // Estilos del alta rápida de opciones (categoría, medio de pago, banco).
+  const addBtnStyle: React.CSSProperties = {
+    marginTop:'0.5rem', background:'transparent', border:'1px dashed '+C.accent,
+    borderRadius:'0.65rem', color:C.accent, fontSize:'0.72rem', fontWeight:700,
+    cursor:'pointer', padding:'0.35rem 0.75rem', fontFamily:F,
+    display:'flex', alignItems:'center', gap:'0.3rem',
+  };
+  const addRowStyle: React.CSSProperties = {
+    marginTop:'0.5rem', background:C.bg, borderRadius:'0.75rem', padding:'0.6rem',
+    display:'flex', gap:'0.4rem', alignItems:'center', border:'1px solid '+C.border,
+  };
+  const addInputStyle: React.CSSProperties = {
+    flex:1, border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.4rem',
+    fontSize:'0.82rem', outline:'none', fontFamily:F, color:C.navy, background:C.surface,
+    minWidth:0,
+  };
+  const addOkStyle: React.CSSProperties = {
+    background:C.accent, color:C.white, border:'none', borderRadius:'0.5rem',
+    padding:'0.4rem 0.6rem', fontSize:'0.78rem', fontWeight:700, cursor:'pointer', fontFamily:F,
+  };
+  const addCancelStyle: React.CSSProperties = {
+    background:'none', border:'none', color:C.textMuted, cursor:'pointer',
+    display:'flex', alignItems:'center',
+  };
   const Lbl = ({ children }: { children: React.ReactNode }) => (
     <label style={{ fontSize:'0.8rem', color:C.textMuted, fontWeight:700, display:'block', marginBottom:'0.35rem', marginTop:'0.75rem' }}>{children}</label>
   );
@@ -347,6 +385,27 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     const cat = newCatName.trim();
     saveCustomCats(customCats.concat([cat]));
     set('category', cat); setNewCatName(''); setShowNewCat(false);
+  }
+
+  // Alta de medio de pago / banco. Solo se persiste si es realmente nuevo: si ya
+  // está en la lista base o entre las personalizadas, se selecciona y listo (no
+  // se guarda un duplicado en Firestore).
+  function addNewPayMethod() {
+    const v = newPayName.trim();
+    if (!v) return;
+    if (!payOptions.some(o => o.toLowerCase() === v.toLowerCase())) {
+      saveCustomPayMethods(customPayMethods.concat([v]));
+    }
+    set('paymentMethod', v); setNewPayName(''); setShowNewPay(false);
+  }
+
+  function addNewBank() {
+    const v = newBankName.trim();
+    if (!v) return;
+    if (!bankOptions.some(o => o.toLowerCase() === v.toLowerCase())) {
+      saveCustomBanks(customBanks.concat([v]));
+    }
+    set('bank', v); setNewBankName(''); setShowNewBank(false);
   }
 
   function onSplitConfirm(paidBy: string, splitAmong: SplitAmong) {
@@ -794,19 +853,20 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         {allCats.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
       {!showNewCat ? (
-        <button onClick={() => setShowNewCat(true)} style={{ marginTop:'0.5rem', background:'transparent', border:'1px dashed '+C.accent, borderRadius:'0.65rem', color:C.accent, fontSize:'0.72rem', fontWeight:700, cursor:'pointer', padding:'0.35rem 0.75rem', fontFamily:F, display:'flex', alignItems:'center', gap:'0.3rem' }}>
+        <button onClick={() => setShowNewCat(true)} style={addBtnStyle}>
           <Plus size={13} strokeWidth={2.5} />Nueva categoría
         </button>
       ) : (
-        <div style={{ marginTop:'0.5rem', background:C.bg, borderRadius:'0.75rem', padding:'0.6rem', display:'flex', gap:'0.4rem', alignItems:'center', border:'1px solid '+C.border }}>
+        <div style={addRowStyle}>
           <input
             value={newCatName}
             onChange={e => setNewCatName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNewCat(); } }}
             placeholder="Nombre de la categoría..."
-            style={{ flex:1, border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.4rem', fontSize:'0.82rem', outline:'none', fontFamily:F, color:C.navy, background:C.surface }}
+            style={addInputStyle}
           />
-          <button onClick={addNewCat} style={{ background:C.accent, color:C.white, border:'none', borderRadius:'0.5rem', padding:'0.4rem 0.6rem', fontSize:'0.78rem', fontWeight:700, cursor:'pointer', fontFamily:F }}>OK</button>
-          <button onClick={() => setShowNewCat(false)} style={{ background:'none', border:'none', color:C.textMuted, cursor:'pointer', display:'flex', alignItems:'center' }}>
+          <button onClick={addNewCat} style={addOkStyle}>OK</button>
+          <button onClick={() => setShowNewCat(false)} style={addCancelStyle}>
             <X size={16} strokeWidth={2} />
           </button>
         </div>
@@ -814,13 +874,51 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
 
       <Lbl>Medio de pago</Lbl>
       <select value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value)} style={selStyle}>
-        {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
+        {payOptions.map(m => <option key={m}>{m}</option>)}
       </select>
+      {!showNewPay ? (
+        <button onClick={() => setShowNewPay(true)} style={addBtnStyle}>
+          <Plus size={13} strokeWidth={2.5} />Nuevo medio de pago
+        </button>
+      ) : (
+        <div style={addRowStyle}>
+          <input
+            value={newPayName}
+            onChange={e => setNewPayName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNewPayMethod(); } }}
+            placeholder="Ej: Efectivo, Naranja X..."
+            style={addInputStyle}
+          />
+          <button onClick={addNewPayMethod} style={addOkStyle}>OK</button>
+          <button onClick={() => setShowNewPay(false)} style={addCancelStyle}>
+            <X size={16} strokeWidth={2} />
+          </button>
+        </div>
+      )}
 
       <Lbl>Banco / Billetera</Lbl>
       <select value={form.bank} onChange={e => set('bank', e.target.value)} style={selStyle}>
-        {BANKS.map(b => <option key={b}>{b}</option>)}
+        {bankOptions.map(b => <option key={b}>{b}</option>)}
       </select>
+      {!showNewBank ? (
+        <button onClick={() => setShowNewBank(true)} style={addBtnStyle}>
+          <Plus size={13} strokeWidth={2.5} />Nuevo banco / billetera
+        </button>
+      ) : (
+        <div style={addRowStyle}>
+          <input
+            value={newBankName}
+            onChange={e => setNewBankName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNewBank(); } }}
+            placeholder="Ej: Santander, Ualá..."
+            style={addInputStyle}
+          />
+          <button onClick={addNewBank} style={addOkStyle}>OK</button>
+          <button onClick={() => setShowNewBank(false)} style={addCancelStyle}>
+            <X size={16} strokeWidth={2} />
+          </button>
+        </div>
+      )}
 
       <Lbl>Notas (opcional)</Lbl>
       <textarea

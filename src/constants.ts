@@ -58,8 +58,25 @@ export const FS = {
 
 export const PALETTE: string[]      = ['#174871','#A77693','#4a9d8f','#d4875a','#7b5fa0','#c4965a','#5a8fa0','#a05a6e','#4a7a5a','#9a7040'];
 export const DEFAULT_CATS: string[] = ['🏠 Hogar','🍕 Alimentación','🔑 Arriendo','💡 Servicios Públicos','🚌 Transporte','🎬 Entretenimiento','👥 Amigos','💆 Cuidado Personal','💪 Gimnasio','💊 Farmacia','👶 Hijito','👕 Ropa'];
-export const PAY_METHODS: string[]  = ['Efectivo','TC Visa Laura','TC Master Card Laura','TC Visa Extensión','TC Master Card Extensión','Dinero en Cuenta','TC Visa Javi','TC Amex Javi','TC Amex Laura'];
-export const BANKS: string[]        = ['Banco Nación','Banco Provincia','Banco Ciudad','Banco Credicoop','Galicia','Macro','Supervielle','Patagonia','Comafi','Hipotecario','Naranja X','Santander','BBVA','HSBC','Itaú','ICBC','Mercado Pago','Ualá','Brubank','Lemon','Personal Pay','Otro'];
+// Listas base. El usuario puede sumar opciones propias (se guardan en
+// settings/main como customPayMethods / customBanks) y la UI muestra la unión
+// ordenada alfabéticamente — ver mergeOptions() en lib/helpers.ts.
+export const PAY_METHODS: string[]  = ['AMEX','Master Card','Visa'];
+export const BANKS: string[]        = ['BBVA','Galicia','Macro','Mercado Libre','Modo'];
+
+// Tarjetas viejas → equivalente actual. La distinción por titular se descarta a
+// propósito: la app ya registra quién pagó en `paidBy`, así que era redundante.
+// 'Efectivo' y 'Dinero en Cuenta' NO están acá: no son tarjetas y no tienen
+// equivalente, así que se conservan tal cual en los gastos que los usan.
+export const LEGACY_PAY_METHOD_MAP: Record<string, string> = {
+  'TC Visa Laura':            'Visa',
+  'TC Visa Javi':             'Visa',
+  'TC Visa Extensión':        'Visa',
+  'TC Master Card Laura':     'Master Card',
+  'TC Master Card Extensión': 'Master Card',
+  'TC Amex Javi':             'AMEX',
+  'TC Amex Laura':            'AMEX',
+};
 export const BASE_CURS: string[]    = ['ARS','USD','EUR'];
 export const CUR_SYM: Record<string, string> = { ARS:'$', USD:'US$', EUR:'€' };
 export const CUOTA_OPTS: number[]   = [3,6,9,12,18,24];

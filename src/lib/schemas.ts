@@ -203,15 +203,23 @@ export const SettingsSchema = z.object({
   font:    z.string().catch('Nunito'),
 });
 
-// El doc settings/main trae la config compartida + las categorías personalizadas.
-// Devuelve ambas por separado (espejan los dos caches: ['settings'] y ['customCats']).
-export function parseSettingsDoc(raw: unknown): { settings: Settings; customCats: string[]; people: string[] } {
+// El doc settings/main trae la config compartida + las listas personalizadas.
+// Devuelve cada una por separado (espejan los caches: ['settings'], ['customCats'],
+// ['people'], ['customPayMethods'], ['customBanks']).
+export function parseSettingsDoc(raw: unknown): {
+  settings: Settings; customCats: string[]; people: string[];
+  customPayMethods: string[]; customBanks: string[];
+} {
   const parsed = SettingsSchema.safeParse(raw);
   if (!parsed.success) reportAnomaly('Config', raw, parsed.error);
   const settings = (parsed.success ? parsed.data : { periods: [], theme: 'default', font: 'Nunito' }) as Settings;
-  const catsRaw = (raw && typeof raw === 'object') ? (raw as { customCats?: unknown }).customCats : undefined;
-  const customCats = z.array(z.string()).catch([]).parse(catsRaw);
-  const peopleRaw = (raw && typeof raw === 'object') ? (raw as { people?: unknown }).people : undefined;
-  const people = z.array(z.string()).catch([]).parse(peopleRaw);
-  return { settings, customCats, people };
+  const obj = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
+  const strArray = (v: unknown): string[] => z.array(z.string()).catch([]).parse(v);
+  return {
+    settings,
+    customCats:       strArray(obj.customCats),
+    people:           strArray(obj.people),
+    customPayMethods: strArray(obj.customPayMethods),
+    customBanks:      strArray(obj.customBanks),
+  };
 }

@@ -71,6 +71,19 @@ export function sortByDate(exps: Expense[]): Expense[] {
   return exps.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
+// Opciones de un desplegable editable (medio de pago, banco): base + las que
+// agregó el usuario, sin duplicados y en orden alfabético español.
+// `current` es el valor del gasto que se está editando: se incluye aunque ya no
+// esté en las listas para que un gasto viejo (ej. 'Efectivo', 'Banco Nación')
+// no cambie solo de valor al abrir el formulario y guardar.
+export function mergeOptions(base: string[], custom: string[], current?: string): string[] {
+  const all = new Set<string>();
+  base.forEach(v => { if (v && v.trim()) all.add(v.trim()); });
+  custom.forEach(v => { if (v && v.trim()) all.add(v.trim()); });
+  if (current && current.trim()) all.add(current.trim());
+  return Array.from(all).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+}
+
 export function pctChange(cur: number, prev: number): number | null {
   return prev === 0 ? null : Math.round((cur - prev) / prev * 100);
 }

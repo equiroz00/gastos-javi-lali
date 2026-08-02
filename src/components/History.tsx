@@ -1,10 +1,10 @@
 // ── components/History.tsx ────────────────────────────────────────────────────
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
-import { C, F, PENDING_PER, SP, FS } from '../constants';
+import { C, F, PENDING_PER, SP, FS, DEFAULT_CATS } from '../constants';
 import { fmt, safeN, calcBal, sortByDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
-import { useExpenses, useSettings } from '../lib/queries';
+import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
 import { Card, ScrollFilter } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense } from '../types';
@@ -72,6 +72,7 @@ function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection
 export default function History() {
   const expenses          = useExpenses();
   const settings          = useSettings();
+  const customCats        = useCustomCats();
   const requestDelete     = useAppStore(s => s.requestDelete);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
 
@@ -81,8 +82,15 @@ export default function History() {
   const [catFilter, setCatFilter]             = useState('Todas');
   const [sortOrder, setSortOrder]             = useState<'date' | 'amount-desc' | 'amount-asc'>('date');
 
-  // Opciones de categoría a partir de los gastos existentes
-  const catOptions = ['Todas', ...Array.from(new Set(expenses.map(e => e.category).filter(Boolean)))];
+  // Opciones = catálogo completo (default + personalizadas) más las categorías
+  // que aparezcan en gastos viejos aunque ya no estén en el catálogo. Antes se
+  // armaba SOLO con las categorías presentes en gastos, así que una categoría
+  // recién creada por el usuario no se podía elegir en el filtro.
+  const catOptions = ['Todas', ...Array.from(new Set([
+    ...DEFAULT_CATS,
+    ...customCats,
+    ...expenses.map(e => e.category).filter(Boolean),
+  ]))];
   // Filtro por categoría aplicado antes de agrupar por período
   const baseExpenses = catFilter === 'Todas' ? expenses : expenses.filter(e => e.category === catFilter);
 

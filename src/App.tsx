@@ -11,7 +11,7 @@ import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
 import {
-  runMigrationIfNeeded, pruneActivityLog, settingsDoc,
+  runMigrationIfNeeded, runPayMethodMigrationIfNeeded, pruneActivityLog, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc, activityLogCol,
 } from './store/useAppStore.js';
 import LoginScreen       from './components/LoginScreen';
@@ -109,7 +109,12 @@ export default function App() {
         _unsubs.forEach(u => u()); _unsubs = [];
         const fired = { exp:false, plans:false, pay:false, cfg:false, prefs:false, log:false };
         const checkDone = () => {
-          if (fired.exp && fired.plans && fired.pay && fired.cfg && fired.prefs && fired.log) setLoading(false);
+          if (fired.exp && fired.plans && fired.pay && fired.cfg && fired.prefs && fired.log) {
+            setLoading(false);
+            // Con gastos y planes ya en caché: renombra las tarjetas viejas
+            // ('TC Visa Laura' → 'Visa'). Idempotente y silenciosa si no hay nada.
+            runPayMethodMigrationIfNeeded();
+          }
         };
 
         // Lectura de gastos con dual-query (Sprint 11): las reglas restringen los
@@ -144,10 +149,12 @@ export default function App() {
 
         const u4 = onSnapshot(settingsDoc(), snap => {
           if (snap.exists()) {
-            const { settings, customCats, people } = parseSettingsDoc(snap.data());
+            const { settings, customCats, people, customPayMethods, customBanks } = parseSettingsDoc(snap.data());
             queryClient.setQueryData(['settings'], settings);
             queryClient.setQueryData(['customCats'], customCats);
             queryClient.setQueryData(['people'], people);
+            queryClient.setQueryData(['customPayMethods'], customPayMethods);
+            queryClient.setQueryData(['customBanks'], customBanks);
           }
           fired.cfg = true; checkDone();
         }, e => { console.error('settings:', e.code); fired.cfg = true; checkDone(); });

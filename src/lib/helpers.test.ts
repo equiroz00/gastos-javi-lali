@@ -8,8 +8,9 @@ import {
   calcAmts, divideAmount, resolveSplit, splitFromLegacy, calcBal, calcNetBal,
   computeBalances, simplifyDebts, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize,
+  mergeOptions,
 } from './helpers';
-import { PENDING_PER, DEFAULT_CATS } from '../constants';
+import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
 
 // ── Helpers de test ───────────────────────────────────────────────────────────
@@ -557,5 +558,61 @@ describe('sanitize', () => {
   it('convierte montos string a número', () => {
     const s = sanitize(exp({ amount: '1500.50' as never }), DEFAULT_CATS);
     expect(s.amount).toBe(1500.5);
+  });
+});
+
+// ── mergeOptions (medios de pago / bancos editables) ──────────────────────────
+describe('mergeOptions', () => {
+  it('une base y personalizadas en orden alfabético', () => {
+    expect(mergeOptions(['Visa', 'AMEX'], ['Naranja X'])).toEqual(['AMEX', 'Naranja X', 'Visa']);
+  });
+
+  it('deduplica si el usuario agrega una que ya existe', () => {
+    expect(mergeOptions(['Visa', 'AMEX'], ['Visa'])).toEqual(['AMEX', 'Visa']);
+  });
+
+  it('incluye el valor actual aunque no esté en ninguna lista', () => {
+    // Gasto viejo con 'Efectivo': debe seguir seleccionable para no cambiar solo.
+    expect(mergeOptions(['Visa'], [], 'Efectivo')).toEqual(['Efectivo', 'Visa']);
+  });
+
+  it('no duplica el valor actual si ya está en la lista', () => {
+    expect(mergeOptions(['Visa', 'AMEX'], [], 'Visa')).toEqual(['AMEX', 'Visa']);
+  });
+
+  it('ordena ignorando acentos y mayúsculas (español)', () => {
+    expect(mergeOptions(['Ñandú', 'Itaú', 'ábaco'], [])).toEqual(['ábaco', 'Itaú', 'Ñandú']);
+  });
+
+  it('descarta vacíos y recorta espacios', () => {
+    expect(mergeOptions(['Visa', '', '  '], ['  Modo  '])).toEqual(['Modo', 'Visa']);
+  });
+
+  it('sin current devuelve solo base + custom', () => {
+    expect(mergeOptions(['Visa'], [], undefined)).toEqual(['Visa']);
+    expect(mergeOptions(['Visa'], [], '')).toEqual(['Visa']);
+  });
+});
+
+// ── Migración de tarjetas viejas ──────────────────────────────────────────────
+describe('LEGACY_PAY_METHOD_MAP', () => {
+  it('todo destino existe en la lista actual de medios de pago', () => {
+    Object.values(LEGACY_PAY_METHOD_MAP).forEach(v => {
+      expect(PAY_METHODS).toContain(v);
+    });
+  });
+
+  it('unifica las tarjetas sin distinguir titular', () => {
+    expect(LEGACY_PAY_METHOD_MAP['TC Visa Laura']).toBe('Visa');
+    expect(LEGACY_PAY_METHOD_MAP['TC Visa Javi']).toBe('Visa');
+    expect(LEGACY_PAY_METHOD_MAP['TC Visa Extensión']).toBe('Visa');
+    expect(LEGACY_PAY_METHOD_MAP['TC Master Card Laura']).toBe('Master Card');
+    expect(LEGACY_PAY_METHOD_MAP['TC Amex Javi']).toBe('AMEX');
+    expect(LEGACY_PAY_METHOD_MAP['TC Amex Laura']).toBe('AMEX');
+  });
+
+  it('NO toca Efectivo ni Dinero en Cuenta: no son tarjetas', () => {
+    expect(LEGACY_PAY_METHOD_MAP['Efectivo']).toBeUndefined();
+    expect(LEGACY_PAY_METHOD_MAP['Dinero en Cuenta']).toBeUndefined();
   });
 });
