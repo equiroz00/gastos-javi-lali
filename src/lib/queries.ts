@@ -63,3 +63,23 @@ export function usePeople(): string[] {
   });
   return data;
 }
+
+// Medios de pago y bancos que agregó el usuario (además de PAY_METHODS/BANKS).
+// También viven en settings/main, igual que las categorías personalizadas.
+export function useCustomPayMethods(): string[] {
+  const { data } = useQuery<string[]>({
+    queryKey: ['customPayMethods'],
+    queryFn: () => Promise.resolve([] as string[]),
+    initialData: [] as string[],
+  });
+  return data;
+}
+
+export function useCustomBanks(): string[] {
+  const { data } = useQuery<string[]>({
+    queryKey: ['customBanks'],
+    queryFn: () => Promise.resolve([] as string[]),
+    initialData: [] as string[],
+  });
+  return data;
+}

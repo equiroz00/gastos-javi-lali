@@ -7,7 +7,7 @@ import {
   getPeriod, generatePlanExpenses, reassignExpensePeriods,
   sanitize, calcAmts, safeN, catEm, fmt, genId, splitFromLegacy, expenseResolved,
 } from '../lib/helpers.js';
-import { DEFAULT_CATS } from '../constants.js';
+import { DEFAULT_CATS, LEGACY_PAY_METHOD_MAP } from '../constants.js';
 import { queryClient } from '../lib/queryClient';
 import { checkExpenseForWrite, checkPaymentForWrite, checkPlanForWrite } from '../lib/schemas';
 import type {
@@ -42,6 +42,25 @@ const getCats = (): string[] => queryClient.getQueryData<string[]>(['customCats'
 const setCats = (next: string[]): void => { queryClient.setQueryData<string[]>(['customCats'], next); };
 const getPeople = (): string[] => queryClient.getQueryData<string[]>(['people']) ?? [];
 const setPeople = (next: string[]): void => { queryClient.setQueryData<string[]>(['people'], next); };
+const getPayMethods = (): string[] => queryClient.getQueryData<string[]>(['customPayMethods']) ?? [];
+const setPayMethods = (next: string[]): void => { queryClient.setQueryData<string[]>(['customPayMethods'], next); };
+const getBanks = (): string[] => queryClient.getQueryData<string[]>(['customBanks']) ?? [];
+const setBanks = (next: string[]): void => { queryClient.setQueryData<string[]>(['customBanks'], next); };
+
+// El doc settings/main se reescribe ENTERO en cada guardado, así que todos los
+// sub-conjuntos (config, categorías, personas, medios de pago, bancos) tienen
+// que re-adjuntarse siempre. Centralizarlo acá evita el bug silencioso de que
+// un `save*` se olvide de uno y lo borre de Firestore.
+function settingsDocPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...getCfg(),
+    customCats:       getCats(),
+    people:           getPeople(),
+    customPayMethods: getPayMethods(),
+    customBanks:      getBanks(),
+    ...overrides,
+  };
+}
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 export function runMigrationIfNeeded(onDone: () => void): void {
@@ -105,6 +124,43 @@ export async function runSplitMigrationIfNeeded(): Promise<void> {
   }
 }
 
+// ── Migración: tarjetas viejas → nombres actuales ─────────────────────────────
+// 'TC Visa Laura' → 'Visa', 'TC Amex Javi' → 'AMEX', etc. Se descarta el titular
+// porque la app ya registra quién pagó en `paidBy`. 'Efectivo' y 'Dinero en
+// Cuenta' NO se tocan: no son tarjetas y no tienen equivalente.
+//
+// Lee del caché de TanStack (poblado por las queries que respetan las reglas) en
+// vez de getDocs sin filtro: esa lectura la deniegan las reglas estrictas apenas
+// existe un gasto privado del otro usuario — el motivo por el que se retiró la
+// migración del Sprint 11.
+//
+// Idempotente: si no queda ningún valor legacy, no escribe nada. Los gastos
+// privados del otro usuario no están en este caché; se migran solos cuando esa
+// persona abre la app.
+let payMethodMigrationRan = false;
+export function runPayMethodMigrationIfNeeded(): void {
+  if (payMethodMigrationRan) return;
+  const isLegacy = (v: string) => !!LEGACY_PAY_METHOD_MAP[v];
+  const exps  = getExps().filter(e => isLegacy(e.paymentMethod));
+  const plans = getPlans().filter(p => isLegacy(p.paymentMethod));
+  // Sin nada que migrar no marcamos la bandera: puede ser que el caché todavía
+  // no esté cargado y la próxima llamada sí encuentre datos.
+  if (!exps.length && !plans.length) return;
+  payMethodMigrationRan = true;
+
+  const ops = [
+    ...exps.map(e  => ({ ref: expenseDoc(e.id), value: LEGACY_PAY_METHOD_MAP[e.paymentMethod] })),
+    ...plans.map(p => ({ ref: planDoc(p.id),    value: LEGACY_PAY_METHOD_MAP[p.paymentMethod] })),
+  ];
+  for (let i = 0; i < ops.length; i += 450) {
+    const batch = writeBatch(db);
+    ops.slice(i, i + 450).forEach(o => batch.update(o.ref, { paymentMethod: o.value }));
+    batch.commit().catch(e => console.error('Firestore [runPayMethodMigration]:', e));
+  }
+  const n = ops.length;
+  useAppStore.getState().showMsg('✓ ' + n + ' registro' + (n !== 1 ? 's' : '') + ' actualizado' + (n !== 1 ? 's' : '') + ' al nuevo nombre de tarjeta.');
+}
+
 // ── Error en escrituras ───────────────────────────────────────────────────────
 // Todas las escrituras a Firestore son optimistas (el estado local se actualiza
 // primero). Si la nube rechaza la operación, avisamos en lugar de fallar mudos.
@@ -162,6 +218,8 @@ interface AppActions {
   deletePayment:       (id: string) => void;
   saveCustomCats:      (cats: string[]) => void;
   savePeople:          (people: string[]) => void;
+  saveCustomPayMethods:(methods: string[]) => void;
+  saveCustomBanks:     (banks: string[]) => void;
   saveSettings:        (s: Settings)    => void;
   exportCSV:           (from: string, to: string) => void;
 }
@@ -430,7 +488,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   // Settings
   saveCustomCats: cats => {
     setCats(cats);
-    setDoc(settingsDoc(), { ...getCfg(), customCats: cats, people: getPeople() })
+    setDoc(settingsDoc(), settingsDocPayload({ customCats: cats }))
       .catch(reportWriteError('saveCustomCats'));
   },
 
@@ -438,8 +496,21 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   // config (el doc settings/main se reescribe entero, hay que re-adjuntar todo).
   savePeople: people => {
     setPeople(people);
-    setDoc(settingsDoc(), { ...getCfg(), customCats: getCats(), people })
+    setDoc(settingsDoc(), settingsDocPayload({ people }))
       .catch(reportWriteError('savePeople'));
+  },
+
+  // Medios de pago y bancos que agrega el usuario desde el formulario de gasto.
+  saveCustomPayMethods: methods => {
+    setPayMethods(methods);
+    setDoc(settingsDoc(), settingsDocPayload({ customPayMethods: methods }))
+      .catch(reportWriteError('saveCustomPayMethods'));
+  },
+
+  saveCustomBanks: banks => {
+    setBanks(banks);
+    setDoc(settingsDoc(), settingsDocPayload({ customBanks: banks }))
+      .catch(reportWriteError('saveCustomBanks'));
   },
 
   saveSettings: s => {
@@ -457,7 +528,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     }
     setExps(updated);
     setCfg(s);
-    setDoc(settingsDoc(), { ...s, customCats: getCats(), people: getPeople() })
+    setDoc(settingsDoc(), settingsDocPayload({ ...s }))
       .catch(reportWriteError('saveSettings'));
     state.showMsg(changed.length > 0
       ? '✓ Guardado · ' + changed.length + ' gasto' + (changed.length !== 1 ? 's' : '') + ' reubicado' + (changed.length !== 1 ? 's' : '')
