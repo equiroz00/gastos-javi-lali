@@ -71,6 +71,24 @@ export function sortByDate(exps: Expense[]): Expense[] {
   return exps.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
+// Encabezado del bloque de ítems en las notas. Se exporta porque el formulario
+// lo usa para reconocer y reemplazar el bloque anterior si se re-escanea.
+export const ITEMS_NOTE_HEADER = 'Ítems del ticket:';
+
+// Ítems leídos de una factura, formateados para dejarlos en las notas del gasto.
+// Sin esto la información se perdía al guardar: el recuadro del escaneo es solo
+// visual y no se persiste en ningún lado.
+export function buildItemsNote(
+  items: Array<{ descripcion: string; monto: number }> | undefined,
+  cur?: Currency,
+): string {
+  if (!items || !items.length) return '';
+  const lines = items
+    .filter(i => i && String(i.descripcion || '').trim())
+    .map(i => '• ' + String(i.descripcion).trim() + ' — ' + fmt(safeN(i.monto), cur));
+  return lines.length ? ITEMS_NOTE_HEADER + '\n' + lines.join('\n') : '';
+}
+
 // Opciones de un desplegable editable (medio de pago, banco): base + las que
 // agregó el usuario, sin duplicados y en orden alfabético español.
 // `current` es el valor del gasto que se está editando: se incluye aunque ya no

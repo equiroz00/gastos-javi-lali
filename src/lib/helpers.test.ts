@@ -8,7 +8,7 @@ import {
   calcAmts, divideAmount, resolveSplit, splitFromLegacy, calcBal, calcNetBal,
   computeBalances, simplifyDebts, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize,
-  mergeOptions,
+  mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
@@ -614,5 +614,45 @@ describe('LEGACY_PAY_METHOD_MAP', () => {
   it('NO toca Efectivo ni Dinero en Cuenta: no son tarjetas', () => {
     expect(LEGACY_PAY_METHOD_MAP['Efectivo']).toBeUndefined();
     expect(LEGACY_PAY_METHOD_MAP['Dinero en Cuenta']).toBeUndefined();
+  });
+});
+
+// ── Ítems del ticket → notas del gasto ────────────────────────────────────────
+describe('buildItemsNote', () => {
+  it('arma el bloque con encabezado y una línea por ítem', () => {
+    const note = buildItemsNote([
+      { descripcion: 'Coca Cola 1.5L', monto: 1500 },
+      { descripcion: 'Pan lactal', monto: 2300 },
+    ], 'ARS');
+    expect(note.startsWith(ITEMS_NOTE_HEADER)).toBe(true);
+    expect(note.split('\n')).toHaveLength(3); // encabezado + 2 ítems
+    expect(note).toContain('Coca Cola 1.5L');
+    expect(note).toContain('Pan lactal');
+  });
+
+  it('formatea el monto según la moneda', () => {
+    expect(buildItemsNote([{ descripcion: 'Café', monto: 1500 }], 'USD')).toContain('US$');
+    expect(buildItemsNote([{ descripcion: 'Café', monto: 1500 }], 'EUR')).toContain('€');
+  });
+
+  it('devuelve string vacío si no hay ítems', () => {
+    expect(buildItemsNote(undefined)).toBe('');
+    expect(buildItemsNote([])).toBe('');
+  });
+
+  it('descarta ítems sin descripción y no deja el bloque huérfano', () => {
+    expect(buildItemsNote([{ descripcion: '  ', monto: 100 }])).toBe('');
+    const note = buildItemsNote([
+      { descripcion: '', monto: 100 },
+      { descripcion: 'Yerba', monto: 4000 },
+    ]);
+    expect(note.split('\n')).toHaveLength(2);
+    expect(note).toContain('Yerba');
+  });
+
+  it('tolera montos inválidos sin romper (los toma como 0)', () => {
+    const note = buildItemsNote([{ descripcion: 'Raro', monto: NaN }], 'ARS');
+    expect(note).toContain('Raro');
+    expect(note).not.toContain('NaN');
   });
 });
