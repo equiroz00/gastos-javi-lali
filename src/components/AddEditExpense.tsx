@@ -2,7 +2,7 @@
 import React, { useRef, useState } from 'react';
 import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin } from 'lucide-react';
 import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions } from '../lib/helpers';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats, usePeople, useCustomPayMethods, useCustomBanks } from '../lib/queries';
@@ -122,6 +122,9 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const [scanError, setScanError]   = useState('');
   const [autoFilled, setAutoFilled] = useState<Set<string>>(new Set());
   const [scanExtra, setScanExtra]   = useState<{ cuit: string | null; items: ReciboExtraido['items'] } | null>(null);
+  // Bloque de ítems que este componente escribió en las notas. Se guarda para
+  // poder reemplazarlo (y no duplicarlo) si el usuario vuelve a escanear.
+  const lastItemsNote               = useRef('');
 
   function clearAutoFilled(field: string) {
     setAutoFilled(af => {
@@ -194,15 +197,34 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       if (data.comercio) filled.add('description');
       if (data.total)    filled.add('amount');
       if (data.fecha)    filled.add('date');
-      setForm(f => ({
-        ...f,
-        ...(data.comercio ? { description: data.comercio } : {}),
-        ...(data.total    ? { amount: String(data.total) } : {}),
-        ...(data.fecha    ? { date: data.fecha }           : {}),
-      }));
+      const coreFields = filled.size;
+
+      // Los ítems se vuelcan a las notas para que queden guardados con el gasto
+      // (el recuadro del escaneo es solo visual y se pierde al guardar).
+      const itemsNote = buildItemsNote(data.items, cur);
+      if (itemsNote) filled.add('notes');
+      const prevNote = lastItemsNote.current;
+
+      setForm(f => {
+        // Se quita el bloque de un escaneo anterior, si lo hubo, y se conserva
+        // lo que el usuario haya escrito a mano.
+        const withoutPrev = prevNote ? (f.notes || '').replace(prevNote, '') : (f.notes || '');
+        const typed = withoutPrev.trim();
+        const notes = itemsNote
+          ? (typed ? typed + '\n\n' + itemsNote : itemsNote)
+          : typed;
+        return {
+          ...f,
+          ...(data.comercio ? { description: data.comercio } : {}),
+          ...(data.total    ? { amount: String(data.total) } : {}),
+          ...(data.fecha    ? { date: data.fecha }           : {}),
+          notes,
+        };
+      });
+      lastItemsNote.current = itemsNote;
       setAutoFilled(filled);
       setScanExtra({ cuit: data.cuit, items: data.items });
-      if (!filled.size) setScanError('No se pudo leer ningún dato de la foto — completá el formulario a mano.');
+      if (!coreFields && !itemsNote) setScanError('No se pudo leer ningún dato de la foto — completá el formulario a mano.');
     } catch (err) {
       setScanError(err instanceof Error ? err.message : 'No se pudo leer la factura.');
     } finally {
@@ -715,6 +737,9 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
                       <span style={{ fontFamily:MONO }}>{fmt(it.monto, cur)}</span>
                     </div>
                   ))}
+                  <div style={{ fontSize:'0.68rem', color:C.textMuted, marginTop:'0.35rem', fontStyle:'italic' }}>
+                    Se copiaron a las notas del gasto (en "Más detalles"), así quedan guardados.
+                  </div>
                 </div>
               )}
             </div>
@@ -923,11 +948,20 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       <Lbl>Notas (opcional)</Lbl>
       <textarea
         value={form.notes || ''}
-        onChange={e => set('notes', e.target.value)}
+        onChange={e => { set('notes', e.target.value); clearAutoFilled('notes'); }}
         placeholder="Agregá un comentario o detalle adicional..."
-        rows={2}
-        style={{ width:'100%', border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.5rem 0.75rem', fontSize:'0.85rem', outline:'none', fontFamily:F, color:C.navy, background:C.surface, boxSizing:'border-box', resize:'vertical', minHeight:'60px', lineHeight:'1.4' }}
+        rows={autoFilled.has('notes') ? 5 : 2}
+        style={{
+          width:'100%',
+          border:'1px solid '+(autoFilled.has('notes') ? AMBER_BORDER : C.border),
+          borderRadius:'0.75rem', padding:'0.5rem 0.75rem', fontSize:'0.85rem',
+          outline:'none', fontFamily:F,
+          color:      autoFilled.has('notes') ? AMBER_TEXT : C.navy,
+          background: autoFilled.has('notes') ? AMBER_BG   : C.surface,
+          boxSizing:'border-box', resize:'vertical', minHeight:'60px', lineHeight:'1.4',
+        }}
       />
+      {autoFilled.has('notes') && <p style={{ fontSize:'0.68rem', color:'#92400e', margin:'0.2rem 0 0' }}>Ítems leídos de la foto — editalos o borralos si no los querés guardar.</p>}
 
       {splitSection}
 
