@@ -157,6 +157,7 @@ export const PlanSchema = z.object({
   splitAmong:        SplitAmongSchema.optional(),
   visibilidad:       z.enum(['compartido', 'privado']).optional(),
   ownerId:           z.string().optional(),
+  createdBy:         z.enum(['Javi', 'Lali']).optional(),
   createdAt:         z.string().catch(''),
 });
 

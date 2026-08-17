@@ -11,7 +11,7 @@ import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
 import type { ActivityEntry } from './store/useAppStore.js';
 import useAppStore from './store/useAppStore.js';
 import {
-  runMigrationIfNeeded, runPayMethodMigrationIfNeeded, pruneActivityLog, settingsDoc,
+  runMigrationIfNeeded, runPayMethodMigrationIfNeeded, runPlanVisibilityBackfill, pruneActivityLog, settingsDoc,
   expensesCol, plansCol, paymentsCol, userPrefDoc, activityLogCol,
 } from './store/useAppStore.js';
 import LoginScreen       from './components/LoginScreen';
@@ -103,6 +103,9 @@ export default function App() {
 
       runMigrationIfNeeded(() => {
         pruneActivityLog();
+        // Antes de suscribirse: completa `visibilidad` en planes viejos, que si
+        // no quedarían fuera del dual-query de abajo.
+        runPlanVisibilityBackfill();
         // La migración de backfill (runSplitMigrationIfNeeded) se retiró: ya completó
         // su trabajo y su lectura de la colección SIN filtro es denegada por las
         // reglas estrictas apenas existe un gasto privado del otro usuario.
@@ -137,10 +140,24 @@ export default function App() {
           applyExpenses();
         }, e => { console.error('expenses(privados):', e.code); });
 
-        const u2 = onSnapshot(plansCol(), snap => {
-          queryClient.setQueryData(['plans'], parsePlans(snap.docs.map(d => d.data())));
+        // Planes: mismo dual-query que los gastos. Con una query SIN filtro, las
+        // reglas estrictas deniegan la lectura entera y "Cuotas activas" queda
+        // vacía (la sección se oculta sola si no hay planes), sin más aviso que
+        // un error en consola.
+        let sharedPlans: Plan[] = [];
+        let ownPrivatePlans: Plan[] = [];
+        const applyPlans = () => queryClient.setQueryData(['plans'], [...sharedPlans, ...ownPrivatePlans]);
+
+        const u2a = onSnapshot(query(plansCol(), where('visibilidad', '==', 'compartido')), snap => {
+          sharedPlans = parsePlans(snap.docs.map(d => d.data()));
+          applyPlans();
           fired.plans = true; checkDone();
-        }, e => { console.error('plans:', e.code); fired.plans = true; checkDone(); });
+        }, e => { console.error('plans(compartidos):', e.code); fired.plans = true; checkDone(); });
+
+        const u2b = onSnapshot(query(plansCol(), where('ownerId', '==', firebaseUser.uid)), snap => {
+          ownPrivatePlans = parsePlans(snap.docs.map(d => d.data()));
+          applyPlans();
+        }, e => { console.error('plans(privados):', e.code); });
 
         const u3 = onSnapshot(paymentsCol(), snap => {
           queryClient.setQueryData(['payments'], parsePayments(snap.docs.map(d => d.data())));
@@ -175,7 +192,7 @@ export default function App() {
           fired.log = true; checkDone();
         }, e => { console.error('activityLog:', e.code); fired.log = true; checkDone(); });
 
-        _unsubs = [u1a, u1b, u2, u3, u4, u5, u6];
+        _unsubs = [u1a, u1b, u2a, u2b, u3, u4, u5, u6];
       });
     });
     _unsubAuth = unsubAuth;
