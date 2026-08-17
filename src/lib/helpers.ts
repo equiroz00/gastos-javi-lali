@@ -309,10 +309,12 @@ export function generatePlanExpenses(plan: Plan, periods: Period[]): Expense[] {
       installmentNum: cuotaNum,
       numInstallments: plan.numInstallments,
       fromPlan: true,
-      // Cada cuota hereda el reparto (montos de esa cuota) y la visibilidad del plan.
+      // Cada cuota hereda el reparto (montos de esa cuota), la visibilidad del
+      // plan y quién lo cargó (para poder mostrarlo en el detalle del gasto).
       splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
       visibilidad: plan.visibilidad ?? 'compartido',
       ...(plan.visibilidad === 'privado' && plan.ownerId ? { ownerId: plan.ownerId } : {}),
+      ...(plan.createdBy ? { createdBy: plan.createdBy } : {}),
     });
   }
   return result;

@@ -276,9 +276,9 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
         {d.noDebt
           ? <div style={{ fontSize:'0.9rem', fontWeight:800, color:C.navy }}>Al día</div>
           : d.transfers.map((t, i) => (
-              <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.5rem', padding:'0.2rem 0' }}>
-                <span style={{ fontSize:'0.8rem', color:C.navy }}><strong>{t.from}</strong> → <strong>{t.to}</strong> <span style={{ fontFamily:MONO, fontWeight:700 }}>{fmt(t.amount, c)}</span></span>
-                {settleBtn(t, c)}
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.5rem', padding:'0.2rem 0', flexWrap:'wrap' }}>
+                <span style={{ fontSize:'0.8rem', color:C.navy, minWidth:0, overflowWrap:'anywhere' }}><strong>{t.from}</strong> → <strong>{t.to}</strong> <span style={{ fontFamily:MONO, fontWeight:700 }}>{fmt(t.amount, c)}</span></span>
+                <div style={{ flexShrink:0 }}>{settleBtn(t, c)}</div>
               </div>
             ))}
       </div>
@@ -353,21 +353,25 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
         ) : pd.transfers.length === 1 ? (
           <>
             <div style={{ fontSize:'0.82rem', color:C.textMuted, marginTop:'0.1rem', fontWeight:500 }}>{pd.transfers[0].from} le debe a {pd.transfers[0].to}</div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.6rem', marginTop:'0.1rem' }}>
-              <div style={{ fontSize:FS.hero, fontWeight:800, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05 }}>{fmt(pd.transfers[0].amount, primary)}</div>
-              {settleBtn(pd.transfers[0], primary, true)}
+            {/* flexWrap + minWidth:0: el monto va en MONO (no se puede cortar) y
+                el botón tiene nowrap, así que con 7 cifras ninguno cedía y se
+                salía de la tarjeta. Ahora el monto puede encoger y, si aun así
+                no entra, el botón baja a la línea siguiente. */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.6rem', marginTop:'0.1rem', flexWrap:'wrap' }}>
+              <div style={{ fontSize:FS.hero, fontWeight:800, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05, minWidth:0, flex:'1 1 auto', overflowWrap:'anywhere' }}>{fmt(pd.transfers[0].amount, primary)}</div>
+              <div style={{ flexShrink:0 }}>{settleBtn(pd.transfers[0], primary, true)}</div>
             </div>
           </>
         ) : (
           <div style={{ marginTop:'0.4rem' }}>
             <div style={{ fontSize:'0.72rem', color:C.textMuted, fontWeight:700, marginBottom:'0.3rem' }}>Para quedar a mano:</div>
             {pd.transfers.map((t, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.5rem', padding:'0.4rem 0', borderTop: i ? '1px solid '+C.border : 'none' }}>
-                <span style={{ fontSize:'0.88rem', color:C.navy, fontWeight:600 }}>
+              <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.5rem', padding:'0.4rem 0', borderTop: i ? '1px solid '+C.border : 'none', flexWrap:'wrap' }}>
+                <span style={{ fontSize:'0.88rem', color:C.navy, fontWeight:600, minWidth:0, overflowWrap:'anywhere' }}>
                   <strong>{t.from}</strong> → <strong>{t.to}</strong>{' '}
                   <span style={{ fontFamily:MONO, fontWeight:800 }}>{fmt(t.amount, primary)}</span>
                 </span>
-                {settleBtn(t, primary)}
+                <div style={{ flexShrink:0 }}>{settleBtn(t, primary)}</div>
               </div>
             ))}
           </div>

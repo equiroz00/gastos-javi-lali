@@ -19,11 +19,18 @@ service cloud.firestore {
     // (ownerId == uid). Un gasto compartido lo ven ambos. Se usa != 'privado'
     // (no == 'compartido') a propósito: un doc sin el campo se trata como
     // compartido → nunca queda inaccesible por falta de migración.
+    // Se usa .get(campo, default) y no d.visibilidad: acceder con punto a un
+    // campo ausente hace fallar la evaluación y deniega el documento entero.
+    // Con docs viejos sin migrar (sin `visibilidad`) eso tumbaba la query de
+    // toda la colección — así se caía la lectura de planes y "Cuotas activas"
+    // aparecía vacía.
     function canSee(d) {
-      return d.visibilidad != 'privado' || d.ownerId == request.auth.uid;
+      return d.get('visibilidad', 'compartido') != 'privado'
+             || d.get('ownerId', '') == request.auth.uid;
     }
     function canOwn(d) {
-      return d.visibilidad != 'privado' || d.ownerId == request.auth.uid;
+      return d.get('visibilidad', 'compartido') != 'privado'
+             || d.get('ownerId', '') == request.auth.uid;
     }
     // Nota (hardening futuro): hoy un miembro podría convertir un gasto compartido
     // en privado y "ocultárselo" al otro. Aceptable entre pareja; se endurece si

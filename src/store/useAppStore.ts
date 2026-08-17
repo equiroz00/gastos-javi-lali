@@ -124,6 +124,31 @@ export async function runSplitMigrationIfNeeded(): Promise<void> {
   }
 }
 
+// ── Backfill: planes sin el campo `visibilidad` ───────────────────────────────
+// El dual-query de planes filtra por `visibilidad == 'compartido'` o por
+// `ownerId`, así que un plan viejo SIN el campo no matchearía ninguna de las dos
+// y desaparecería de "Cuotas activas". Este backfill lo completa una vez.
+//
+// Usa una lectura sin filtro a propósito: hoy es segura porque ningún plan es
+// privado todavía (hasta este cambio la visibilidad estaba fija en 'compartido')
+// y las reglas ya tratan el campo ausente como compartido. Si algún día falla,
+// no rompe nada: se registra en consola y sigue.
+export async function runPlanVisibilityBackfill(): Promise<void> {
+  try {
+    const snap = await getDocs(plansCol());
+    const pending = snap.docs.filter(d => !d.data().visibilidad);
+    if (!pending.length) return;
+    for (let i = 0; i < pending.length; i += 450) {
+      const batch = writeBatch(db);
+      pending.slice(i, i + 450).forEach(d => batch.update(d.ref, { visibilidad: 'compartido' }));
+      await batch.commit();
+    }
+    console.info('Backfill de visibilidad en planes:', pending.length);
+  } catch (e) {
+    console.error('Firestore [runPlanVisibilityBackfill]:', e);
+  }
+}
+
 // ── Migración: tarjetas viejas → nombres actuales ─────────────────────────────
 // 'TC Visa Laura' → 'Visa', 'TC Amex Javi' → 'AMEX', etc. Se descarta el titular
 // porque la app ya registra quién pagó en `paidBy`. 'Efectivo' y 'Dinero en
@@ -391,7 +416,12 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       javiAmount: amts.javiAmount,
       laliAmount: amts.laliAmount,
       splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
-      visibilidad: 'compartido',
+      // Antes esto era 'compartido' fijo: un plan marcado como privado se
+      // guardaba compartido y el otro usuario lo veía igual (y sus cuotas
+      // quedaban sin forma de editarse ni borrarse).
+      visibilidad: formData.visibilidad === 'privado' ? 'privado' : 'compartido',
+      ...(formData.visibilidad === 'privado' && formData.ownerId ? { ownerId: formData.ownerId } : {}),
+      createdBy: formData.createdBy,
       createdAt: new Date().toISOString(),
     };
     const installments = generatePlanExpenses(plan, getCfg().periods);
@@ -432,7 +462,10 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
       javiAmount: amts.javiAmount,
       laliAmount: amts.laliAmount,
       splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
-      visibilidad: 'compartido',
+      visibilidad: formData.visibilidad === 'privado' ? 'privado' : 'compartido',
+      ...(formData.visibilidad === 'privado' && formData.ownerId ? { ownerId: formData.ownerId } : {}),
+      // Al editar se conserva quién lo creó originalmente.
+      createdBy: existing?.createdBy ?? formData.createdBy,
       createdAt: existing?.createdAt || new Date().toISOString(),
     };
     const oldExps = getExps().filter(e => e.planId === planId);

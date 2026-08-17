@@ -59,6 +59,7 @@ export interface Plan {
   splitAmong?: SplitAmong;
   visibilidad?: Visibility;
   ownerId?: string;
+  createdBy?: UserName;    // quién cargó el plan; las cuotas lo heredan
   createdAt: string;
 }
 
