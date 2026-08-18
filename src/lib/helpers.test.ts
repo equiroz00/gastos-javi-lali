@@ -8,7 +8,7 @@ import {
   calcAmts, divideAmount, resolveSplit, splitFromLegacy, calcBal, calcNetBal,
   computeBalances, simplifyDebts, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize,
-  mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER,
+  mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER, shortDate, periodRange,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
@@ -654,5 +654,33 @@ describe('buildItemsNote', () => {
     const note = buildItemsNote([{ descripcion: 'Raro', monto: NaN }], 'ARS');
     expect(note).toContain('Raro');
     expect(note).not.toContain('NaN');
+  });
+});
+
+// -- Fechas del ciclo en el selector de Inicio --------------------------------
+describe('shortDate / periodRange', () => {
+  it('shortDate pasa YYYY-MM-DD a dd/mm', () => {
+    expect(shortDate('2026-07-15')).toBe('15/07');
+    expect(shortDate('2026-01-05')).toBe('05/01');
+  });
+
+  it('shortDate tolera fecha con hora', () => {
+    expect(shortDate('2026-07-15T10:30:00')).toBe('15/07');
+  });
+
+  it('shortDate devuelve vacio ante basura', () => {
+    expect(shortDate('')).toBe('');
+    expect(shortDate(undefined)).toBe('');
+    expect(shortDate('15/07/2026')).toBe('');
+  });
+
+  it('periodRange arma el rango del ciclo', () => {
+    expect(periodRange({ start: '2026-07-15', end: '2026-08-14' })).toBe('15/07 – 14/08');
+  });
+
+  it('periodRange devuelve vacio si falta un extremo o el periodo', () => {
+    expect(periodRange(undefined)).toBe('');
+    expect(periodRange({ start: '2026-07-15', end: '' })).toBe('');
+    expect(periodRange({ start: '', end: '2026-08-14' })).toBe('');
   });
 });

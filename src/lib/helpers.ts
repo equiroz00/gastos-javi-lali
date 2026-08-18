@@ -71,6 +71,20 @@ export function sortByDate(exps: Expense[]): Expense[] {
   return exps.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
+// 'YYYY-MM-DD' → 'dd/mm'. Devuelve '' si la fecha no viene en ese formato, para
+// no mostrar basura cuando un período quedó a medio configurar.
+export function shortDate(iso?: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  return m ? m[3] + '/' + m[2] : '';
+}
+
+// Rango de un ciclo de facturación en formato corto: '15/07 – 14/08'.
+export function periodRange(p?: { start?: string; end?: string }): string {
+  const a = shortDate(p?.start);
+  const b = shortDate(p?.end);
+  return a && b ? a + ' – ' + b : '';
+}
+
 // Encabezado del bloque de ítems en las notas. Se exporta porque el formulario
 // lo usa para reconocer y reemplazar el bloque anterior si se re-escanea.
 export const ITEMS_NOTE_HEADER = 'Ítems del ticket:';
