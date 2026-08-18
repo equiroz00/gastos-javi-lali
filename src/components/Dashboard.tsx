@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil } from 'lucide-react';
 import { C, F, MONO, PENDING_PER, SP, FS } from '../constants';
-import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment } from '../lib/helpers';
+import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment, periodRange } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, usePayments, usePlans, useSettings } from '../lib/queries';
@@ -220,17 +220,28 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
   }
 
   // ── Selector de período (chip dropdown) ──────────────────────────────────────
+  // Debajo del chip se muestran las fechas del ciclo elegido (dd/mm) para tener
+  // a mano de qué días habla el balance. Va como línea aparte y no dentro del
+  // <option>: el texto del seleccionado ensancharía el chip en móvil.
+  const selRange = periodRange(periods.find(p => p.name === selPeriod));
   const periodSelector = (
-    <div style={{ position:'relative', display:'inline-flex', alignItems:'center' }}>
-      <select
-        value={selPeriod}
-        onChange={e => setSelPeriod(e.target.value)}
-        style={{ appearance:'none', WebkitAppearance:'none', border:'1px solid '+C.border, borderRadius:'999px', padding:'0.3rem 1.7rem 0.3rem 0.8rem', fontSize:'0.78rem', fontWeight:700, color:C.navy, background:C.bg, outline:'none', cursor:'pointer', fontFamily:F } as React.CSSProperties}
-      >
-        <option value="Todos">Todos los períodos</option>
-        {periods.slice().reverse().map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-      </select>
-      <ChevronDown size={14} strokeWidth={2.2} color={C.textMuted} style={{ position:'absolute', right:'0.6rem', pointerEvents:'none' }} />
+    <div style={{ display:'inline-flex', flexDirection:'column', alignItems:'flex-start', minWidth:0 }}>
+      <div style={{ position:'relative', display:'inline-flex', alignItems:'center' }}>
+        <select
+          value={selPeriod}
+          onChange={e => setSelPeriod(e.target.value)}
+          style={{ appearance:'none', WebkitAppearance:'none', border:'1px solid '+C.border, borderRadius:'999px', padding:'0.3rem 1.7rem 0.3rem 0.8rem', fontSize:'0.78rem', fontWeight:700, color:C.navy, background:C.bg, outline:'none', cursor:'pointer', fontFamily:F } as React.CSSProperties}
+        >
+          <option value="Todos">Todos los períodos</option>
+          {periods.slice().reverse().map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+        </select>
+        <ChevronDown size={14} strokeWidth={2.2} color={C.textMuted} style={{ position:'absolute', right:'0.6rem', pointerEvents:'none' }} />
+      </div>
+      {selRange && (
+        <span style={{ fontSize:'0.64rem', color:C.textMuted, marginTop:'0.2rem', paddingLeft:'0.85rem', fontFamily:MONO, letterSpacing:'-0.01em' }}>
+          {selRange}
+        </span>
+      )}
     </div>
   );
 
