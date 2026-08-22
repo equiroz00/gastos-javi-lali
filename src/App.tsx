@@ -106,9 +106,9 @@ export default function App() {
         // Antes de suscribirse: completa `visibilidad` en planes viejos, que si
         // no quedarían fuera del dual-query de abajo.
         runPlanVisibilityBackfill();
-        // La migración de backfill (runSplitMigrationIfNeeded) se retiró: ya completó
-        // su trabajo y su lectura de la colección SIN filtro es denegada por las
-        // reglas estrictas apenas existe un gasto privado del otro usuario.
+        // El backfill de splitAmong del Sprint 11 se retiró en el Sprint 12: ya
+        // completó su trabajo y su lectura de la colección SIN filtro es denegada
+        // por las reglas estrictas apenas existe un gasto privado del otro usuario.
         _unsubs.forEach(u => u()); _unsubs = [];
         const fired = { exp:false, plans:false, pay:false, cfg:false, prefs:false, log:false };
         const checkDone = () => {

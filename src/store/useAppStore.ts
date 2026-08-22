@@ -98,32 +98,6 @@ export function pruneActivityLog(keep: number = 100): void {
     .catch(e => console.error('Firestore [pruneActivityLog]:', e));
 }
 
-// ── Migración Sprint 11: backfill de splitAmong + visibilidad ─────────────────
-// Idempotente. El parser ya sintetiza splitAmong en lectura; esto lo PERSISTE en
-// los docs (expenses/plans) para que las security rules —que requieren el campo
-// visibilidad— lo encuentren. Aditiva: no toca javiAmount/laliAmount.
-export async function runSplitMigrationIfNeeded(): Promise<void> {
-  try {
-    for (const col of [expensesCol(), plansCol()]) {
-      const snap = await getDocs(col);
-      const pending = snap.docs.filter(d => !d.data().splitAmong);
-      for (let i = 0; i < pending.length; i += 450) {
-        const batch = writeBatch(db);
-        pending.slice(i, i + 450).forEach(d => {
-          const data = d.data();
-          batch.update(d.ref, {
-            splitAmong: splitFromLegacy(safeN(data.javiAmount), safeN(data.laliAmount)),
-            visibilidad: 'compartido',
-          });
-        });
-        await batch.commit();
-      }
-    }
-  } catch (e) {
-    console.error('Firestore [runSplitMigrationIfNeeded]:', e);
-  }
-}
-
 // ── Backfill: planes sin el campo `visibilidad` ───────────────────────────────
 // El dual-query de planes filtra por `visibilidad == 'compartido'` o por
 // `ownerId`, así que un plan viejo SIN el campo no matchearía ninguna de las dos
