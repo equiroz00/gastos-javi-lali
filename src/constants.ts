@@ -1,5 +1,5 @@
 // ── src/constants.ts ──────────────────────────────────────────────────────────
-import type { ThemeConfig, FontConfig, ThemeKey, FontKey } from './types';
+import type { ThemeConfig, FontConfig, ThemeKey, FontKey, UIVariantConfig, UIKey } from './types';
 
 // onNavy = color de texto/íconos cuando el FONDO es `navy`. En el tema claro
 // navy es azul → texto blanco; en el oscuro navy es casi blanco (#F4F4F5) →
@@ -10,9 +10,9 @@ import type { ThemeConfig, FontConfig, ThemeKey, FontKey } from './types';
 // violeta oscuro legible (texto + Javi), accent = malva (Lali), igual que el
 // original para no perder la identidad de pareja.
 export const THEMES: Record<ThemeKey, ThemeConfig> = {
-  default:    { label:'Original',    emoji:'💜', bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#E4DAD2', textMuted:'#8a7a85', border:'#E2D8CF', white:'#FFFFFF', onNavy:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)', danger:'#c0314f', warn:'#b45309', ok:'#2d9e7f' },
-  budgetflow: { label:'Budget Flow', emoji:'🟣', bg:'#F2F2F7', surface:'#FFFFFF', navy:'#3D2F73', accent:'#A77693', beige:'#ECECF2', textMuted:'#8A8A8E', border:'#E4E4EC', white:'#FFFFFF', onNavy:'#FFFFFF', gradMain:'linear-gradient(135deg,#6E4DC9,#A77693)', gradJavi:'linear-gradient(135deg,#4D3B9E,#6E4DC9)', gradLali:'linear-gradient(135deg,#A77693,#C490A8)', danger:'#c0314f', warn:'#b45309', ok:'#2d9e7f' },
-  oscuro:     { label:'Oscuro',      emoji:'🌑', bg:'#0F1115', surface:'#191C22', navy:'#F4F4F5', accent:'#10B981', beige:'#23272F', textMuted:'#8B909B', border:'#262A32', white:'#FFFFFF', onNavy:'#0F1115', gradMain:'linear-gradient(135deg,#1A1D24,#23272F)', gradJavi:'linear-gradient(135deg,#10B981,#0E9F6E)', gradLali:'linear-gradient(135deg,#A78BFA,#8B5CF6)', danger:'#F87171', warn:'#FBBF24', ok:'#34D399' },
+  default:    { label:'Original',    emoji:'💜', dark:false, bg:'#F2F3F4', surface:'#FFFFFF', navy:'#174871', accent:'#A77693', beige:'#E4DAD2', textMuted:'#8a7a85', border:'#E2D8CF', white:'#FFFFFF', onNavy:'#FFFFFF', gradMain:'linear-gradient(135deg,#174871,#A77693)', gradJavi:'linear-gradient(135deg,#174871,#1e5c9b)', gradLali:'linear-gradient(135deg,#A77693,#c490a8)', danger:'#c0314f', warn:'#b45309', ok:'#2d9e7f' },
+  budgetflow: { label:'Budget Flow', emoji:'🟣', dark:false, bg:'#F2F2F7', surface:'#FFFFFF', navy:'#3D2F73', accent:'#A77693', beige:'#ECECF2', textMuted:'#8A8A8E', border:'#E4E4EC', white:'#FFFFFF', onNavy:'#FFFFFF', gradMain:'linear-gradient(135deg,#6E4DC9,#A77693)', gradJavi:'linear-gradient(135deg,#4D3B9E,#6E4DC9)', gradLali:'linear-gradient(135deg,#A77693,#C490A8)', danger:'#c0314f', warn:'#b45309', ok:'#2d9e7f' },
+  oscuro:     { label:'Oscuro',      emoji:'🌑', dark:true, bg:'#0F1115', surface:'#191C22', navy:'#F4F4F5', accent:'#10B981', beige:'#23272F', textMuted:'#8B909B', border:'#262A32', white:'#FFFFFF', onNavy:'#0F1115', gradMain:'linear-gradient(135deg,#1A1D24,#23272F)', gradJavi:'linear-gradient(135deg,#10B981,#0E9F6E)', gradLali:'linear-gradient(135deg,#A78BFA,#8B5CF6)', danger:'#F87171', warn:'#FBBF24', ok:'#34D399' },
 };
 
 export const FONTS: Record<FontKey, FontConfig> = {
@@ -23,6 +23,37 @@ export const FONTS: Record<FontKey, FontConfig> = {
 
 // Monospaced font for monetary figures — loaded always, used regardless of body font
 export const MONO = "'JetBrains Mono',ui-monospace,monospace";
+
+// ── Variantes de interfaz ─────────────────────────────────────────────────────
+// Las dos direcciones del rediseño, expresadas SOLO como tokens de layout. No
+// hay un color acá a propósito: el color sigue viniendo del tema (`C`), así que
+// cualquiera de los 3 temas funciona con cualquiera de las 2 variantes.
+//
+// Medidas tomadas de los mockups a 1320px del documento de diseño:
+//   cuenta → riel claro 64px, banda de acento con la cifra a 44–52px, secciones
+//            con versalita + filete fuerte, filas separadas por hairline.
+//   panel  → riel oscuro 56px, tarjetas con borde de 1px y radio 10, tablas
+//            densas, pasos como pestañas, atajos de teclado a la vista.
+export const UI_VARIANTS: Record<UIKey, UIVariantConfig> = {
+  cuenta: {
+    label:'Estado de cuenta',
+    hint:'Bandas a todo el ancho, cifras grandes y filetes. Sin tarjetas.',
+    railW:64, railDark:false, railIcon:40, railRadius:11,
+    surfaceMode:'flat', radius:10, shellBg:'surface',
+    sectionRule:'strong', sectionSize:11, sectionLS:'0.06em',
+    rowRule:true, rowPadY:'0.8rem',
+    heroBand:true, shortcuts:false, stepStyle:'bars', navStyle:'pill',
+  },
+  panel: {
+    label:'Panel de trabajo',
+    hint:'Tarjetas, tablas densas y atajos de teclado. Riel oscuro.',
+    railW:56, railDark:true, railIcon:38, railRadius:10,
+    surfaceMode:'card', radius:10, shellBg:'bg',
+    sectionRule:'none', sectionSize:10.5, sectionLS:'0.04em',
+    rowRule:true, rowPadY:'0.5rem',
+    heroBand:false, shortcuts:true, stepStyle:'tabs', navStyle:'bar',
+  },
+};
 
 // ── Sistema de layout ─────────────────────────────────────────────────────────
 // Escala de espaciado (múltiplos de 4px). Usar SIEMPRE estos valores para
@@ -91,6 +122,10 @@ export const USER_MAP: Record<string, string> = {
 // ── Mutable theme globals ─────────────────────────────────────────────────────
 export const C: ThemeConfig = { ...THEMES.default };
 export let F: string = "'Nunito',sans-serif";
+// Variante de interfaz activa. Mismo patrón que `C`: un objeto estable que se
+// muta en sitio, para que los `import { V }` de cada pantalla vean el cambio
+// sin volver a importar.
+export const V: UIVariantConfig = { ...UI_VARIANTS.cuenta };
 
 // Legacy preference migration: old theme/font keys → current valid keys
 const LEGACY_DARK = ['bosque','oceano','moca','noche','carbon','selva','madera'];
@@ -102,10 +137,19 @@ export function coerceFont(key: string): string {
   if (key === 'Nunito' || key === 'PlusJakarta' || key === 'Jost') return key;
   return 'Nunito';
 }
+// Quien nunca eligió variante (todos, hasta este cambio) cae en 'cuenta': es la
+// dirección con el juego de pantallas completo en el documento de diseño.
+export function coerceUI(key: string): UIKey {
+  return key === 'panel' ? 'panel' : 'cuenta';
+}
 
-export function applyTheme(themeKey: string, fontKey: string): void {
+export function applyTheme(themeKey: string, fontKey: string, uiKey?: string): void {
   const t = THEMES[coerceTheme(themeKey) as ThemeKey] || THEMES.default;
-  (Object.keys(t) as (keyof ThemeConfig)[]).forEach(k => { C[k] = t[k]; });
+  // El cast es necesario desde que ThemeConfig mezcla string y boolean (`dark`):
+  // con claves en unión, TS reduce el destino a `never`.
+  (Object.keys(t) as (keyof ThemeConfig)[]).forEach(k => { (C as any)[k] = t[k]; });
   const fd = FONTS[coerceFont(fontKey) as FontKey] || FONTS.Nunito;
   F = fd.css;
+  const v = UI_VARIANTS[coerceUI(uiKey || 'cuenta')];
+  (Object.keys(v) as (keyof UIVariantConfig)[]).forEach(k => { (V as any)[k] = v[k]; });
 }

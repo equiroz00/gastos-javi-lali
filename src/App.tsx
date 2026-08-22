@@ -4,7 +4,7 @@ import { Loader2, Home, Plus, BarChart2, ClipboardList, Settings2, LogOut, Walle
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
-import { C, F, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
+import { C, F, V, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
 import { queryClient } from './lib/queryClient';
 import { parseExpenses, parsePayments, parsePlans, parseSettingsDoc } from './lib/schemas';
 import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
@@ -63,18 +63,20 @@ export default function App() {
   const syncMsg        = useAppStore(s => s.syncMsg);
   const userTheme      = useAppStore(s => s.userTheme);
   const userFont       = useAppStore(s => s.userFont);
+  const userUI         = useAppStore(s => s.userUI);
 
   const setCurrentUser    = useAppStore(s => s.setCurrentUser);
   const setAuthDenied     = useAppStore(s => s.setAuthDenied);
   const setLoading        = useAppStore(s => s.setLoading);
   const setUserTheme      = useAppStore(s => s.setUserTheme);
   const setUserFont       = useAppStore(s => s.setUserFont);
+  const setUserUI         = useAppStore(s => s.setUserUI);
   const setActivityLog    = useAppStore(s => s.setActivityLog);
   const setLastReadTs     = useAppStore(s => s.setLastReadTs);
   const setView           = useAppStore(s => s.setView);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
 
-  applyTheme(userTheme || 'default', userFont || 'Nunito');
+  applyTheme(userTheme || 'default', userFont || 'Nunito', userUI || 'cuenta');
 
   useEffect(() => {
     const fd = FONTS[(userFont || 'Nunito') as keyof typeof FONTS] || FONTS.Nunito;
@@ -182,6 +184,7 @@ export default function App() {
             const prefs = snap.data();
             if (prefs.theme)      setUserTheme(prefs.theme);
             if (prefs.font)       setUserFont(prefs.font);
+            if (prefs.ui)         setUserUI(prefs.ui);
             if (prefs.lastReadTs) setLastReadTs(prefs.lastReadTs);
           }
           fired.prefs = true; checkDone();
@@ -279,40 +282,63 @@ export default function App() {
 
   // ── DESKTOP layout ─────────────────────────────────────────────────────────
   if (isDesktop) {
-    // Sidebar nav items (no FAB on desktop — just a prominent button)
+    // Riel de íconos a la izquierda. Las dos direcciones lo usan, con distinto
+    // peso: 'cuenta' lo pinta claro (sobre `beige`) y 'panel' lo pinta ink.
+    // Ojo: en el tema Oscuro `navy` es casi blanco, así que el riel "oscuro" se
+    // resuelve por contraste (`C.dark`) y no invirtiendo el color.
+    const railOnInk  = V.railDark && !C.dark;
+    const railBg     = V.railDark ? (C.dark ? C.beige : C.navy) : C.beige;
+    const railFg     = railOnInk ? C.onNavy : C.navy;
+    const railMuted  = railOnInk ? C.onNavy + '85' : C.textMuted;
+    const railActive = V.railDark
+      ? { background: railOnInk ? C.onNavy + '1F' : C.surface, color: railFg, boxShadow: 'none' }
+      : { background: C.surface, color: C.navy, boxShadow: '0 0 0 1px ' + C.border };
     const sideNavTabs = TABS.filter(t => t.id !== 'add');
+
+    const railBtn = (active: boolean): React.CSSProperties => ({
+      width:V.railIcon, height:V.railIcon, borderRadius:V.railRadius, border:'none',
+      display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer',
+      background:active ? railActive.background : 'transparent',
+      color:active ? railActive.color : railMuted,
+      boxShadow:active ? railActive.boxShadow : 'none',
+    });
+
+    const Rail = (
+      <div style={{ width:V.railW, flexShrink:0, background:railBg, borderRight: V.railDark && !C.dark ? 'none' : '1px solid '+C.border, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.85rem 0', gap:'0.35rem', height:'100vh', position:'sticky', top:0 }}>
+        <div style={{ width:32, height:32, borderRadius:9, background: V.railDark ? C.accent : C.navy, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginBottom:'0.5rem' }}>
+          <Wallet size={17} strokeWidth={2.2} color={V.railDark ? C.white : C.onNavy} />
+        </div>
+        {/* "Agregar" no figura en el riel de los mockups (ahí el alta es un panel
+            lateral). Se suma acá como cuadrado de acento para que la acción
+            principal siga a un clic desde cualquier pantalla. */}
+        <button onClick={() => setView('add')} title="Agregar gasto"
+          style={{ ...railBtn(view === 'add'), background:C.accent, color:C.white, marginBottom:'0.35rem' }}>
+          <Plus size={20} strokeWidth={2.6} />
+        </button>
+        {sideNavTabs.map(t => (
+          <button key={t.id} onClick={() => setView(t.id)} title={t.label} style={railBtn(view === t.id)}>
+            {t.icon}
+          </button>
+        ))}
+        <div style={{ marginTop:'auto' }}>
+          <span style={{ width:28, height:28, borderRadius:'50%', background:C.navy, color:C.onNavy, fontSize:'0.7rem', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:F }}>
+            {(currentUser || '?').charAt(0)}
+          </span>
+        </div>
+      </div>
+    );
+
     return (
-      <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', fontFamily:F }}>
+      <div style={{ minHeight:'100vh', background:C.bg, display:'flex', fontFamily:F }}>
         <ConfirmDialog /><PaymentModal /><Toast />
-        {Header}
-        <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-          {/* Sidebar */}
-          <div style={{ width:'200px', flexShrink:0, background:C.surface, borderRight:'1px solid '+C.border, display:'flex', flexDirection:'column', padding:'1rem 0.75rem', gap:'0.35rem', position:'sticky', top:0, height:'calc(100vh - 56px)', overflowY:'auto' }}>
-            {/* Add button — prominent at top of sidebar */}
-            <button
-              onClick={() => setView('add')}
-              style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.7rem 1rem', borderRadius:'0.9rem', border:'none', cursor:'pointer', fontFamily:F, fontWeight:800, fontSize:'0.85rem', background:C.gradMain, color:C.white, boxShadow:'0 4px 14px rgba(0,0,0,0.18)', marginBottom:'0.5rem' }}
-            >
-              <Plus size={18} strokeWidth={2.5} />
-              Agregar gasto
-            </button>
-            {sideNavTabs.map(t => {
-              const active = view === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setView(t.id)}
-                  style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 1rem', borderRadius:'0.75rem', border:'none', cursor:'pointer', fontFamily:F, fontWeight:active ? 800 : 500, fontSize:'0.85rem', background:active ? C.accent+'1F' : 'transparent', color:active ? C.accent : C.textMuted, textAlign:'left' }}
-                >
-                  {t.icon}
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
+        {Rail}
+        <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+          {Header}
           {/* Main content — el scroll ocupa todo el ancho; un wrapper interno
-              centra el contenido con un max-width único (MAXW) */}
-          <div style={{ flex:1, overflowY:'auto', paddingTop:SP.md, paddingBottom:SP.xxl }}>
+              centra el contenido con un max-width único (MAXW). El fondo lo
+              decide la variante: 'cuenta' trabaja sobre blanco, 'panel' sobre
+              el gris de sistema para que las tarjetas se despeguen. */}
+          <div style={{ flex:1, overflowY:'auto', paddingTop:SP.md, paddingBottom:SP.xxl, background: V.shellBg === 'surface' ? C.surface : C.bg }}>
             <div style={{ maxWidth:MAXW, margin:'0 auto' }}>
               {SyncBar}
               {Content}
@@ -324,18 +350,32 @@ export default function App() {
   }
 
   // ── MOBILE layout ──────────────────────────────────────────────────────────
+  // Dos formas de nav según la variante:
+  //   pill ('cuenta') → píldora ink flotante, despegada de los bordes.
+  //   bar  ('panel')  → barra al ras, estilo iOS, sobre la superficie.
+  const isPill   = V.navStyle === 'pill';
+  // La píldora es siempre ink: en el tema Oscuro `navy` es casi blanco, así que
+  // ahí se usa una superficie elevada en lugar de invertir.
+  const pillBg   = C.dark ? C.beige : C.navy;
+  const pillOn   = C.dark ? C.navy  : C.onNavy;
+  const navFg    = (active: boolean) =>
+    isPill ? (active ? pillOn : pillOn + '80')
+           : (active ? C.accent : C.textMuted);
+
+  const navWrap: React.CSSProperties = isPill
+    ? { position:'fixed', bottom:'calc(0.75rem + env(safe-area-inset-bottom))', left:'50%', transform:'translateX(-50%)', width:'calc(100% - 1.5rem)', maxWidth:'calc(' + SHELL_MAXW + ' - 1.5rem)', background:pillBg, borderRadius:'18px', display:'flex', alignItems:'center', padding:'0 0.5rem', height:'58px', zIndex:10, boxShadow:'0 8px 24px rgba(0,0,0,0.22)' }
+    : { position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:SHELL_MAXW, background:C.surface, borderTop:'1px solid '+C.border, display:'flex', alignItems:'center', zIndex:10, paddingBottom:'env(safe-area-inset-bottom)' };
+
   return (
-    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', maxWidth:SHELL_MAXW, margin:'0 auto', fontFamily:F }}>
+    <div style={{ minHeight:'100vh', background: V.shellBg === 'surface' ? C.surface : C.bg, display:'flex', flexDirection:'column', maxWidth:SHELL_MAXW, margin:'0 auto', fontFamily:F }}>
       <ConfirmDialog /><PaymentModal /><Toast />
       {Header}
-      <div style={{ flex:1, overflowY:'auto', paddingBottom:'5.5rem', paddingTop:'0.75rem' }}>
+      <div style={{ flex:1, overflowY:'auto', paddingBottom: isPill ? '6.5rem' : '5.5rem', paddingTop:'0.75rem' }}>
         {SyncBar}
         {Content}
       </div>
 
-      {/* Bottom nav — barra de pestañas estilo iOS (Budget Flow). El "Agregar"
-          es un cuadrado de acento, no un FAB flotante. */}
-      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:SHELL_MAXW, background:C.surface, borderTop:'1px solid '+C.border, display:'flex', alignItems:'center', zIndex:10, paddingBottom:'env(safe-area-inset-bottom)' }}>
+      <div style={navWrap}>
         {TABS.map(t => {
           const isAdd = t.id === 'add';
           const active = view === t.id;
@@ -343,19 +383,26 @@ export default function App() {
             <button
               key={t.id}
               onClick={() => setView('add')}
-              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'0.18rem', padding:'0.5rem 0 0.45rem', border:'none', background:'none', cursor:'pointer', fontFamily:F }}
+              title="Agregar gasto"
+              style={ isPill
+                ? { width:'46px', height:'46px', borderRadius:'14px', border:'none', background:C.accent, color:C.white, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 0.25rem', cursor:'pointer', flexShrink:0 }
+                : { flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'0.18rem', padding:'0.5rem 0 0.45rem', border:'none', background:'none', cursor:'pointer', fontFamily:F } }
             >
-              <span style={{ width:'30px', height:'30px', borderRadius:'9px', background:C.accent, color:C.white, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <Plus size={20} strokeWidth={2.6} />
-              </span>
-              <span style={{ fontSize:'0.6rem', color: active ? C.accent : C.textMuted, fontWeight: active ? 800 : 500 }}>Agregar</span>
+              {isPill ? <Plus size={22} strokeWidth={2.6} /> : (
+                <>
+                  <span style={{ width:'30px', height:'30px', borderRadius:'9px', background:C.accent, color:C.white, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <Plus size={20} strokeWidth={2.6} />
+                  </span>
+                  <span style={{ fontSize:'0.6rem', color: active ? C.accent : C.textMuted, fontWeight: active ? 800 : 500 }}>Agregar</span>
+                </>
+              )}
             </button>
           );
           return (
             <button
               key={t.id}
               onClick={() => setView(t.id)}
-              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.55rem 0 0.45rem', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:active ? C.accent : C.textMuted, fontSize:'0.6rem', fontWeight:active ? 800 : 500, gap:'0.2rem' }}
+              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding: isPill ? '0' : '0.55rem 0 0.45rem', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:navFg(active), fontSize: isPill ? '0.59rem' : '0.6rem', fontWeight:active ? (isPill ? 700 : 800) : 500, gap: isPill ? '0.19rem' : '0.2rem' }}
             >
               {t.icon}
               {t.label}

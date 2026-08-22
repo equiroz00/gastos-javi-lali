@@ -1,7 +1,7 @@
 // ── components/Dashboard.tsx ──────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil } from 'lucide-react';
-import { C, F, MONO, PENDING_PER, SP, FS } from '../constants';
+import { C, F, V, MONO, PENDING_PER, SP, FS } from '../constants';
 import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment, periodRange } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
@@ -224,6 +224,14 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
   // a mano de qué días habla el balance. Va como línea aparte y no dentro del
   // <option>: el texto del seleccionado ensancharía el chip en móvil.
   const selRange = periodRange(periods.find(p => p.name === selPeriod));
+  // "Estado de cuenta" convierte este bloque en la BANDA de acento con la cifra
+  // protagonista (mockup 2a/3a). Sobre navy los tokens de texto habituales no
+  // contrastan, así que la banda usa su propio trío ink/dim/line.
+  const band = V.heroBand;
+  const ink  = band ? C.onNavy : C.navy;
+  const dim  = band ? C.onNavy + '99' : C.textMuted;
+  const line = band ? C.onNavy + '33' : C.border;
+
   const periodSelector = (
     <div style={{ display:'inline-flex', flexDirection:'column', alignItems:'flex-start', minWidth:0 }}>
       <div style={{ position:'relative', display:'inline-flex', alignItems:'center' }}>
@@ -238,7 +246,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
         <ChevronDown size={14} strokeWidth={2.2} color={C.textMuted} style={{ position:'absolute', right:'0.6rem', pointerEvents:'none' }} />
       </div>
       {selRange && (
-        <span style={{ fontSize:'0.64rem', color:C.textMuted, marginTop:'0.2rem', paddingLeft:'0.85rem', fontFamily:MONO, letterSpacing:'-0.01em' }}>
+        <span style={{ fontSize:'0.64rem', color:dim, marginTop:'0.2rem', paddingLeft:'0.85rem', fontFamily:MONO, letterSpacing:'-0.01em' }}>
           {selRange}
         </span>
       )}
@@ -335,14 +343,16 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
   }
 
   return (
-    <Card style={{ padding:'1rem 1.1rem', background:C.accent + '14' }}>
+    <Card style={ band
+      ? { padding:'1.35rem 1.25rem 1.2rem', background:C.navy, border:'none', borderRadius:0, color:C.onNavy }
+      : { padding:'1rem 1.1rem', background:C.accent + '14' } }>
       {/* Top row: período + count + total + variación */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.85rem', flexWrap:'wrap', gap:'0.4rem' }}>
         {periodSelector}
-        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.72rem', color:C.textMuted, fontWeight:600 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.72rem', color:dim, fontWeight:600 }}>
           <span>{count} gastos</span>
           <span style={{ opacity:0.4 }}>·</span>
-          <span>Total <span style={{ fontFamily:MONO, fontWeight:700, color:C.navy }}>{fmtS(pd.total, primary)}</span></span>
+          <span>Total <span style={{ fontFamily:MONO, fontWeight:700, color:ink }}>{fmtS(pd.total, primary)}</span></span>
           {amtPct !== null && (
             <span style={{ display:'inline-flex', alignItems:'center', gap:'0.15rem', color:pctColor, fontWeight:800 }}>
               {pctArrow} {Math.abs(amtPct)}%
@@ -353,32 +363,32 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
 
       {/* Hero: saldos por persona / cómo saldar (moneda primaria) */}
       <div style={{ marginBottom:'0.85rem' }}>
-        <div style={{ fontSize:'0.68rem', color:C.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>Balance{curs.length > 1 ? ' ' + primary : ''}</div>
+        <div style={{ fontSize:'0.68rem', color:dim, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>Balance{curs.length > 1 ? ' ' + primary : ''}</div>
         {pd.noDebt ? (
           <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', marginTop:'0.2rem' }}>
             <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:C.accent, display:'flex', alignItems:'center', justifyContent:'center' }}>
               <Check size={16} strokeWidth={3} color={C.white} />
             </div>
-            <span style={{ fontSize:'1.3rem', fontWeight:800, color:C.navy }}>¡Al día!</span>
+            <span style={{ fontSize:'1.3rem', fontWeight:800, color:ink }}>¡Al día!</span>
           </div>
         ) : pd.transfers.length === 1 ? (
           <>
-            <div style={{ fontSize:'0.82rem', color:C.textMuted, marginTop:'0.1rem', fontWeight:500 }}>{pd.transfers[0].from} le debe a {pd.transfers[0].to}</div>
+            <div style={{ fontSize:'0.82rem', color:dim, marginTop:'0.1rem', fontWeight:500 }}>{pd.transfers[0].from} le debe a {pd.transfers[0].to}</div>
             {/* flexWrap + minWidth:0: el monto va en MONO (no se puede cortar) y
                 el botón tiene nowrap, así que con 7 cifras ninguno cedía y se
                 salía de la tarjeta. Ahora el monto puede encoger y, si aun así
                 no entra, el botón baja a la línea siguiente. */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.6rem', marginTop:'0.1rem', flexWrap:'wrap' }}>
-              <div style={{ fontSize:FS.hero, fontWeight:800, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05, minWidth:0, flex:'1 1 auto', overflowWrap:'anywhere' }}>{fmt(pd.transfers[0].amount, primary)}</div>
+              <div style={{ fontSize:FS.hero, fontWeight:800, color:ink, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05, minWidth:0, flex:'1 1 auto', overflowWrap:'anywhere' }}>{fmt(pd.transfers[0].amount, primary)}</div>
               <div style={{ flexShrink:0 }}>{settleBtn(pd.transfers[0], primary, true)}</div>
             </div>
           </>
         ) : (
           <div style={{ marginTop:'0.4rem' }}>
-            <div style={{ fontSize:'0.72rem', color:C.textMuted, fontWeight:700, marginBottom:'0.3rem' }}>Para quedar a mano:</div>
+            <div style={{ fontSize:'0.72rem', color:dim, fontWeight:700, marginBottom:'0.3rem' }}>Para quedar a mano:</div>
             {pd.transfers.map((t, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.5rem', padding:'0.4rem 0', borderTop: i ? '1px solid '+C.border : 'none', flexWrap:'wrap' }}>
-                <span style={{ fontSize:'0.88rem', color:C.navy, fontWeight:600, minWidth:0, overflowWrap:'anywhere' }}>
+              <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.5rem', padding:'0.4rem 0', borderTop: i ? '1px solid '+line : 'none', flexWrap:'wrap' }}>
+                <span style={{ fontSize:'0.88rem', color:ink, fontWeight:600, minWidth:0, overflowWrap:'anywhere' }}>
                   <strong>{t.from}</strong> → <strong>{t.to}</strong>{' '}
                   <span style={{ fontFamily:MONO, fontWeight:800 }}>{fmt(t.amount, primary)}</span>
                 </span>
@@ -392,7 +402,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
       {/* Detalle */}
       <button
         onClick={() => setExpanded(!expanded)}
-        style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.25rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.8rem', padding:'0.55rem', color:C.textMuted, fontWeight:600, fontSize:'0.75rem', cursor:'pointer', fontFamily:F }}
+        style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.25rem', background:'transparent', border:'1px solid '+line, borderRadius:'0.8rem', padding:'0.55rem', color:dim, fontWeight:600, fontSize:'0.75rem', cursor:'pointer', fontFamily:F }}
       >
         Ver detalle<ChevronDown size={14} strokeWidth={2.2} style={{ transform:expanded ? 'rotate(180deg)' : 'none', transition:'transform 0.2s' }} />
       </button>

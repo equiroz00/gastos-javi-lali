@@ -1,7 +1,7 @@
 // ── components/Settings.tsx ───────────────────────────────────────────────────
 import React, { useState } from 'react';
 import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown, Users, X, CreditCard } from 'lucide-react';
-import { C, F, THEMES, FONTS, coerceTheme, coerceFont, SP, FS, BANKS } from '../constants';
+import { C, F, THEMES, FONTS, UI_VARIANTS, coerceTheme, coerceFont, coerceUI, SP, FS, BANKS } from '../constants';
 import { mergeOptions } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card } from './ui';
@@ -16,6 +16,7 @@ export default function Settings() {
   const currentUser         = useAppStore(s => s.currentUser);
   const userTheme           = useAppStore(s => s.userTheme);
   const userFont            = useAppStore(s => s.userFont);
+  const userUI              = useAppStore(s => s.userUI);
   const saveUserPreferences  = useAppStore(s => s.saveUserPreferences);
   const people               = usePeople();
   const savePeople           = useAppStore(s => s.savePeople);
@@ -89,7 +90,9 @@ export default function Settings() {
     width:'100%', border:'1px solid '+C.border, borderRadius:'0.75rem',
     padding:'0.6rem 0.85rem', fontSize:'0.85rem', fontWeight:600,
     outline:'none', cursor:'pointer', fontFamily:F, color:C.navy,
-    background:C.surface, appearance:'none' as any,
+    // backgroundColor (no `background`): mezclar la abreviada con backgroundImage
+    // dispara el warning de React al re-renderizar y puede pisar la flechita.
+    backgroundColor:C.surface, appearance:'none' as any,
     backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
     backgroundRepeat:'no-repeat', backgroundPosition:'right 0.75rem center',
     paddingRight:'2rem',
@@ -125,6 +128,68 @@ export default function Settings() {
         Configuración compartida — se aplica para Javi y Lali
       </p>
     </div>
+  );
+
+  // ── Variante de interfaz ────────────────────────────────────────────────────
+  // Miniatura en vivo de cada dirección: se dibuja con los colores del tema
+  // activo, así se ve que variante y tema son ejes independientes.
+  const VariantPreview = ({ uiKey }: { uiKey: string }) => {
+    const isPanel = uiKey === 'panel';
+    return (
+      <span style={{ width:'100%', height:'52px', borderRadius:'0.4rem', overflow:'hidden', border:'1px solid '+C.border, display:'flex', background:isPanel ? C.bg : C.surface }}>
+        {/* riel */}
+        <span style={{ width:'11px', flexShrink:0, background:isPanel ? C.navy : C.beige, borderRight:isPanel ? 'none' : '1px solid '+C.border, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:'4px', gap:'3px' }}>
+          {[0,1,2].map(i => (
+            <span key={i} style={{ width:'5px', height:'5px', borderRadius:'2px', background:isPanel ? (i===0 ? C.white : C.white+'66') : (i===0 ? C.navy : C.textMuted+'88') }} />
+          ))}
+        </span>
+        {/* contenido */}
+        {isPanel ? (
+          <span style={{ flex:1, display:'grid', gridTemplateColumns:'1fr 1fr', gap:'3px', padding:'4px' }}>
+            {[0,1,2,3].map(i => (
+              <span key={i} style={{ background:C.surface, border:'1px solid '+C.border, borderRadius:'2px' }} />
+            ))}
+          </span>
+        ) : (
+          <span style={{ flex:1, display:'flex', flexDirection:'column' }}>
+            <span style={{ height:'20px', background:C.navy, display:'flex', alignItems:'center', paddingLeft:'5px' }}>
+              <span style={{ width:'26px', height:'6px', borderRadius:'1px', background:C.onNavy+'CC' }} />
+            </span>
+            {[0,1,2].map(i => (
+              <span key={i} style={{ flex:1, borderBottom:'1px solid '+C.border, display:'flex', alignItems:'center', paddingLeft:'5px' }}>
+                <span style={{ width:i===1?'20px':'30px', height:'3px', borderRadius:'1px', background:C.textMuted+'77' }} />
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
+    );
+  };
+
+  const curUI = coerceUI(userUI || 'cuenta');
+  const uiCard = (
+    <Card>
+      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.25rem', fontSize:'0.95rem' }}>Interfaz</h3>
+      <p style={{ fontSize:'0.72rem', color:C.textMuted, margin:'0 0 0.75rem', fontWeight:600 }}>
+        Cambia la estructura de las pantallas. El tema y la tipografía siguen siendo tuyos aparte.
+      </p>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem' }}>
+        {Object.entries(UI_VARIANTS).map(([key, v]) => {
+          const active = curUI === key;
+          return (
+            <button
+              key={key}
+              onClick={() => saveUserPreferences(userTheme, userFont, key)}
+              style={{ display:'flex', flexDirection:'column', alignItems:'stretch', gap:'0.45rem', padding:'0.6rem', borderRadius:'0.85rem', border:'2px solid ' + (active ? C.accent : C.border), background: active ? C.accent + '12' : 'transparent', cursor:'pointer', fontFamily:F, textAlign:'left' }}
+            >
+              <VariantPreview uiKey={key} />
+              <span style={{ fontSize:'0.74rem', fontWeight: active ? 800 : 700, color: active ? C.accent : C.navy }}>{v.label}</span>
+              <span style={{ fontSize:'0.66rem', color:C.textMuted, fontWeight:600, lineHeight:1.35 }}>{v.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+    </Card>
   );
 
   // ── Tema dropdown ───────────────────────────────────────────────────────────
@@ -329,6 +394,7 @@ export default function Settings() {
         <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>
         {/* Apariencia banner + 2-col grid */}
         {appearanceBanner}
+        {uiCard}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'stretch' }}>
           {themeCard}
           {fontCard}
@@ -355,6 +421,7 @@ export default function Settings() {
       {closingCard}
       {csvCard}
       {appearanceBanner}
+      {uiCard}
       {themeCard}
       {fontCard}
       {saveBtn}
