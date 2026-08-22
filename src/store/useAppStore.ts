@@ -46,6 +46,8 @@ const getPayMethods = (): string[] => queryClient.getQueryData<string[]>(['custo
 const setPayMethods = (next: string[]): void => { queryClient.setQueryData<string[]>(['customPayMethods'], next); };
 const getBanks = (): string[] => queryClient.getQueryData<string[]>(['customBanks']) ?? [];
 const setBanks = (next: string[]): void => { queryClient.setQueryData<string[]>(['customBanks'], next); };
+const getClosingDays = (): Record<string, number> => queryClient.getQueryData<Record<string, number>>(['bankClosingDays']) ?? {};
+const setClosingDays = (next: Record<string, number>): void => { queryClient.setQueryData<Record<string, number>>(['bankClosingDays'], next); };
 
 // El doc settings/main se reescribe ENTERO en cada guardado, así que todos los
 // sub-conjuntos (config, categorías, personas, medios de pago, bancos) tienen
@@ -58,6 +60,7 @@ function settingsDocPayload(overrides: Record<string, unknown> = {}): Record<str
     people:           getPeople(),
     customPayMethods: getPayMethods(),
     customBanks:      getBanks(),
+    bankClosingDays:  getClosingDays(),
     ...overrides,
   };
 }
@@ -219,6 +222,7 @@ interface AppActions {
   savePeople:          (people: string[]) => void;
   saveCustomPayMethods:(methods: string[]) => void;
   saveCustomBanks:     (banks: string[]) => void;
+  saveBankClosingDays: (days: Record<string, number>) => void;
   saveSettings:        (s: Settings)    => void;
   exportCSV:           (from: string, to: string) => void;
 }
@@ -518,6 +522,13 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     setBanks(banks);
     setDoc(settingsDoc(), settingsDocPayload({ customBanks: banks }))
       .catch(reportWriteError('saveCustomBanks'));
+  },
+
+  // Día de cierre del resumen por banco (informativo).
+  saveBankClosingDays: days => {
+    setClosingDays(days);
+    setDoc(settingsDoc(), settingsDocPayload({ bankClosingDays: days }))
+      .catch(reportWriteError('saveBankClosingDays'));
   },
 
   saveSettings: s => {

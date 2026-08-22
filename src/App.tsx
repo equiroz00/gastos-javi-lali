@@ -166,12 +166,13 @@ export default function App() {
 
         const u4 = onSnapshot(settingsDoc(), snap => {
           if (snap.exists()) {
-            const { settings, customCats, people, customPayMethods, customBanks } = parseSettingsDoc(snap.data());
+            const { settings, customCats, people, customPayMethods, customBanks, bankClosingDays } = parseSettingsDoc(snap.data());
             queryClient.setQueryData(['settings'], settings);
             queryClient.setQueryData(['customCats'], customCats);
             queryClient.setQueryData(['people'], people);
             queryClient.setQueryData(['customPayMethods'], customPayMethods);
             queryClient.setQueryData(['customBanks'], customBanks);
+            queryClient.setQueryData(['bankClosingDays'], bankClosingDays);
           }
           fired.cfg = true; checkDone();
         }, e => { console.error('settings:', e.code); fired.cfg = true; checkDone(); });

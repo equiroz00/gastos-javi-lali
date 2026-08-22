@@ -85,6 +85,31 @@ export function periodRange(p?: { start?: string; end?: string }): string {
   return a && b ? a + ' – ' + b : '';
 }
 
+// Resumen de tarjeta al que va una compra: el primer día de cierre posterior o
+// igual a la fecha del gasto. Si el mes no llega a ese día (cierre 31 en
+// febrero) se usa el último día del mes.
+//
+// Es informativo: NO decide el `period` del gasto — eso lo sigue haciendo
+// getPeriod con los ciclos configurados. Sirve para saber, al cargar con una
+// tarjeta puntual, en qué resumen va a aparecer.
+export function nextClosingDate(dateISO: string, closingDay?: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateISO || '');
+  if (!m || !closingDay || closingDay < 1 || closingDay > 31) return '';
+  const year0 = Number(m[1]);
+  const month0 = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  // Día 0 del mes siguiente = último día de este mes.
+  const lastDayOf = (y: number, mo: number) => new Date(y, mo + 1, 0).getDate();
+  const closeIn = (y: number, mo: number) => Math.min(closingDay, lastDayOf(y, mo));
+
+  let y = year0, mo = month0;
+  if (day > closeIn(y, mo)) {
+    mo += 1;
+    if (mo > 11) { mo = 0; y += 1; }
+  }
+  return y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(closeIn(y, mo)).padStart(2, '0');
+}
+
 // Encabezado del bloque de ítems en las notas. Se exporta porque el formulario
 // lo usa para reconocer y reemplazar el bloque anterior si se re-escanea.
 export const ITEMS_NOTE_HEADER = 'Ítems del ticket:';

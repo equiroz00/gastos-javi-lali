@@ -1,11 +1,12 @@
 // ── components/Settings.tsx ───────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown, Users, X } from 'lucide-react';
-import { C, F, THEMES, FONTS, coerceTheme, coerceFont, SP, FS } from '../constants';
+import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown, Users, X, CreditCard } from 'lucide-react';
+import { C, F, THEMES, FONTS, coerceTheme, coerceFont, SP, FS, BANKS } from '../constants';
+import { mergeOptions } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
-import { useSettings, usePeople } from '../lib/queries';
+import { useSettings, usePeople, useCustomBanks, useBankClosingDays } from '../lib/queries';
 
 export default function Settings() {
   const isDesktop           = useIsDesktop();
@@ -18,6 +19,9 @@ export default function Settings() {
   const saveUserPreferences  = useAppStore(s => s.saveUserPreferences);
   const people               = usePeople();
   const savePeople           = useAppStore(s => s.savePeople);
+  const customBanks          = useCustomBanks();
+  const bankClosingDays      = useBankClosingDays();
+  const saveBankClosingDays  = useAppStore(s => s.saveBankClosingDays);
 
   const [periods, setPeriods]         = useState(settings.periods || []);
   const [newPerson, setNewPerson]     = useState('');
@@ -234,6 +238,44 @@ export default function Settings() {
     display:'inline-flex', alignItems:'center', gap:'0.3rem', padding:'0.3rem 0.6rem',
     borderRadius:'999px', fontSize:'0.78rem', fontWeight:700, fontFamily:F,
   };
+  // ── Cierre de tarjetas ──────────────────────────────────────────────────────
+  // Solo informativo: no cambia a qué período va el gasto (eso lo siguen
+  // decidiendo los ciclos de arriba), sirve para saber en qué resumen aparecerá.
+  const bankOptions = mergeOptions(BANKS, customBanks);
+  function setClosingDay(bank: string, raw: string) {
+    const next = { ...bankClosingDays };
+    const n = parseInt(raw, 10);
+    if (!raw.trim() || isNaN(n) || n < 1 || n > 31) delete next[bank];
+    else next[bank] = n;
+    saveBankClosingDays(next);
+  }
+  const closingCard = (
+    <Card>
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.4rem', fontSize:'0.95rem' }}>
+        <CreditCard size={16} strokeWidth={2.2} color={C.accent} />Cierre de tarjetas
+      </h3>
+      <p style={{ fontSize:'0.72rem', color:C.textMuted, margin:'0 0 0.75rem', lineHeight:1.4 }}>
+        Día del mes en que cierra el resumen de cada banco. Al cargar un gasto te avisa en qué resumen va a caer — útil cuando tus tarjetas cierran en fechas distintas. Dejalo vacío si no lo sabés.
+      </p>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(140px, 100%), 1fr))', gap:'0.5rem' }}>
+        {bankOptions.map(b => (
+          <div key={b} style={{ display:'flex', alignItems:'center', gap:'0.4rem', minWidth:0 }}>
+            <span style={{ fontSize:'0.75rem', color:C.navy, fontWeight:600, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b}</span>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={bankClosingDays[b] ?? ''}
+              onChange={e => setClosingDay(b, e.target.value)}
+              placeholder="—"
+              style={{ ...inp, width:'3.6rem', flexShrink:0, padding:'0.35rem 0.4rem', textAlign:'center' }}
+            />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+
   const peopleCard = (
     <Card>
       <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.4rem', fontSize:'0.95rem' }}>
@@ -295,6 +337,7 @@ export default function Settings() {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'stretch' }}>
           {periodsCard}
           {peopleCard}
+          {closingCard}
           {csvCard}
         </div>
         {saveBtn}
@@ -309,6 +352,7 @@ export default function Settings() {
       {sharedBanner}
       {periodsCard}
       {peopleCard}
+      {closingCard}
       {csvCard}
       {appearanceBanner}
       {themeCard}
