@@ -195,7 +195,8 @@ interface AppActions {
   setLoading:     (v: boolean) => void;
   setUserTheme:   (theme: string)     => void;
   setUserFont:    (font: string)      => void;
-  saveUserPreferences: (theme: string, font: string) => void;
+  setUserUI:      (ui: string)        => void;
+  saveUserPreferences: (theme: string, font: string, ui?: string) => void;
   setActivityLog: (entries: ActivityEntry[]) => void;
   setLastReadTs:  (ts: string) => void;
   markAllRead:    () => void;
@@ -234,6 +235,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   loading:        true,
   userTheme:      'default',
   userFont:       'Nunito',
+  userUI:         'cuenta',
   activityLog:    [] as ActivityEntry[],
   lastReadTs:     '',
   view:           'dashboard',
@@ -252,11 +254,14 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   // Per-user preferences
   setUserTheme: theme => set({ userTheme: theme }),
   setUserFont:  font  => set({ userFont: font }),
-  saveUserPreferences: (theme, font) => {
+  setUserUI:    ui    => set({ userUI: ui }),
+  // `ui` es opcional: quien solo cambia tema o tipografía conserva su variante.
+  saveUserPreferences: (theme, font, ui) => {
     const state = get();
-    set({ userTheme: theme, userFont: font });
+    const nextUI = ui ?? state.userUI;
+    set({ userTheme: theme, userFont: font, userUI: nextUI });
     if (state.currentUser) {
-      setDoc(userPrefDoc(state.currentUser), { theme, font }, { merge: true })
+      setDoc(userPrefDoc(state.currentUser), { theme, font, ui: nextUI }, { merge: true })
         .catch(reportWriteError('saveUserPreferences'));
     }
   },

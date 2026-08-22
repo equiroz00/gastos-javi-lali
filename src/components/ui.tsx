@@ -6,7 +6,7 @@ import {
   Wallet, Tag, Trash2, ArrowRightLeft,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { C, F, CHART_TYPES } from '../constants';
+import { C, F, V, MONO, FS, CHART_TYPES } from '../constants';
 import { fmt, safeN, catLb, todayStr, genId, allParticipants } from '../lib/helpers';
 import { usePeople } from '../lib/queries';
 import useAppStore from '../store/useAppStore';
@@ -60,20 +60,67 @@ export function UserDot({ user, style }: { user: string; style?: React.CSSProper
   return <span style={{ display:'inline-block', width:'7px', height:'7px', borderRadius:'50%', background:isJavi ? C.navy : C.accent, flexShrink:0, ...style }} />;
 }
 
-// Tarjeta base — estética Budget Flow / iOS: esquinas amplias, plana (sin
-// sombra; resalta por contraste con el fondo gris-sistema), borde fino.
+// Contenedor de bloque. Es el punto donde las dos direcciones se separan, y por
+// eso concentra la diferencia: como todas las pantallas ya envuelven sus bloques
+// en <Card>, cambiar la variante las reescribe a todas sin tocarlas una por una.
+//   panel  → tarjeta: superficie, borde de 1px y radio 10 (mockups de 2b/3b).
+//   cuenta → filete: sin caja ni fondo, el bloque se separa por una regla
+//            inferior y respira con el ancho completo (mockups de 2a/3a).
 export function Card({ style, children }: { style?: React.CSSProperties; children?: React.ReactNode }) {
+  const flat = V.surfaceMode === 'flat';
+  const base: React.CSSProperties = flat
+    ? { background:'transparent', border:'none', borderBottom:'1px solid '+C.border, borderRadius:0, padding:'0.15rem 0 1rem' }
+    : { background:C.surface, borderRadius:V.radius+'px', padding:'1rem', border:'1px solid '+C.border };
+  return <div style={{ ...base, ...style }}>{children}</div>;
+}
+
+// Encabezado de sección.
+//   cuenta → versalita sobre el ink con FILETE fuerte debajo: es la firma de la
+//            dirección "Estado de cuenta", que no usa cajas para agrupar.
+//   panel  → etiqueta chica y apagada, sin regla (la caja ya agrupa).
+export function SectionLabel({ children, style }: { children?: React.ReactNode; style?: React.CSSProperties }) {
+  const strong = V.sectionRule === 'strong';
   return (
-    <div style={{ background:C.surface, borderRadius:'1.15rem', padding:'1rem', border:'1px solid '+C.border, ...style }}>
+    <div style={{
+      fontSize:V.sectionSize+'px', fontWeight:700, letterSpacing:V.sectionLS,
+      textTransform:'uppercase', fontFamily:F,
+      color: strong ? C.navy : C.textMuted,
+      borderBottom: strong ? '1px solid '+C.navy : 'none',
+      paddingBottom: strong ? '0.55rem' : 0,
+      margin: strong ? '0 0 0.15rem' : '0 0 0.4rem 0.15rem',
+      ...style,
+    }}>
       {children}
     </div>
   );
 }
 
-// Etiqueta de sección estilo iOS (mayúsculas, espaciada, apagada).
-export function SectionLabel({ children, style }: { children?: React.ReactNode; style?: React.CSSProperties }) {
+// Fila de lista separada por hairline. En 'cuenta' las filas son el material
+// principal (no hay tarjetas); en 'panel' son filas de tabla densa.
+export function Row({ last, style, children }: { last?: boolean; style?: React.CSSProperties; children?: React.ReactNode }) {
   return (
-    <div style={{ fontSize:'0.66rem', fontWeight:800, letterSpacing:'0.05em', textTransform:'uppercase', color:C.textMuted, margin:'0 0 0.4rem 0.15rem', fontFamily:F, ...style }}>
+    <div style={{
+      display:'flex', alignItems:'center', gap:'0.6rem',
+      padding:V.rowPadY+' 0',
+      borderBottom: V.rowRule && !last ? '1px solid '+C.border : 'none',
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// Banda de acento con la cifra protagonista — exclusiva de 'cuenta'. En 'panel'
+// devuelve null y la pantalla usa su propio titular, porque esa dirección no
+// tiene bandas a todo el ancho.
+export function AmountBand({ eyebrow, amount, children }: { eyebrow?: React.ReactNode; amount: React.ReactNode; children?: React.ReactNode }) {
+  if (!V.heroBand) return null;
+  return (
+    <div style={{ background:C.navy, padding:'1.6rem 1.35rem 1.4rem', color:C.onNavy }}>
+      {eyebrow ? (
+        <div style={{ fontSize:'0.68rem', fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:C.onNavy+'99', fontFamily:F }}>{eyebrow}</div>
+      ) : null}
+      <div style={{ fontFamily:MONO, fontSize:FS.hero, fontWeight:700, letterSpacing:'-0.03em', marginTop:'0.3rem' }}>{amount}</div>
       {children}
     </div>
   );

@@ -108,6 +108,10 @@ export interface DeleteData {
 export interface UserPreferences {
   theme: string;
   font: string;
+  // Variante de interfaz (layout). Es un eje INDEPENDIENTE del tema: `theme`
+  // decide los colores, `ui` decide la estructura. Como `theme` y `font`, vive
+  // en userPreferences/{usuario} y no afecta a la otra persona.
+  ui: string;
 }
 
 export interface ActivityEntry {
@@ -131,6 +135,7 @@ export interface AppState {
   // Per-user preferences
   userTheme: string;
   userFont: string;
+  userUI: string;
 
   // Activity log (notifications)
   activityLog: ActivityEntry[];
@@ -163,8 +168,47 @@ export interface ExpenseForm {
 export type ThemeKey = 'default' | 'budgetflow' | 'oscuro';
 export type FontKey  = 'Nunito' | 'PlusJakarta' | 'Jost';
 
+// ── Variantes de interfaz ─────────────────────────────────────────────────────
+// Las dos direcciones del rediseño. NO llevan color: los colores siguen saliendo
+// del tema (objeto `C`), así que las 3 opciones de tema × 2 de interfaz son
+// ortogonales y el tema "Original" de Lali se preserva en ambas variantes.
+//   cuenta → "Estado de cuenta": bandas a todo el ancho, filetes, sin tarjetas.
+//   panel  → "Panel de trabajo": tarjetas, tablas densas, atajos de teclado.
+export type UIKey = 'cuenta' | 'panel';
+
+export interface UIVariantConfig {
+  label: string;
+  hint: string;
+  // Riel de navegación en escritorio
+  railW: number;          // ancho en px
+  railDark: boolean;      // riel sobre ink (panel) vs. sobre gris claro (cuenta)
+  railIcon: number;       // lado del botón de ícono
+  railRadius: number;
+  // Superficies
+  surfaceMode: 'flat' | 'card'; // filetes vs. tarjetas con borde
+  radius: number;
+  shellBg: 'surface' | 'bg';    // fondo del área de contenido
+  // Encabezados de sección
+  sectionRule: 'strong' | 'none'; // filete 1px sobre el ink debajo del título
+  sectionSize: number;
+  sectionLS: string;
+  // Filas
+  rowRule: boolean;       // hairline entre filas
+  rowPadY: string;
+  // Rasgos propios
+  heroBand: boolean;      // banda de acento con la cifra protagonista
+  shortcuts: boolean;     // muestra atajos de teclado (⌘↵)
+  stepStyle: 'bars' | 'tabs';   // progreso del alta de gasto
+  navStyle: 'pill' | 'bar';     // nav móvil: píldora flotante vs. barra al ras
+}
+
 export interface ThemeConfig {
-  label: string; emoji: string; bg: string; surface: string;
+  label: string; emoji: string;
+  // `dark` no es cosmético: las variantes lo necesitan para decidir superficies
+  // por contraste en vez de por color fijo. El riel de "Panel de trabajo" es
+  // ink sobre claro, pero en el tema oscuro invertirlo lo dejaría blanco.
+  dark: boolean;
+  bg: string; surface: string;
   navy: string; accent: string; beige: string; textMuted: string;
   border: string; white: string; onNavy: string;
   gradMain: string; gradJavi: string; gradLali: string;

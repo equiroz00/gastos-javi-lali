@@ -1,7 +1,7 @@
 // ── components/AddEditExpense.tsx ─────────────────────────────────────────────
 import React, { useRef, useState } from 'react';
-import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin, CreditCard } from 'lucide-react';
-import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
+import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin, CreditCard, Check } from 'lucide-react';
+import { C, F, V, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
 import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote, nextClosingDate, shortDate } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
@@ -672,10 +672,45 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     </div>
   ) : null;
 
+  // ── Indicador de pasos ────────────────────────────────────────────────────
+  // Las dos direcciones lo resuelven distinto (mockups 3a vs 3b):
+  //   cuenta → barras de progreso + contador "1 / 2".
+  //   panel  → pestañas navegables, con tilde en los pasos ya completados.
+  // Al editar no hay recorrido de dos pasos, así que no se muestra.
+  const STEP_LABELS = ['Lo esencial', 'Cuotas y detalles'];
+  const stepIndicator = (isEditMode || isPlanEdit) ? null : V.stepStyle === 'tabs' ? (
+    <div style={{ display:'flex', gap:'0.4rem', borderBottom:'1px solid '+C.border, marginBottom:'0.9rem' }}>
+      {STEP_LABELS.map((label, i) => {
+        const n = i + 1;
+        const active = step === n;
+        const done   = step > n;
+        return (
+          <button
+            key={label}
+            type="button"
+            onClick={() => { if (done) setStep(n); }}
+            disabled={!done && !active}
+            style={{ height:'34px', padding:'0 0.7rem', border:'none', background:'transparent', borderBottom:'2px solid ' + (active ? C.navy : 'transparent'), color: active ? C.navy : C.textMuted, fontFamily:F, fontSize:'0.72rem', fontWeight: active ? 700 : 600, cursor: done ? 'pointer' : 'default', display:'flex', alignItems:'center', gap:'0.35rem' }}
+          >
+            {done && <Check size={13} strokeWidth={2.6} color={C.ok} />}
+            {n} · {label}
+          </button>
+        );
+      })}
+    </div>
+  ) : (
+    <div style={{ display:'flex', alignItems:'center', gap:'0.55rem', marginBottom:'0.9rem' }}>
+      {STEP_LABELS.map((label, i) => (
+        <span key={label} style={{ flex:1, height:'3px', borderRadius:'999px', background: step >= i + 1 ? C.navy : C.border, display:'block' }} />
+      ))}
+      <span style={{ fontSize:'0.64rem', fontWeight:700, color:C.textMuted, letterSpacing:'0.04em', flexShrink:0 }}>{step} / {STEP_LABELS.length}</span>
+    </div>
+  );
+
   // ── Paso 1 ────────────────────────────────────────────────────────────────
   const step1 = (
     <div>
-      <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'1rem' }}>{isPlanEdit ? 'Editar plan — Lo esencial' : 'Paso 1 de 2 — Lo esencial'}</div>
+      {(isEditMode || isPlanEdit) && <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'1rem' }}>Editar plan — Lo esencial</div>}
 
       {!isEditMode && !isPlanEdit && (
         <div style={{ marginBottom:'1rem' }}>
@@ -838,9 +873,11 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   // ── Paso 2 ────────────────────────────────────────────────────────────────
   const step2 = (
     <div>
-      <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'0.75rem' }}>
-        {isEditMode ? 'Editar gasto' : isPlanEdit ? 'Editar plan — Cuotas y detalles' : 'Paso 2 de 2 — Detalles'}
-      </div>
+      {(isEditMode || isPlanEdit) && (
+        <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'0.75rem' }}>
+          {isEditMode ? 'Editar gasto' : 'Editar plan — Cuotas y detalles'}
+        </div>
+      )}
 
       {isEditMode ? (
         <div style={{ background:C.bg, borderRadius:'0.85rem', padding:'0.75rem', marginBottom:'0.5rem', border:'1px solid '+C.border }}>
@@ -1090,6 +1127,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         {(isEditMode || isPlanEdit) && <Pencil size={18} strokeWidth={2.3} color={C.accent} />}
         {isEditMode ? 'Editar gasto' : isPlanEdit ? 'Editar plan de cuotas' : 'Nuevo gasto'}
       </h2>
+      {stepIndicator}
       {step === 1 ? step1 : step2}
     </div>
   );
