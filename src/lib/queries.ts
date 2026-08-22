@@ -83,3 +83,14 @@ export function useCustomBanks(): string[] {
   });
   return data;
 }
+
+// Día de cierre del resumen por banco: { 'BBVA': 5, 'Galicia': 14 }. Solo
+// informativo — no interviene en el cálculo del período del gasto.
+export function useBankClosingDays(): Record<string, number> {
+  const { data } = useQuery<Record<string, number>>({
+    queryKey: ['bankClosingDays'],
+    queryFn: () => Promise.resolve({} as Record<string, number>),
+    initialData: {} as Record<string, number>,
+  });
+  return data;
+}

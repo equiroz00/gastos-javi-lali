@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import { Pencil, Trash2, Clock, CreditCard, Lock } from 'lucide-react';
 import { C, F, MONO, PENDING_PER } from '../constants';
-import { fmt, safeN, catLb, expenseResolved } from '../lib/helpers';
+import { fmt, safeN, catLb, expenseResolved, nextClosingDate, shortDate } from '../lib/helpers';
 import { CatIcon } from './ui';
 import useAppStore from '../store/useAppStore';
-import { usePlans } from '../lib/queries';
+import { usePlans, useBankClosingDays } from '../lib/queries';
 import type { Expense } from '../types';
 
 interface ExpenseListProps {
@@ -35,8 +35,10 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 function ExpenseRow({ expense: e, open, onToggle, onDelete, onEdit }: ExpenseRowProps) {
   const cur = e.currency || 'ARS';
   const r = expenseResolved(e);
-  const plans          = usePlans();
-  const setEditingPlan = useAppStore(s => s.setEditingPlan);
+  const plans           = usePlans();
+  const bankClosingDays = useBankClosingDays();
+  const setEditingPlan  = useAppStore(s => s.setEditingPlan);
+  const closing         = nextClosingDate(e.date, bankClosingDays[e.bank]);
   const plan           = e.fromPlan ? plans.find(p => p.id === e.planId) : undefined;
   // Reparto: se listan solo los participantes con monto, así sirve para N personas.
   const shares = Object.entries(r).filter(([, v]) => safeN(v) > 0);
@@ -86,6 +88,7 @@ function ExpenseRow({ expense: e, open, onToggle, onDelete, onEdit }: ExpenseRow
           <DetailRow label="Categoría">{catLb(e.category)}</DetailRow>
           {e.paymentMethod && <DetailRow label="Medio de pago">{e.paymentMethod}</DetailRow>}
           {e.bank && <DetailRow label="Banco / billetera">{e.bank}</DetailRow>}
+          {closing && <DetailRow label="Resumen que cierra">{shortDate(closing)}</DetailRow>}
           <DetailRow label="Período">{e.period || 'Sin período'}</DetailRow>
           {e.fromPlan && <DetailRow label="Cuota">{e.installmentNum} de {e.numInstallments}</DetailRow>}
           {e.visibilidad === 'privado' && (

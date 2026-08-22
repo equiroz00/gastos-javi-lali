@@ -210,17 +210,23 @@ export const SettingsSchema = z.object({
 export function parseSettingsDoc(raw: unknown): {
   settings: Settings; customCats: string[]; people: string[];
   customPayMethods: string[]; customBanks: string[];
+  bankClosingDays: Record<string, number>;
 } {
   const parsed = SettingsSchema.safeParse(raw);
   if (!parsed.success) reportAnomaly('Config', raw, parsed.error);
   const settings = (parsed.success ? parsed.data : { periods: [], theme: 'default', font: 'Nunito' }) as Settings;
   const obj = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
   const strArray = (v: unknown): string[] => z.array(z.string()).catch([]).parse(v);
+  // Día de cierre por banco (1–31). Se descarta cualquier valor fuera de rango
+  // en vez de tumbar toda la config.
+  const bankClosingDays = z.record(z.string(), z.coerce.number().int().min(1).max(31))
+    .catch({}).parse(obj.bankClosingDays);
   return {
     settings,
     customCats:       strArray(obj.customCats),
     people:           strArray(obj.people),
     customPayMethods: strArray(obj.customPayMethods),
     customBanks:      strArray(obj.customBanks),
+    bankClosingDays,
   };
 }

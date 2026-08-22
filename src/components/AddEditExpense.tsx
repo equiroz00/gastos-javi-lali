@@ -1,11 +1,11 @@
 // ── components/AddEditExpense.tsx ─────────────────────────────────────────────
 import React, { useRef, useState } from 'react';
-import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin } from 'lucide-react';
+import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin, CreditCard } from 'lucide-react';
 import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote } from '../lib/helpers';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote, nextClosingDate, shortDate } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
-import { useExpenses, useSettings, useCustomCats, usePeople, useCustomPayMethods, useCustomBanks } from '../lib/queries';
+import { useExpenses, useSettings, useCustomCats, usePeople, useCustomPayMethods, useCustomBanks, useBankClosingDays } from '../lib/queries';
 import SplitModal from './SplitModal';
 import { auth, storage } from '../firebase.js';
 import { ref, uploadBytes } from 'firebase/storage';
@@ -57,6 +57,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const participants      = allParticipants(people);
   const customPayMethods  = useCustomPayMethods();
   const customBanks       = useCustomBanks();
+  const bankClosingDays   = useBankClosingDays();
   const saveCustomCats    = useAppStore(s => s.saveCustomCats);
   const saveCustomPayMethods = useAppStore(s => s.saveCustomPayMethods);
   const saveCustomBanks   = useAppStore(s => s.saveCustomBanks);
@@ -925,6 +926,19 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       <select value={form.bank} onChange={e => set('bank', e.target.value)} style={selStyle}>
         {bankOptions.map(b => <option key={b}>{b}</option>)}
       </select>
+      {/* Aviso informativo: en qué resumen cae la compra según el cierre del
+          banco. No cambia el período del gasto, solo evita la duda cuando las
+          tarjetas cierran en fechas distintas. Se configura en Ajustes. */}
+      {(() => {
+        const closing = nextClosingDate(form.date, bankClosingDays[form.bank]);
+        if (!closing) return null;
+        return (
+          <p style={{ fontSize:'0.7rem', color:C.textMuted, margin:'0.35rem 0 0', display:'flex', alignItems:'center', gap:'0.3rem' }}>
+            <CreditCard size={12} strokeWidth={2.2} color={C.accent} style={{ flexShrink:0 }} />
+            Entra en el resumen de <strong style={{ color:C.navy }}>{form.bank}</strong> que cierra el {shortDate(closing)}
+          </p>
+        );
+      })()}
       {!showNewBank ? (
         <button onClick={() => setShowNewBank(true)} style={addBtnStyle}>
           <Plus size={13} strokeWidth={2.5} />Nuevo banco / billetera

@@ -8,7 +8,7 @@ import {
   calcAmts, divideAmount, resolveSplit, splitFromLegacy, calcBal, calcNetBal,
   computeBalances, simplifyDebts, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize,
-  mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER, shortDate, periodRange,
+  mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER, shortDate, periodRange, nextClosingDate,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
@@ -682,5 +682,49 @@ describe('shortDate / periodRange', () => {
     expect(periodRange(undefined)).toBe('');
     expect(periodRange({ start: '2026-07-15', end: '' })).toBe('');
     expect(periodRange({ start: '', end: '2026-08-14' })).toBe('');
+  });
+});
+
+// -- Resumen de tarjeta al que va la compra -----------------------------------
+describe('nextClosingDate', () => {
+  it('compra antes del cierre: entra en el resumen de ese mes', () => {
+    expect(nextClosingDate('2026-08-03', 5)).toBe('2026-08-05');
+  });
+
+  it('compra el mismo dia del cierre: entra en ese resumen', () => {
+    expect(nextClosingDate('2026-08-05', 5)).toBe('2026-08-05');
+  });
+
+  it('compra despues del cierre: pasa al resumen siguiente', () => {
+    expect(nextClosingDate('2026-08-10', 5)).toBe('2026-09-05');
+  });
+
+  it('cruza el fin de anio', () => {
+    expect(nextClosingDate('2026-12-20', 5)).toBe('2027-01-05');
+  });
+
+  it('cierre 31 en un mes de 30 dias usa el ultimo dia', () => {
+    expect(nextClosingDate('2026-04-15', 31)).toBe('2026-04-30');
+  });
+
+  it('cierre 30 en febrero usa el ultimo dia del mes', () => {
+    expect(nextClosingDate('2026-02-15', 30)).toBe('2026-02-28');
+  });
+
+  it('anio bisiesto: febrero llega al 29', () => {
+    expect(nextClosingDate('2028-02-15', 30)).toBe('2028-02-29');
+  });
+
+  it('compra despues del ultimo dia posible pasa al mes siguiente', () => {
+    expect(nextClosingDate('2026-02-28', 31)).toBe('2026-02-28');
+    expect(nextClosingDate('2026-03-31', 31)).toBe('2026-03-31');
+  });
+
+  it('sin dia de cierre o con fecha invalida devuelve vacio', () => {
+    expect(nextClosingDate('2026-08-10', undefined)).toBe('');
+    expect(nextClosingDate('2026-08-10', 0)).toBe('');
+    expect(nextClosingDate('2026-08-10', 32)).toBe('');
+    expect(nextClosingDate('', 5)).toBe('');
+    expect(nextClosingDate('10/08/2026', 5)).toBe('');
   });
 });
