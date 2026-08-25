@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil } from 'lucide-react';
 import { C, F, V, MONO, PENDING_PER, SP, FS } from '../constants';
-import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment, periodRange } from '../lib/helpers';
+import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment, periodRange, shortDate } from '../lib/helpers';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, usePayments, usePlans, useSettings } from '../lib/queries';
-import { Card, DonutRing } from './ui';
+import { Card, DonutRing, MetricStrip, bandColors } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense, Payment, Period, Currency } from '../types';
 
@@ -237,10 +237,13 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
   // "Estado de cuenta" convierte este bloque en la BANDA de acento con la cifra
   // protagonista (mockup 2a/3a). Sobre navy los tokens de texto habituales no
   // contrastan, así que la banda usa su propio trío ink/dim/line.
+  // bandColors() resuelve el fondo por contraste: en el tema Oscuro `navy` es
+  // casi blanco y la banda salía blanca en medio de una pantalla oscura.
   const band = V.heroBand;
-  const ink  = band ? C.onNavy : C.navy;
-  const dim  = band ? C.onNavy + '99' : C.textMuted;
-  const line = band ? C.onNavy + '33' : C.border;
+  const B    = bandColors();
+  const ink  = band ? B.on   : C.navy;
+  const dim  = band ? B.dim  : C.textMuted;
+  const line = band ? B.line : C.border;
 
   const periodSelector = (
     <div style={{ display:'inline-flex', flexDirection:'column', alignItems:'flex-start', minWidth:0 }}>
@@ -354,7 +357,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
 
   return (
     <Card style={ band
-      ? { padding:'1.35rem 1.25rem 1.2rem', background:C.navy, border:'none', borderRadius:0, color:C.onNavy }
+      ? { padding:'1.35rem 1.25rem 1.2rem', background:B.bg, border:'none', borderRadius:0, color:B.on }
       : { padding:'1rem 1.1rem', background:C.accent + '14' } }>
       {/* Top row: período + count + total + variación */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.85rem', flexWrap:'wrap', gap:'0.4rem' }}>
@@ -434,6 +437,7 @@ export default function Dashboard() {
   const payments          = usePayments();
   const requestDelete     = useAppStore(s => s.requestDelete);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
+  const currentUser       = useAppStore(s => s.currentUser);
 
   const periods = settings.periods || [];
   const latestPeriod = periods.length ? periods[periods.length - 1].name : '';
@@ -455,6 +459,32 @@ export default function Dashboard() {
   );
   const whoPaidBlock  = <WhoPaidMore periodExps={periodExps} cur={primaryCur} />;
   const lastPayBlock  = <LastPaymentCard payments={payments} cur={primaryCur} />;
+
+  // ── Tira de métricas del ciclo (mockup 1b) ─────────────────────────────────
+  // Cuatro celdas separadas por reglas verticales, debajo de la banda del saldo:
+  // gastado, tu parte, cuotas del mes y último pago. En 'panel' la primitiva las
+  // dibuja como tarjetas en vez de celdas con filete.
+  const curExps    = periodExps.filter(e => (e.currency || 'ARS') === primaryCur);
+  const cicloTotal = curExps.reduce((s, e) => s + safeN(e.amount), 0);
+  const miParte    = currentUser
+    ? curExps.reduce((s, e) => s + safeN(expenseResolved(e)[currentUser]), 0)
+    : 0;
+  const cuotasMes  = curExps.filter(e => e.fromPlan).reduce((s, e) => s + safeN(e.amount), 0);
+  const cuotasSinPeriodo = expenses.filter(e => e.fromPlan && e.period === PENDING_PER).length;
+  const lp         = lastPayment(payments, primaryCur);
+  const miPct      = cicloTotal > 0 ? Math.round(miParte / cicloTotal * 1000) / 10 : 0;
+
+  const metricStrip = (
+    <MetricStrip items={[
+      { label:'Gastado en el ciclo', value: fmtS(cicloTotal, primaryCur), sub: curExps.length + ' gasto' + (curExps.length !== 1 ? 's' : '') },
+      { label:'Tu parte',            value: fmtS(miParte, primaryCur),    sub: miPct + '% del total' },
+      { label:'Cuotas del ciclo',    value: fmtS(cuotasMes, primaryCur),
+        sub: cuotasSinPeriodo ? cuotasSinPeriodo + ' cuota' + (cuotasSinPeriodo !== 1 ? 's' : '') + ' sin período' : 'todas asignadas',
+        subColor: cuotasSinPeriodo ? C.warn : C.textMuted },
+      { label:'Último pago',         value: lp ? fmtS(safeN(lp.amount), lp.currency || primaryCur) : '—',
+        sub: lp ? lp.from + ' → ' + lp.to + ' · ' + shortDate(lp.date) : 'sin pagos' },
+    ]} />
+  );
 
   const weekSection = (
     <div>
@@ -495,6 +525,7 @@ export default function Dashboard() {
         {/* Col 1: balance · ¿quién pagó más? · último pago */}
         <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
           {headerBlock}
+          {metricStrip}
           {whoPaidBlock}
           {lastPayBlock}
         </div>
@@ -511,6 +542,7 @@ export default function Dashboard() {
   return (
     <div style={{ padding:SP.lg, display:'flex', flexDirection:'column', gap:SP.lg }}>
       {headerBlock}
+      {metricStrip}
       {whoPaidBlock}
       {lastPayBlock}
       {weekSection}
