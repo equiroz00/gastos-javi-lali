@@ -8,11 +8,11 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, PieChart, Pie, Cell,
   AreaChart, Area,
 } from 'recharts';
-import { C, F, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP, FS } from '../constants';
+import { C, F, V, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP, FS } from '../constants';
 import { fmtS, fmt, safeN, catEm, catLb, normCat, pctChange, sortByDate, expenseResolved } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
-import { Card, ScrollFilter, ChartSelector } from './ui';
+import { Card, ScrollFilter, ChartSelector, ScreenHeader, AmountBand, BandPills, bandColors } from './ui';
 import type { Expense, Currency } from '../types';
 
 const PERSONALIZADO = 'Personalizado';
@@ -423,8 +423,10 @@ export default function Stats() {
 
   const filters = (
     <>
-      <ScrollFilter items={['Todos', ...allPeriodNames, PERSONALIZADO]} selected={period} onSelect={setPeriod} />
-      {allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={(c: string) => setCur(c as Currency)} />}
+      {/* En 'cuenta' los períodos y la moneda viven en la banda y el encabezado
+          (mockup 4a); repetirlos acá los mostraría dos veces. */}
+      {!V.heroBand && <ScrollFilter items={['Todos', ...allPeriodNames, PERSONALIZADO]} selected={period} onSelect={setPeriod} />}
+      {!V.heroBand && allCurrencies.length > 1 && <ScrollFilter items={allCurrencies} selected={cur} onSelect={(c: string) => setCur(c as Currency)} />}
       {period === PERSONALIZADO && (
         <Card style={{ marginBottom:'0.6rem' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, fontSize:'0.85rem', marginBottom:'0.5rem' }}>
@@ -451,9 +453,21 @@ export default function Stats() {
     </>
   );
 
+  // Estado vacío: va ANTES de calcular el total, así que no puede usar el
+  // chasis con la banda. Muestra el encabezado y las píldoras, para que se
+  // pueda cambiar de período sin quedar sin controles.
   if (!filtered.length) return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
-      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+      {V.heroBand ? (
+        <div style={{ margin:'-'+SP.lg+' -'+SP.lg+' '+SP.lg }}>
+          <ScreenHeader crumb="Estadísticas" current={period === 'Todos' ? 'Todos los períodos' : period} />
+          <div style={{ background:bandColors().bg, padding:'1rem 1.35rem' }}>
+            <BandPills items={['Todos', ...allPeriodNames, PERSONALIZADO]} selected={period} onSelect={setPeriod} />
+          </div>
+        </div>
+      ) : (
+        <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+      )}
       {filters}
       <Card style={{ textAlign:'center', padding:'3rem', color:C.textMuted }}>
         <div style={{ display:'flex', justifyContent:'center', marginBottom:'0.5rem' }}><BarChart3 size={36} strokeWidth={1.6} color={C.textMuted} /></div>
@@ -463,6 +477,30 @@ export default function Stats() {
   );
 
   const total = filtered.reduce((s, e) => s + safeN(e.amount), 0);
+
+  // ── Chasis de la dirección "Estado de cuenta" (mockup 4a) ──────────────────
+  // Migas arriba y banda de acento con el total como titular. Las píldoras de
+  // período se mudan a la banda, así que en esa variante el ScrollFilter de
+  // períodos sobraría (quedarían los dos duplicados).
+  const bandPeriods = ['Todos', ...allPeriodNames, PERSONALIZADO];
+  const statsChrome = V.heroBand ? (
+    <div style={{ margin:'-'+SP.lg+' -'+SP.lg+' '+SP.lg }}>
+      <ScreenHeader
+        crumb="Estadísticas"
+        current={period === 'Todos' ? 'Todos los períodos' : period}
+        chip={allCurrencies.length > 1 ? cur : undefined}
+        actions={allCurrencies.length > 1
+          ? <ScrollFilter items={allCurrencies} selected={cur} onSelect={(c: string) => setCur(c as Currency)} />
+          : undefined}
+      />
+      <AmountBand
+        eyebrow={period === 'Todos' ? 'Gasto total' : 'Gasto total del ciclo'}
+        amount={fmtS(total, cur)}
+        sub={<>{filtered.length} gasto{filtered.length !== 1 ? 's' : ''} · promedio <span style={{ fontFamily:MONO }}>{fmtS(total / Math.max(1, filtered.length), cur)}</span></>}
+        aside={<BandPills items={bandPeriods} selected={period} onSelect={setPeriod} />}
+      />
+    </div>
+  ) : null;
 
   // Category data
   const byCat: Record<string, CatRow> = {};
@@ -600,7 +638,8 @@ export default function Stats() {
 
     return (
       <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
-        <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, margin:'0 0 '+SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+        {statsChrome}
+        {!V.heroBand && <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>}
         {filters}
         {body}
       </div>
@@ -610,7 +649,8 @@ export default function Stats() {
   // ── MOBILE — una sola columna ──────────────────────────────────────────────
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl, display:'flex', flexDirection:'column', gap:SP.md }}>
-      <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>
+      {statsChrome}
+      {!V.heroBand && <h2 style={{ display:'flex', alignItems:'center', gap:'0.45rem', fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}><BarChart3 size={20} strokeWidth={2.3} color={C.accent} />Estadísticas</h2>}
       {filters}
       <ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} />
       {canCompare && <CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} />}

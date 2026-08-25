@@ -117,18 +117,112 @@ export function Row({ last, style, children }: { last?: boolean; style?: React.C
   );
 }
 
+// Barra de encabezado de pantalla: migas + rango + acciones. En los mockups es
+// una franja de 52px con "Sección / Período" a la izquierda y los controles a
+// la derecha; es lo que da continuidad entre pantallas en las dos direcciones.
+// Colores de la banda de acento. En los temas claros la banda es `navy`; en el
+// Oscuro NO se puede usar navy porque ahí vale #F4F4F5 (casi blanco) y la banda
+// salía blanca en medio de una pantalla oscura. Se resuelve por contraste, igual
+// que el riel de la variante 'panel'.
+export function bandColors() {
+  const bg   = C.dark ? C.beige : C.navy;
+  const on   = C.dark ? C.navy  : C.onNavy;
+  return { bg, on, dim: on + '99', line: on + '33' };
+}
+
+export function ScreenHeader({ crumb, current, chip, actions }: {
+  crumb: React.ReactNode; current?: React.ReactNode; chip?: React.ReactNode; actions?: React.ReactNode;
+}) {
+  return (
+    <div style={{ minHeight:'52px', borderBottom:'1px solid '+C.border, display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.5rem 1.25rem', flexWrap:'wrap', fontFamily:F }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.78rem', color:C.textMuted, minWidth:0 }}>
+        <span>{crumb}</span>
+        {current ? (<><span style={{ opacity:0.5 }}>/</span><span style={{ color:C.navy, fontWeight:600 }}>{current}</span></>) : null}
+        {chip ? (
+          <span style={{ fontSize:'0.68rem', color:C.textMuted, background:C.beige, borderRadius:'5px', padding:'0.12rem 0.45rem', whiteSpace:'nowrap' }}>{chip}</span>
+        ) : null}
+      </div>
+      {actions ? <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap' }}>{actions}</div> : null}
+    </div>
+  );
+}
+
 // Banda de acento con la cifra protagonista — exclusiva de 'cuenta'. En 'panel'
 // devuelve null y la pantalla usa su propio titular, porque esa dirección no
 // tiene bandas a todo el ancho.
-export function AmountBand({ eyebrow, amount, children }: { eyebrow?: React.ReactNode; amount: React.ReactNode; children?: React.ReactNode }) {
+//   sub   → línea de contexto bajo la cifra (conteo, promedio, proyección).
+//   aside → bloque derecho (píldoras de período, donut, botones).
+export function AmountBand({ eyebrow, amount, sub, aside, children }: {
+  eyebrow?: React.ReactNode; amount: React.ReactNode;
+  sub?: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode;
+}) {
   if (!V.heroBand) return null;
+  const B = bandColors();
   return (
-    <div style={{ background:C.navy, padding:'1.6rem 1.35rem 1.4rem', color:C.onNavy }}>
-      {eyebrow ? (
-        <div style={{ fontSize:'0.68rem', fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:C.onNavy+'99', fontFamily:F }}>{eyebrow}</div>
-      ) : null}
-      <div style={{ fontFamily:MONO, fontSize:FS.hero, fontWeight:700, letterSpacing:'-0.03em', marginTop:'0.3rem' }}>{amount}</div>
-      {children}
+    <div style={{ background:B.bg, padding:'1.6rem 1.35rem 1.4rem', color:B.on, display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:'1.5rem', flexWrap:'wrap' }}>
+      <div style={{ minWidth:0, flex:'1 1 260px' }}>
+        {eyebrow ? (
+          <div style={{ fontSize:'0.68rem', fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:B.dim, fontFamily:F }}>{eyebrow}</div>
+        ) : null}
+        <div style={{ fontFamily:MONO, fontSize:FS.hero, fontWeight:700, letterSpacing:'-0.03em', marginTop:'0.3rem', overflowWrap:'anywhere' }}>{amount}</div>
+        {sub ? (
+          <div style={{ fontSize:'0.78rem', color:B.on+'D0', marginTop:'0.45rem', lineHeight:1.5 }}>{sub}</div>
+        ) : null}
+        {children}
+      </div>
+      {aside ? <div style={{ flexShrink:0 }}>{aside}</div> : null}
+    </div>
+  );
+}
+
+// Píldoras de período sobre la banda (mockup 4a): el activo va en sólido
+// invertido, el resto con borde translúcido.
+export function BandPills({ items, selected, onSelect }: {
+  items: string[]; selected: string; onSelect: (v: string) => void;
+}) {
+  const B = bandColors();
+  return (
+    <div style={{ display:'flex', gap:'0.4rem', alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end' }}>
+      {items.map(it => {
+        const active = it === selected;
+        return (
+          <button
+            key={it}
+            onClick={() => onSelect(it)}
+            style={{ height:'30px', padding:'0 0.75rem', borderRadius:'999px', cursor:'pointer', fontFamily:F, fontSize:'0.72rem',
+              border: active ? 'none' : '1px solid '+B.on+'47',
+              background: active ? B.on : 'transparent',
+              color: active ? B.bg : B.on+'CC',
+              fontWeight: active ? 700 : 600 }}
+          >
+            {it}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Tira de celdas métricas separadas por reglas verticales (mockup 1b). Es el
+// reemplazo, en la dirección 'cuenta', de lo que en 'panel' serían tarjetas.
+export function MetricStrip({ items }: {
+  items: Array<{ label: React.ReactNode; value: React.ReactNode; sub?: React.ReactNode; subColor?: string }>;
+}) {
+  const card = V.surfaceMode === 'card';
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(150px, 100%), 1fr))', borderBottom: card ? 'none' : '1px solid '+C.border, gap: card ? '0.6rem' : 0, padding: card ? '0 0 0.6rem' : 0 }}>
+      {items.map((it, i) => (
+        // Ojo con el orden: `border` es abreviada y pisa a `borderRight`. Si se
+        // deja la clave puesta (aunque sea undefined) borra la regla vertical de
+        // la variante plana, así que cada rama arma su propio objeto.
+        <div key={i} style={ card
+          ? { padding:'0.8rem 0.9rem', background:C.surface, border:'1px solid '+C.border, borderRadius:V.radius+'px', minWidth:0 }
+          : { padding:'1rem 1.1rem 1rem 0', background:'transparent', borderRight: i < items.length - 1 ? '1px solid '+C.border : 'none', borderRadius:0, minWidth:0 } }>
+          <div style={{ fontSize:'0.68rem', fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:C.textMuted, fontFamily:F }}>{it.label}</div>
+          <div style={{ marginTop:'0.4rem', fontFamily:MONO, fontSize:'1.25rem', fontWeight:700, color:C.navy, overflowWrap:'anywhere' }}>{it.value}</div>
+          {it.sub ? <div style={{ marginTop:'0.15rem', fontSize:'0.72rem', color: it.subColor || C.textMuted, fontWeight:600 }}>{it.sub}</div> : null}
+        </div>
+      ))}
     </div>
   );
 }
