@@ -1,6 +1,6 @@
 // ── components/AddEditExpense.tsx ─────────────────────────────────────────────
 import React, { useRef, useState } from 'react';
-import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin, CreditCard, Check } from 'lucide-react';
+import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin, CreditCard, Check, Trash2 } from 'lucide-react';
 import { C, F, V, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
 import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote, nextClosingDate, shortDate } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
@@ -66,6 +66,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const handleEdit        = useAppStore(s => s.handleEdit);
   const handleAddPlan     = useAppStore(s => s.handleAddPlan);
   const handleEditPlan    = useAppStore(s => s.handleEditPlan);
+  const handleCancelPlan  = useAppStore(s => s.handleCancelPlan);
   const setView           = useAppStore(s => s.setView);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
   const setEditingPlan    = useAppStore(s => s.setEditingPlan);
@@ -472,6 +473,44 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     setDupWarning(match);
   }
 
+  // ── Restricción: un gasto privado es 100% de quien lo carga ────────────────
+  // Antes esto se "arreglaba" en silencio: buildBase pisaba paidBy y el reparto
+  // sin avisar, así que quien intentaba dividir un privado creía que lo había
+  // dividido. Ahora se BLOQUEA con el motivo, para que quede claro que un gasto
+  // privado no puede tocar el balance compartido.
+  // Pasa el formulario a privado dejándolo 100% de quien lo carga: dueño como
+  // pagador y responsable, y un splitAmong de un solo participante.
+  function makePrivate() {
+    const me = (currentUser || 'Javi') as UserName;
+    setForm(f => ({
+      ...f,
+      visibilidad: 'privado',
+      paidBy:      me,
+      responsible: me as Responsible,
+      javiAmount:  me === 'Javi' ? safeN(f.amount) : 0,
+      laliAmount:  me === 'Lali' ? safeN(f.amount) : 0,
+      splitAmong:  { strategy: 'iguales', entries: [{ participant: me }] },
+    }));
+  }
+
+  function privateConflict(): string | null {
+    if (form.visibilidad !== 'privado') return null;
+    const me    = (currentUser || 'Javi') as UserName;
+    const other = me === 'Javi' ? 'Lali' : 'Javi';
+    if (form.paidBy && form.paidBy !== me) {
+      return `Marcaste el gasto como privado pero figura pagado por ${form.paidBy}. Un gasto privado es 100% tuyo: cambiá "quién pagó" a ${me}, o pasalo a Compartido.`;
+    }
+    // Se mira el reparto EFECTIVO (javiAmt/laliAmt), no solo form.splitAmong:
+    // si el usuario nunca abrió el modal, splitAmong viene vacío y el reparto
+    // real sale de calcAmts() — que reparte 50/50 por defecto. Chequear solo el
+    // campo dejaba pasar exactamente el caso que se quiere frenar.
+    const otherAmt = other === 'Javi' ? javiAmt : laliAmt;
+    if (otherAmt > 0) {
+      return `Marcaste el gasto como privado pero lo estás dividiendo con ${other}. Un gasto privado es 100% tuyo y no entra en el balance compartido: dejalo todo a tu nombre, o pasalo a Compartido para dividirlo con ${other}.`;
+    }
+    return null;
+  }
+
   function buildBase(id: string): Expense {
     const currency = form.currency === 'Otra' ? (form.customCurrency || 'ARS') : form.currency;
     const period = getPeriod(form.date, periods);
@@ -502,6 +541,8 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     const e: Record<string, string> = {};
     if (!form.description.trim()) e.description = 'Requerido';
     if (!form.amount || parseFloat(String(form.amount)) <= 0) e.amount = 'Monto inválido';
+    const pcq = privateConflict();
+    if (pcq) e.visibilidad = pcq;
     if (Object.keys(e).length) { setErrors(e); return; }
     const item = sanitize({
       ...buildBase(genId()),
@@ -527,6 +568,8 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     if (!form.amount || parseFloat(String(form.amount)) <= 0) e.amount = 'Monto inválido';
     if (useCuotas && isRetro && paidNum >= finalCuotas) e.retroPaid = 'Las cuotas ya pagadas deben ser menos que el total.';
     if (useCuotas && isRetro && !retroStartPer) e.retroStartPer = 'Seleccioná el período inicial.';
+    const pc = privateConflict();
+    if (pc) e.visibilidad = pc;
     if (Object.keys(e).length) { setErrors(e); return; }
     const base = buildBase(isEditMode ? ((initialData && initialData.id) || genId()) : genId());
     if (!isEditMode && !isPlanEdit) {
@@ -545,6 +588,31 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     else if (isPlanEdit) setEditingPlan(null);
     else setView('dashboard');
   }
+
+  // Borra el plan y TODAS sus cuotas (las ya pagadas también). Pide confirmación
+  // nombrando cuántas cuotas se van, porque es irreversible y arrastra varios
+  // gastos que el usuario quizá no tiene presentes.
+  function deletePlan() {
+    if (!editingPlan) return;
+    const n = editingPlan.numInstallments;
+    const ok = window.confirm(
+      `¿Borrar el plan "${editingPlan.description}" y sus ${n} cuota${n !== 1 ? 's' : ''}?\n\n` +
+      'Se eliminan todos los gastos generados por este plan. Esta acción no se puede deshacer.'
+    );
+    if (!ok) return;
+    handleCancelPlan(editingPlan.id);
+    setEditingPlan(null);
+  }
+
+  const deletePlanBtn = (
+    <button
+      onClick={deletePlan}
+      style={{ width:'100%', padding:'0.8rem', background:'transparent', border:'1px solid '+C.danger, borderRadius:'1rem', color:C.danger, fontWeight:800, fontSize:'0.9rem', cursor:'pointer', fontFamily:F, marginTop:'0.5rem', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.4rem' }}
+    >
+      <Trash2 size={16} strokeWidth={2.2} />
+      Borrar el plan y sus cuotas
+    </button>
+  );
 
   // ── Autocomplete dropdown ──────────────────────────────────────────────────
   const acDropdown = acSuggestions.length > 0 ? (
@@ -633,21 +701,34 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       <Lbl>Visibilidad</Lbl>
       <div style={{ display:'flex', gap:'0.5rem' }}>
         <SegBtn active={form.visibilidad !== 'privado'} color={C.navy} onClick={() => set('visibilidad', 'compartido')}>Compartido</SegBtn>
-        <SegBtn active={form.visibilidad === 'privado'} color={C.accent} onClick={() => { set('visibilidad', 'privado'); setUseCuotas(false); setIsRetro(false); }}>Privado</SegBtn>
+        {/* Ya no fuerza setUseCuotas(false): un gasto privado SÍ puede ir en
+            cuotas (el plan y cada cuota heredan visibilidad + ownerId). */}
+        {/* Al pasar a Privado el gasto queda 100% tuyo de entrada. Antes esto se
+            hacía en silencio recién al guardar, así que el formulario seguía
+            mostrando "50% / 50%" y el usuario creía que lo estaba dividiendo. */}
+        <SegBtn active={form.visibilidad === 'privado'} color={C.accent} onClick={() => { makePrivate(); setIsRetro(false); }}>Privado</SegBtn>
       </div>
       {form.visibilidad === 'privado' && (
         <p style={{ fontSize:'0.68rem', color:C.textMuted, margin:'0.4rem 0 0', lineHeight:1.4 }}>
-          🔒 Solo vos lo vas a ver. No entra en el balance ni en la comparación con {currentUser === 'Javi' ? 'Lali' : 'Javi'}.
+          🔒 Solo vos lo vas a ver — también si va en cuotas. Es 100% tuyo: no entra en el balance ni en la comparación con {currentUser === 'Javi' ? 'Lali' : 'Javi'}.
+        </p>
+      )}
+      {errors.visibilidad && (
+        <p style={{ fontSize:'0.72rem', color:C.danger, margin:'0.5rem 0 0', lineHeight:1.45, fontWeight:600, background:C.danger+'14', border:'1px solid '+C.danger+'55', borderRadius:'0.6rem', padding:'0.5rem 0.65rem' }}>
+          {errors.visibilidad}
         </p>
       )}
     </>
   ) : null;
 
+  // La división se muestra TAMBIÉN en privado: si se ocultara, el usuario no
+  // podría ver por qué se le bloquea el guardado ni corregirlo sin volver a
+  // Compartido. Se ve, se puede intentar, y la validación explica el límite.
   const splitSection = (
     <>
       {visibilidadToggle}
-      {form.visibilidad !== 'privado' && splitButton}
-      {form.visibilidad !== 'privado' && splitPreview}
+      {splitButton}
+      {splitPreview}
     </>
   );
 
@@ -1018,8 +1099,9 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
 
       {!isEditMode && (
         <>
-          {/* El toggle único/cuotas no se muestra al editar un plan ni en gastos privados */}
-          {!isPlanEdit && form.visibilidad !== 'privado' && (
+          {/* El toggle único/cuotas no se muestra al editar un plan. Sí en
+              gastos privados: una compra en cuotas puede ser 100% tuya. */}
+          {!isPlanEdit && (
             <>
               <Lbl>¿Pago en cuotas?</Lbl>
               <div style={{ display:'flex', gap:'0.5rem' }}>
@@ -1106,6 +1188,10 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       )}
 
       <button onClick={submit} style={{ width:'100%', padding:'1rem', background:C.gradMain, color:C.white, border:'none', borderRadius:'1rem', fontWeight:900, fontSize:'1rem', cursor:'pointer', fontFamily:F, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', marginTop:'1rem' }}>{btnLabel}</button>
+      {/* Borrar el plan entero. Antes esto no existía: el botón del historial
+          decía "Editar o borrar el plan completo" y traía acá, donde no había
+          ninguna forma de borrar. El único borrado vivía escondido en Inicio. */}
+      {isPlanEdit && deletePlanBtn}
       <button onClick={cancel} style={{ width:'100%', padding:'0.75rem', background:'none', border:'none', color:C.textMuted, fontSize:'0.9rem', cursor:'pointer', fontFamily:F, marginTop:'0.25rem' }}>Cancelar</button>
     </div>
   );

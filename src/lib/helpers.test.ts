@@ -435,6 +435,47 @@ function plan(over: Partial<Plan> = {}): Plan {
   };
 }
 
+// Privacidad de las cuotas. Es la parte que más caro sale si se rompe: si una
+// cuota de un plan privado se guarda como compartida, el otro usuario la ve en
+// Historial y en el balance aunque el PLAN esté oculto. Las reglas de Firestore
+// filtran por el campo de cada gasto, no por el del plan, así que la herencia
+// tiene que pasar por acá sí o sí.
+describe('generatePlanExpenses · privacidad heredada del plan', () => {
+  it('un plan privado genera cuotas privadas, todas con el ownerId del dueño', () => {
+    const insts = generatePlanExpenses(
+      plan({ visibilidad: 'privado', ownerId: 'uid-javi', numInstallments: 4, paidInstallments: 0 }),
+      PERIODS,
+    );
+    expect(insts).toHaveLength(4);
+    expect(insts.every(i => i.visibilidad === 'privado')).toBe(true);
+    expect(insts.every(i => i.ownerId === 'uid-javi')).toBe(true);
+  });
+
+  it('un plan compartido no filtra ownerId a sus cuotas', () => {
+    const insts = generatePlanExpenses(plan({ visibilidad: 'compartido' }), PERIODS);
+    expect(insts.every(i => i.visibilidad === 'compartido')).toBe(true);
+    expect(insts.every(i => i.ownerId === undefined)).toBe(true);
+  });
+
+  it('un plan viejo sin visibilidad cae en compartido (no queda inaccesible)', () => {
+    const insts = generatePlanExpenses(plan(), PERIODS);
+    expect(insts.every(i => i.visibilidad === 'compartido')).toBe(true);
+  });
+
+  it('la última cuota, que recalcula montos, también conserva la privacidad', () => {
+    // La última absorbe el redondeo por una rama distinta del código: es la que
+    // más chance tiene de perder los campos si alguien toca el cálculo.
+    const insts = generatePlanExpenses(
+      plan({ visibilidad: 'privado', ownerId: 'uid-lali', numInstallments: 3 }),
+      PERIODS,
+    );
+    const last = insts[insts.length - 1];
+    expect(last.installmentNum).toBe(3);
+    expect(last.visibilidad).toBe('privado');
+    expect(last.ownerId).toBe('uid-lali');
+  });
+});
+
 describe('generatePlanExpenses', () => {
   it('genera una cuota por cada cuota restante', () => {
     const insts = generatePlanExpenses(plan(), PERIODS);

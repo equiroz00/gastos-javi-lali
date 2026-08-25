@@ -88,6 +88,69 @@ export default function App() {
     document.body.style.background = C.bg;
   }, [userFont]);
 
+  // ── Navegación con el historial del navegador ──────────────────────────────
+  // Antes la app no tocaba el historial: el gesto de "atrás" del celular (y el
+  // botón del navegador) salían de la app en vez de volver a la pantalla previa.
+  // Ahora cada pantalla y cada overlay (editar gasto / editar plan) dejan su
+  // entrada, así atrás y adelante se mueven DENTRO de la app.
+  //
+  // `navPopping` evita el bucle clásico: al procesar un popstate cambiamos el
+  // estado, lo que dispararía el efecto que empuja una entrada nueva y anularía
+  // el "atrás". La bandera se limpia en un timeout para no comerse el próximo
+  // push legítimo si el pop no llegó a provocar re-render.
+  const navPopping = React.useRef(false);
+  const exitArmed  = React.useRef(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const st0 = window.history.state as { appView?: string } | null;
+    if (!st0?.appView) {
+      // Entrada centinela: si el usuario llega hasta acá con "atrás" es que
+      // quiso salir de la app. Encima de ella va la pantalla real.
+      window.history.replaceState({ appGuard: true }, '');
+      window.history.pushState({ appView: useAppStore.getState().view, overlay: null }, '');
+    }
+
+    const onPop = (ev: PopStateEvent) => {
+      const st = (ev.state || {}) as { appView?: string; overlay?: string | null; appGuard?: boolean };
+
+      if (st.appGuard) {
+        // Estamos en la raíz y el usuario pidió salir.
+        if (exitArmed.current) {
+          // Segunda vez seguida: dejamos que se vaya de verdad.
+          setTimeout(() => window.history.back(), 0);
+          return;
+        }
+        exitArmed.current = true;
+        window.history.pushState({ appView: useAppStore.getState().view, overlay: null }, '');
+        useAppStore.getState().showMsg('Tocá "atrás" otra vez para salir de la app.', 3000);
+        setTimeout(() => { exitArmed.current = false; }, 3000);
+        return;
+      }
+
+      navPopping.current = true;
+      const store = useAppStore.getState();
+      useAppStore.setState({
+        view:           st.appView || 'dashboard',
+        editingExpense: st.overlay === 'expense' ? store.editingExpense : null,
+        editingPlan:    st.overlay === 'plan'    ? store.editingPlan    : null,
+      });
+      setTimeout(() => { navPopping.current = false; }, 0);
+    };
+
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [currentUser]);
+
+  // Cada pantalla/overlay nuevo deja su entrada en el historial.
+  useEffect(() => {
+    if (!currentUser || navPopping.current) return;
+    const overlay = editingExpense ? 'expense' : editingPlan ? 'plan' : null;
+    const st = (window.history.state || {}) as { appView?: string; overlay?: string | null };
+    if (st.appView === view && (st.overlay ?? null) === overlay) return;
+    window.history.pushState({ appView: view, overlay }, '');
+  }, [view, editingExpense, editingPlan, currentUser]);
+
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, firebaseUser => {
       if (!firebaseUser) {

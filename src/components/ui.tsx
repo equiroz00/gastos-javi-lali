@@ -68,8 +68,15 @@ export function UserDot({ user, style }: { user: string; style?: React.CSSProper
 //            inferior y respira con el ancho completo (mockups de 2a/3a).
 export function Card({ style, children }: { style?: React.CSSProperties; children?: React.ReactNode }) {
   const flat = V.surfaceMode === 'flat';
+  // Una tarjeta que pinta su PROPIO fondo (degradado del último pago, banda de
+  // acento, avisos tintados) necesita su recuadro aunque la variante sea plana:
+  // sin padding horizontal el texto queda pegado contra el borde de color.
+  // Solo los bloques sin fondo propio se dejan fluir a todo el ancho.
+  const tinted = !!(style && (style.background || style.backgroundColor));
   const base: React.CSSProperties = flat
-    ? { background:'transparent', border:'none', borderBottom:'1px solid '+C.border, borderRadius:0, padding:'0.15rem 0 1rem' }
+    ? (tinted
+        ? { border:'none', borderRadius:V.radius+'px', padding:'0.85rem 1rem' }
+        : { background:'transparent', border:'none', borderBottom:'1px solid '+C.border, borderRadius:0, padding:'0.15rem 0 1rem' })
     : { background:C.surface, borderRadius:V.radius+'px', padding:'1rem', border:'1px solid '+C.border };
   return <div style={{ ...base, ...style }}>{children}</div>;
 }
