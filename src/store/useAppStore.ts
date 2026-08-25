@@ -473,13 +473,26 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   handleCancelPlan: planId => {
+    const state = get();
     const planExps = getExps().filter(e => e.planId === planId);
+    // Snapshot para poder revertir: la UI borra optimista, pero si Firestore
+    // rechaza la escritura el onSnapshot repone los docs y el usuario ve la
+    // cuota "resucitar" sin ninguna explicación. Mejor avisar.
+    const prevExps  = getExps();
+    const prevPlans = getPlans();
     const batch = writeBatch(db);
     batch.delete(planDoc(planId));
     planExps.forEach(e => batch.delete(expenseDoc(e.id)));
-    batch.commit().catch(reportWriteError('handleCancelPlan'));
     setExps(getExps().filter(e => e.planId !== planId));
     setPlans(getPlans().filter(p => p.id !== planId));
+    batch.commit()
+      .then(() => state.showMsg('✓ Plan y sus cuotas eliminados.'))
+      .catch(err => {
+        setExps(prevExps);
+        setPlans(prevPlans);
+        state.showMsg('⚠ No se pudo borrar el plan. Revisá tu conexión y probá de nuevo.');
+        reportWriteError('handleCancelPlan')(err);
+      });
   },
 
   // Payment actions

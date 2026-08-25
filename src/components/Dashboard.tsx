@@ -72,7 +72,17 @@ function ActivePlans() {
                   <button onClick={() => editPlan(plan)} style={{ display:'flex', alignItems:'center', gap:'0.2rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.2rem 0.5rem', fontSize:'0.65rem', color:C.navy, cursor:'pointer', fontFamily:F, fontWeight:700 }}>
                     <Pencil size={11} strokeWidth={2.2} />Editar
                   </button>
-                  <button onClick={() => cancelPlan(plan.id)} style={{ background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.2rem 0.5rem', fontSize:'0.65rem', color:C.textMuted, cursor:'pointer', fontFamily:F }}>Cancelar</button>
+                  {/* Antes decía "Cancelar" (se leía como "descartar", no como
+                      "eliminar") y borraba el plan entero SIN confirmar. */}
+                  <button
+                    onClick={() => {
+                      const n = plan.numInstallments;
+                      if (window.confirm(`¿Borrar el plan "${plan.description}" y sus ${n} cuota${n !== 1 ? 's' : ''}?\n\nEsta acción no se puede deshacer.`)) cancelPlan(plan.id);
+                    }}
+                    style={{ display:'flex', alignItems:'center', gap:'0.2rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.2rem 0.5rem', fontSize:'0.65rem', color:C.danger, cursor:'pointer', fontFamily:F, fontWeight:700 }}
+                  >
+                    <Trash2 size={11} strokeWidth={2.2} />Borrar
+                  </button>
                 </div>
               </div>
             </Card>
