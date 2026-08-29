@@ -30,16 +30,21 @@ export default function LoginScreen({ denied }: { denied?: boolean }) {
     });
   }
 
+  // El login se dibuja ANTES de autenticar, así que no hay preferencia de
+  // variante todavía (vive en userPreferences/{usuario}). Usa siempre el
+  // lenguaje "Estado de cuenta", que es el que arranca por defecto.
   return (
-    <div style={{ minHeight:'100vh', background:C.gradMain, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'2rem', gap:'1.5rem', fontFamily:F }}>
-      <div style={{ textAlign:'center', marginBottom:'1rem' }}>
-        <div style={{ display:'flex', justifyContent:'center', marginBottom:'0.9rem' }}>
-          <div style={{ width:'66px', height:'66px', borderRadius:'18px', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <Wallet size={32} strokeWidth={2} color={C.white} />
-          </div>
+    <div style={{ minHeight:'100vh', background:C.navy, display:'flex', flexDirection:'column', justifyContent:'center', padding:'2rem 1.75rem', gap:'1.4rem', fontFamily:F, maxWidth:'min(520px, 100%)', margin:'0 auto', boxSizing:'border-box' }}>
+      <div>
+        <div style={{ width:'52px', height:'52px', borderRadius:'15px', background:C.onNavy+'24', border:'1px solid '+C.onNavy+'38', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'1.15rem' }}>
+          <Wallet size={26} strokeWidth={2} color={C.onNavy} />
         </div>
-        <h1 style={{ fontSize:'1.9rem', fontWeight:900, color:C.white, margin:0, fontFamily:F }}>Gastos Compartidos</h1>
-        <p style={{ color:'rgba(255,255,255,0.8)', marginTop:'0.5rem', fontSize:'0.9rem' }}>Javi &amp; Lali</p>
+        <h1 style={{ fontSize:'clamp(1.75rem, 1.2rem + 2.4vw, 2.1rem)', fontWeight:800, color:C.onNavy, margin:0, fontFamily:F, lineHeight:1.12, letterSpacing:'-0.01em' }}>
+          Gastos<br />compartidos
+        </h1>
+        <p style={{ color:C.onNavy+'B3', marginTop:'0.65rem', marginBottom:0, fontSize:'0.9rem', lineHeight:1.5 }}>
+          Todo lo que ponen Javi y Lali, en un solo saldo al día.
+        </p>
       </div>
 
       {denied ? (
@@ -55,7 +60,7 @@ export default function LoginScreen({ denied }: { denied?: boolean }) {
         <button
           onClick={handleGoogle}
           disabled={loading}
-          style={{ width:'100%', maxWidth:'280px', padding:'1rem 1.5rem', borderRadius:'1.25rem', background:'rgba(255,255,255,0.95)', border:'none', cursor:loading ? 'wait' : 'pointer', fontFamily:F, fontWeight:700, fontSize:'1rem', color:'#333', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.75rem', boxShadow:'0 8px 24px rgba(0,0,0,0.2)', opacity:loading ? 0.7 : 1 }}
+          style={{ width:'100%', height:'52px', padding:'0 1.25rem', borderRadius:'12px', background:C.onNavy, border:'none', cursor:loading ? 'wait' : 'pointer', fontFamily:F, fontWeight:700, fontSize:'0.9rem', color:C.navy, display:'flex', alignItems:'center', justifyContent:'center', gap:'0.65rem', opacity:loading ? 0.7 : 1 }}
         >
           <svg width="20" height="20" viewBox="0 0 48 48">
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
@@ -64,8 +69,14 @@ export default function LoginScreen({ denied }: { denied?: boolean }) {
             <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
             <path fill="none" d="M0 0h48v48H0z" />
           </svg>
-          {loading ? 'Iniciando sesión...' : 'Iniciar sesión con Google'}
+          {loading ? 'Iniciando sesión...' : 'Entrar con Google'}
         </button>
+      )}
+
+      {!denied && (
+        <p style={{ fontSize:'0.7rem', color:C.onNavy+'80', margin:0, textAlign:'center' }}>
+          Solo las cuentas de Javi y Lali tienen acceso.
+        </p>
       )}
 
       {err && (

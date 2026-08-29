@@ -5,9 +5,9 @@
 // caché (dual-query), así que este cálculo solo ve lo que me corresponde.
 import React, { useState } from 'react';
 import { Wallet, TrendingUp, TrendingDown, Lock, Users } from 'lucide-react';
-import { C, MONO, SP, FS, PALETTE, PENDING_PER, DEFAULT_CATS } from '../constants';
+import { C, V, MONO, SP, FS, PALETTE, PENDING_PER, DEFAULT_CATS } from '../constants';
 import { fmt, fmtS, safeN, catLb, normCat, pctChange, expenseResolved } from '../lib/helpers';
-import { Card, ScrollFilter, CatIcon } from './ui';
+import { Card, ScrollFilter, CatIcon, ScreenHeader, AmountBand, BandPills, SectionLabel, bandColors } from './ui';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
 import type { Expense, Currency, UserName } from '../types';
@@ -100,6 +100,68 @@ export default function PersonalScreen() {
       <Card style={{ marginTop:SP.md }}>
         <p style={{ color:C.textMuted, textAlign:'center', margin:'0.85rem 0', fontSize:'0.85rem' }}>No hay gastos tuyos en este período.</p>
       </Card>
+    </div>
+  );
+
+  // ── "Estado de cuenta" (mockup 2a) ────────────────────────────────────────
+  // El titular y el desglose privado/compartido viven DENTRO de la banda, con
+  // dos barras de proporción; las categorías bajan a filas con filete.
+  const bandBar = (label: string, icon: React.ReactNode, value: number, color: string) => {
+    const pct = total > 0 ? Math.round(value / total * 100) : 0;
+    const B = bandColors();
+    return (
+      <div style={{ marginTop:'0.7rem' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'0.75rem', color:B.on }}>
+          <span style={{ display:'flex', alignItems:'center', gap:'0.35rem' }}>{icon}{label}</span>
+          <span style={{ fontFamily:MONO, fontWeight:700 }}>{fmtS(value, cur)}</span>
+        </div>
+        <div style={{ height:'6px', borderRadius:'999px', background:B.on+'2E', marginTop:'0.3rem', overflow:'hidden' }}>
+          <span style={{ display:'block', width:pct+'%', height:'100%', background:color }} />
+        </div>
+      </div>
+    );
+  };
+
+  if (V.heroBand) return (
+    <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
+      <div style={{ margin:'-'+SP.lg+' -'+SP.lg+' '+SP.lg }}>
+        <ScreenHeader crumb="Lo mío" current={period === 'Todos' ? 'Todos los períodos' : period} />
+        <AmountBand
+          eyebrow={'Gastaste vos ' + (period === 'Todos' ? 'en total' : 'este ciclo')}
+          amount={fmt(total, cur)}
+          aside={<BandPills items={['Todos', ...allPeriodNames]} selected={period} onSelect={setPeriod} />}
+        >
+          {delta !== null && (
+            <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.75rem', fontWeight:700, color: delta > 0 ? C.danger : C.ok, marginTop:'0.35rem' }}>
+              {delta > 0 ? <TrendingUp size={14} strokeWidth={2.4} /> : <TrendingDown size={14} strokeWidth={2.4} />}
+              {Math.abs(delta)}% vs. ciclo anterior
+            </div>
+          )}
+          {bandBar('Tu parte compartida', <Users size={13} strokeWidth={2.2} />, compartido, C.accent)}
+          {bandBar('Privados tuyos',      <Lock  size={13} strokeWidth={2.2} />, privado,    C.beige)}
+        </AmountBand>
+      </div>
+
+      {cats.length > 0 && (
+        <>
+          <SectionLabel style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+            <span>Tus categorías</span>
+            <span style={{ fontSize:'0.64rem', fontWeight:500, letterSpacing:0, textTransform:'none', color:C.textMuted }}>sobre tu parte</span>
+          </SectionLabel>
+          {cats.map((c, i) => (
+            <div key={c.label} style={{ padding:'0.7rem 0', borderBottom: i < cats.length - 1 ? '1px solid '+C.border : 'none' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
+                <CatIcon category={c.label} size={15} color={C.textMuted} />
+                <span style={{ flex:1, fontSize:'0.8rem', fontWeight:600, color:C.navy }}>{c.label}</span>
+                <span style={{ fontFamily:MONO, fontSize:'0.8rem', fontWeight:700, color:C.navy }}>{fmtS(c.value, cur)}</span>
+              </div>
+              <div style={{ height:'5px', borderRadius:'999px', background:C.beige, marginTop:'0.4rem', overflow:'hidden' }}>
+                <span style={{ display:'block', width:c.pct+'%', height:'100%', background:PALETTE[i % PALETTE.length] }} />
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 
