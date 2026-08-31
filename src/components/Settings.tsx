@@ -1,10 +1,10 @@
 // ── components/Settings.tsx ───────────────────────────────────────────────────
 import React, { useState } from 'react';
 import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown, Users, X, CreditCard } from 'lucide-react';
-import { C, F, THEMES, FONTS, UI_VARIANTS, coerceTheme, coerceFont, coerceUI, SP, FS, BANKS } from '../constants';
+import { C, F, V, THEMES, FONTS, UI_VARIANTS, coerceTheme, coerceFont, coerceUI, SP, FS, BANKS } from '../constants';
 import { mergeOptions } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
-import { Card } from './ui';
+import { Card, ScreenHeader, SectionLabel, bandColors } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import { useSettings, usePeople, useCustomBanks, useBankClosingDays } from '../lib/queries';
 
@@ -110,6 +110,33 @@ export default function Settings() {
       </span>
     );
   };
+
+  // ── Chasis "Estado de cuenta" (mockup 2a) ─────────────────────────────────
+  // Banda con la identidad de quien está usando la app y el botón de salir; el
+  // contenido se agrupa en secciones con versalita + filete, no en banners.
+  const settingsChrome = V.heroBand ? (
+    <div style={{ margin:'-'+SP.lg+' -'+SP.lg+' '+SP.lg }}>
+      <ScreenHeader crumb="Configuración" current={currentUser || undefined} />
+      <div style={{ background:bandColors().bg, color:bandColors().on, padding:'1.1rem 1.35rem 1.2rem' }}>
+        <div style={{ fontSize:'0.95rem', fontWeight:700 }}>Configuración</div>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', marginTop:'0.75rem' }}>
+          <span style={{ width:'34px', height:'34px', borderRadius:'50%', background:bandColors().on+'2E', color:bandColors().on, fontSize:'0.8rem', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            {(currentUser || '?').charAt(0)}
+          </span>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:'0.8rem', fontWeight:600 }}>{currentUser}</div>
+            <div style={{ fontSize:'0.68rem', color:bandColors().dim }}>Tus preferencias no afectan a {currentUser === 'Javi' ? 'Lali' : 'Javi'}</div>
+          </div>
+          <button
+            onClick={() => useAppStore.getState().handleSignOut()}
+            style={{ height:'30px', padding:'0 0.7rem', border:'1px solid '+bandColors().on+'40', borderRadius:'8px', background:'transparent', color:bandColors().on, fontFamily:F, fontSize:'0.72rem', fontWeight:600, cursor:'pointer', flexShrink:0 }}
+          >
+            Salir
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   // ── Shared blocks ───────────────────────────────────────────────────────────
   const appearanceBanner = (
@@ -391,15 +418,16 @@ export default function Settings() {
   if (isDesktop) {
     return (
       <div style={{ padding:SP.lg, paddingBottom:SP.xxl, display:'flex', flexDirection:'column', gap:SP.lg }}>
-        <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>
-        {/* Apariencia banner + 2-col grid */}
-        {appearanceBanner}
+        {settingsChrome}
+        {!V.heroBand && <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>}
+        {/* Apariencia: en 'cuenta' agrupa con versalita + filete; en 'panel' con banner */}
+        {V.heroBand ? <SectionLabel>Apariencia</SectionLabel> : appearanceBanner}
         {uiCard}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'stretch' }}>
           {themeCard}
           {fontCard}
         </div>
-        {sharedBanner}
+        {V.heroBand ? <SectionLabel>Datos · compartidos con {currentUser === 'Javi' ? 'Lali' : 'Javi'}</SectionLabel> : sharedBanner}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'stretch' }}>
           {periodsCard}
           {peopleCard}
@@ -414,16 +442,25 @@ export default function Settings() {
   // ── MOBILE — single column, order: Períodos · CSV · Tema · Tipografía · Guardar
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl, display:'flex', flexDirection:'column', gap:SP.md }}>
-      <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>
-      {sharedBanner}
+      {settingsChrome}
+      {!V.heroBand && <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>}
+      {/* En 'cuenta' la Apariencia va primero, como en el mockup 2a; en 'panel'
+          se conserva el orden actual (datos compartidos arriba). */}
+      {V.heroBand && <SectionLabel>Apariencia</SectionLabel>}
+      {V.heroBand && uiCard}
+      {V.heroBand && themeCard}
+      {V.heroBand && fontCard}
+      {V.heroBand
+        ? <SectionLabel>Datos · compartidos con {currentUser === 'Javi' ? 'Lali' : 'Javi'}</SectionLabel>
+        : sharedBanner}
       {periodsCard}
       {peopleCard}
       {closingCard}
       {csvCard}
-      {appearanceBanner}
-      {uiCard}
-      {themeCard}
-      {fontCard}
+      {!V.heroBand && appearanceBanner}
+      {!V.heroBand && uiCard}
+      {!V.heroBand && themeCard}
+      {!V.heroBand && fontCard}
       {saveBtn}
     </div>
   );

@@ -1,11 +1,11 @@
 // ── components/History.tsx ────────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { Search } from 'lucide-react';
-import { C, F, PENDING_PER, SP, FS, DEFAULT_CATS } from '../constants';
-import { fmt, safeN, calcBal, sortByDate } from '../lib/helpers';
+import { Search, ChevronRight, CircleCheck } from 'lucide-react';
+import { C, F, V, MONO, PENDING_PER, SP, FS, DEFAULT_CATS } from '../constants';
+import { fmt, safeN, calcBal, sortByDate, shortDate } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
-import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
-import { Card, ScrollFilter } from './ui';
+import { useExpenses, useSettings, useCustomCats, usePayments } from '../lib/queries';
+import { Card, ScrollFilter, ScreenHeader, AmountBand, SectionLabel, Row } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense } from '../types';
 
@@ -19,12 +19,42 @@ interface PeriodBlockProps {
   onToggle: () => void;
   onDelete: (id: string, e: Expense) => void;
   onEdit: (e: Expense) => void;
+  range?: string;
 }
 
-function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection, onToggle, onDelete, onEdit }: PeriodBlockProps) {
+function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection, onToggle, onDelete, onEdit, range }: PeriodBlockProps) {
   const total = exps.reduce((s, e) => s + safeN(e.amount), 0);
   const bal = calcBal(exps.filter(e => (e.currency || 'ARS') === 'ARS'));
   const highlighted = isOpen || isSelected;
+
+  // ── "Estado de cuenta": el ciclo es una FILA con filete, no una tarjeta ────
+  // (mockup 2a). El detalle se despliega debajo, sin caja ni bordes redondeados.
+  if (V.surfaceMode === 'flat') {
+    return (
+      <div>
+        <div
+          onClick={onToggle}
+          style={{ display:'flex', alignItems:'center', gap:'0.7rem', padding:'0.8rem 0', borderBottom:'1px solid '+C.border, cursor:'pointer' }}
+        >
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:'0.82rem', fontWeight:600, color: isPending ? C.warn : C.navy, display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap' }}>
+              {isPending ? 'Cuotas pendientes' : period}
+              {isSelected && (
+                <span style={{ fontSize:'0.58rem', fontWeight:700, color:C.accent, background:C.accent+'22', borderRadius:'4px', padding:'0.05rem 0.3rem' }}>elegido</span>
+              )}
+            </div>
+            <div style={{ fontSize:'0.66rem', color:C.textMuted, marginTop:'0.1rem' }}>
+              {exps.length} gasto{exps.length !== 1 ? 's' : ''}{range ? ' · ' + range : ''}
+              {!isPending && Math.abs(bal) >= 1 && <> · {bal > 0 ? 'Lali debe' : 'Javi debe'} {fmt(Math.abs(bal))}</>}
+            </div>
+          </div>
+          <span style={{ fontFamily:MONO, fontSize:'0.82rem', fontWeight:700, color:C.navy, flexShrink:0 }}>{fmt(total)}</span>
+          <ChevronRight size={15} strokeWidth={2} color={C.textMuted} style={{ flexShrink:0, transform: highlighted ? 'rotate(90deg)' : 'none', transition:'transform 0.2s' }} />
+        </div>
+        {highlighted && <ExpenseList expenses={exps} onDelete={onDelete} onEdit={onEdit} />}
+      </div>
+    );
+  }
   // Sobre fondo navy (abierto) el texto usa onNavy; sobre accent (seleccionado)
   // el blanco funciona en ambos temas. Antes todo era blanco y en el tema
   // oscuro quedaba blanco sobre blanco.
@@ -73,6 +103,7 @@ export default function History() {
   const expenses          = useExpenses();
   const settings          = useSettings();
   const customCats        = useCustomCats();
+  const payments          = usePayments();
   const requestDelete     = useAppStore(s => s.requestDelete);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
 
@@ -134,9 +165,55 @@ export default function History() {
   }
   const showExpMatches = !!searchLower && expenseMatches.length > 0;
 
+  // ── Chasis del rediseño ────────────────────────────────────────────────────
+  // 'cuenta' (mockup 2a): migas + banda con el TOTAL ACUMULADO de todos los
+  // ciclos, y más abajo una sección de pagos entre los dos.
+  // 'panel' (mockup 2b): barra fina y línea de resultados; sin banda.
+  const rangeOf = (p: string) => {
+    const cfg = (settings.periods || []).find(x => x.name === p);
+    return cfg ? shortDate(cfg.start) + ' – ' + shortDate(cfg.end) : '';
+  };
+  const totalAcum   = baseExpenses.reduce((s, e) => s + safeN(e.amount), 0);
+  const nCiclos     = allSorted.filter(p => p !== PENDING_PER).length;
+  const sortedPays  = [...payments].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+  const chrome = V.heroBand ? (
+    <div style={{ margin:'-'+SP.lg+' -'+SP.lg+' '+SP.lg }}>
+      <ScreenHeader crumb="Historial" current={nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')} />
+      <AmountBand
+        eyebrow={'Total acumulado · ' + nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')}
+        amount={fmt(totalAcum)}
+        sub={baseExpenses.length + ' gasto' + (baseExpenses.length !== 1 ? 's' : '') + ' registrados'}
+      />
+    </div>
+  ) : null;
+
+  // Pagos entre los dos — sección propia del rediseño (mockup 2a). Antes esta
+  // información solo estaba dentro del detalle de Inicio.
+  const paymentsSection = sortedPays.length > 0 ? (
+    <div style={{ marginTop:SP.lg }}>
+      <SectionLabel>Pagos entre ustedes</SectionLabel>
+      <div>
+        {sortedPays.slice(0, 8).map((p, i) => (
+          <Row key={p.id} last={i === Math.min(sortedPays.length, 8) - 1}>
+            <CircleCheck size={15} strokeWidth={2} color={C.ok} style={{ flexShrink:0 }} />
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:'0.78rem', color:C.navy }}>{p.from} → {p.to}</div>
+              <div style={{ fontSize:'0.66rem', color:C.textMuted }}>{shortDate(p.date)}</div>
+            </div>
+            <span style={{ fontFamily:MONO, fontSize:'0.78rem', fontWeight:700, color:C.navy, flexShrink:0 }}>
+              {fmt(safeN(p.amount), p.currency || 'ARS')}
+            </span>
+          </Row>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl, maxWidth:'min(760px, 100%)', margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
-      <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}>Historial</h2>
+      {chrome}
+      {!V.heroBand && <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}>Historial</h2>}
       <input
         value={search}
         onChange={e => { setSearch(e.target.value); setSelectedPeriods([]); }}
@@ -204,23 +281,29 @@ export default function History() {
           No se encontraron resultados
         </Card>
       ) : filteredPeriods.length > 0 ? (
-        <div style={{ display:'flex', flexDirection:'column', gap:'0.75rem', maxHeight:allSorted.length > 3 ? '65vh' : undefined, overflowY:allSorted.length > 3 ? 'auto' : undefined }}>
-          {displayPeriods.map(period => (
-            <PeriodBlock
-              key={period}
-              period={period}
-              exps={applySort(grouped[period] || [])}
-              isOpen={!!openMap[period]}
-              isSelected={selectedPeriods.indexOf(period) >= 0}
-              isPending={period === PENDING_PER}
-              hasSelection={hasSelection}
-              onToggle={() => { if (hasSelection) toggleSelect(period); else toggleOpen(period); }}
-              onDelete={requestDelete}
-              onEdit={setEditingExpense}
-            />
-          ))}
-        </div>
+        <>
+          {V.heroBand && <SectionLabel>Ciclos</SectionLabel>}
+          <div style={{ display:'flex', flexDirection:'column', gap: V.heroBand ? 0 : '0.75rem', maxHeight:allSorted.length > 3 ? '65vh' : undefined, overflowY:allSorted.length > 3 ? 'auto' : undefined }}>
+            {displayPeriods.map(period => (
+              <PeriodBlock
+                key={period}
+                period={period}
+                exps={applySort(grouped[period] || [])}
+                range={rangeOf(period)}
+                isOpen={!!openMap[period]}
+                isSelected={selectedPeriods.indexOf(period) >= 0}
+                isPending={period === PENDING_PER}
+                hasSelection={hasSelection}
+                onToggle={() => { if (hasSelection) toggleSelect(period); else toggleOpen(period); }}
+                onDelete={requestDelete}
+                onEdit={setEditingExpense}
+              />
+            ))}
+          </div>
+        </>
       ) : null}
+
+      {paymentsSection}
     </div>
   );
 }
