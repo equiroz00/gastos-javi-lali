@@ -28,17 +28,26 @@ export const contentBg = () => (V.shellBg === 'surface' ? C.surface : C.bg);
 // La pestaña activa sube a una burbuja que asoma sobre la barra, abrazada por
 // una "colina" de la misma barra con un anillo transparente entre ambas.
 //
-// Se dibuja con SVG: la barra + la colina forman una figura, y un círculo en
-// una máscara recorta el anillo. El recorte es transparente de verdad (no un
-// círculo pintado del color del fondo), así se ve bien aunque pase contenido
-// por detrás. Colina, recorte y burbuja se desplazan juntos con una transición
-// de `transform`, que funciona igual en Chrome y Safari.
+// Se dibuja con SVG: la barra + la colina forman una figura, y encima va un
+// anillo del color de acento que separa la burbuja de la colina. Colina, anillo
+// y burbuja se desplazan juntos con una transición de `transform`, que funciona
+// igual en Chrome y Safari.
+//
+// El anillo se PINTA (no es un recorte transparente): en la referencia funciona
+// porque detrás hay un azul fuerte, pero acá el fondo de la app suele ser
+// blanco, como la barra — un anillo transparente desaparecía y la burbuja
+// quedaba como un círculo blanco suelto. Pintado con el acento, además marca
+// con claridad en qué pestaña se está.
 const BAR_H = 64;   // alto de la barra
 const TOP   = 40;   // espacio por encima de la barra para la colina
 const R_BUB = 26;   // radio de la burbuja
 const GAP   = 5;    // ancho del anillo transparente
 const R_HILL = 38;  // radio del arco superior de la colina (= burbuja + anillo + borde)
-const PAD   = 18;   // margen lateral interno: aleja las burbujas de las esquinas
+// Margen lateral interno. Calculado para que, con la primera o la última
+// pestaña activa, el pie de la colina caiga donde ya terminó la curva de la
+// esquina de la barra (radio 18). Con menos margen la colina se recortaba
+// contra el borde y la barra perdía su esquina redondeada.
+const PAD   = 32;
 const EASE  = 'transform 0.34s cubic-bezier(.3,.7,.2,1)';
 
 // Colina centrada en x=0, con y relativa al borde superior de la barra. Arco
@@ -46,10 +55,13 @@ const EASE  = 'transform 0.34s cubic-bezier(.3,.7,.2,1)';
 // que bajan tangentes hasta la barra.
 const ax = +(R_HILL * Math.cos(Math.PI / 6)).toFixed(1); // 32.9
 const ay = +(R_HILL * Math.sin(Math.PI / 6)).toFixed(1); // 19
+// Pie de la colina a 48px del centro (más angosta que antes): sumado al margen
+// PAD, deja la colina dentro de la parte recta de la barra.
+const FOOT = 48;
 const HILL_PATH =
-  `M -54 0 C -42 0 -${(ax + 6).toFixed(1)} -8.6 -${ax} -${ay} ` +
+  `M -${FOOT} 0 C -${FOOT - 11} 0 -${(ax + 5).toFixed(1)} -10.3 -${ax} -${ay} ` +
   `A ${R_HILL} ${R_HILL} 0 0 1 ${ax} -${ay} ` +
-  `C ${(ax + 6).toFixed(1)} -8.6 42 0 54 0 Z`;
+  `C ${(ax + 5).toFixed(1)} -10.3 ${FOOT - 11} 0 ${FOOT} 0 Z`;
 
 export function MobileNav({ view, onSelect }: { view: string; onSelect: (id: string) => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -71,7 +83,9 @@ export function MobileNav({ view, onSelect }: { view: string; onSelect: (id: str
   const slot   = (w - PAD * 2) / NAV_ITEMS.length;
   const cx     = PAD + slot * (idx + 0.5);
   const Active = NAV_ITEMS[idx].Icon;
-  const maskId = 'navcut';
+  // En el tema Oscuro la sombra no se ve sobre negro y la barra (surface) se
+  // confundía con el fondo: se usa un tono más claro para que se despegue.
+  const barFill = C.dark ? C.beige : C.surface;
 
   return (
     <nav
@@ -86,22 +100,19 @@ export function MobileNav({ view, onSelect }: { view: string; onSelect: (id: str
     >
       <svg width={w} height={TOP + BAR_H} style={{ position:'absolute', inset:0, overflow:'visible', filter:'drop-shadow(0 6px 18px rgba(0,0,0,0.16))' }} aria-hidden="true">
         <defs>
-          <mask id={maskId} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={TOP + BAR_H}>
-            <rect x={0} y={0} width={w} height={TOP + BAR_H} fill="white" />
-            {hasActive && (
-              <circle r={R_BUB + GAP} cx={0} cy={0} fill="black"
-                style={{ transform:`translate(${cx}px, ${TOP}px)`, transition:EASE }} />
-            )}
-          </mask>
           {/* La colina no puede asomar por fuera de los costados de la barra. */}
           <clipPath id="navclip"><rect x={0} y={0} width={w} height={TOP + BAR_H} /></clipPath>
         </defs>
-        <g mask={`url(#${maskId})`} clipPath="url(#navclip)">
-          <rect x={0} y={TOP} width={w} height={BAR_H} rx={18} fill={C.surface} />
+        <g clipPath="url(#navclip)">
+          <rect x={0} y={TOP} width={w} height={BAR_H} rx={18} fill={barFill} />
           {hasActive && (
-            <path d={HILL_PATH} fill={C.surface} style={{ transform:`translate(${cx}px, ${TOP}px)`, transition:EASE }} />
+            <path d={HILL_PATH} fill={barFill} style={{ transform:`translate(${cx}px, ${TOP}px)`, transition:EASE }} />
           )}
         </g>
+        {hasActive && (
+          <circle r={R_BUB + GAP} cx={0} cy={0} fill={C.accent}
+            style={{ transform:`translate(${cx}px, ${TOP}px)`, transition:EASE }} />
+        )}
       </svg>
 
       {/* Burbuja con el ícono activo: relleno tenue + trazo de acento, como en la referencia. */}
@@ -110,7 +121,7 @@ export function MobileNav({ view, onSelect }: { view: string; onSelect: (id: str
           aria-hidden="true"
           style={{
             position:'absolute', left:0, top:TOP - R_BUB, width:R_BUB * 2, height:R_BUB * 2,
-            borderRadius:'50%', background:C.surface, display:'flex', alignItems:'center', justifyContent:'center',
+            borderRadius:'50%', background:barFill, display:'flex', alignItems:'center', justifyContent:'center',
             transform:`translateX(${cx - R_BUB}px)`, transition:EASE,
             boxShadow:'0 4px 12px rgba(0,0,0,0.12)',
           }}
