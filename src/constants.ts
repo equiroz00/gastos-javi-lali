@@ -30,28 +30,28 @@ export const MONO = "'JetBrains Mono',ui-monospace,monospace";
 // cualquiera de los 3 temas funciona con cualquiera de las 2 variantes.
 //
 // Medidas tomadas de los mockups a 1320px del documento de diseño:
-//   cuenta → riel claro 64px, banda de acento con la cifra a 44–52px, secciones
-//            con versalita + filete fuerte, filas separadas por hairline.
-//   panel  → riel oscuro 56px, tarjetas con borde de 1px y radio 10, tablas
-//            densas, pasos como pestañas, atajos de teclado a la vista.
+//   cuenta → banda de acento con la cifra a 44–52px, secciones con versalita +
+//            filete fuerte, filas separadas por hairline.
+//   panel  → tarjetas con borde de 1px y radio 10, tablas densas, atajos de
+//            teclado a la vista.
+// El MENÚ (barra móvil con burbuja, lateral web plegable) es el mismo en las
+// dos: vive en components/Navigation.tsx y ya no depende de la variante.
 export const UI_VARIANTS: Record<UIKey, UIVariantConfig> = {
   cuenta: {
     label:'Estado de cuenta',
     hint:'Bandas a todo el ancho, cifras grandes y filetes. Sin tarjetas.',
-    railW:64, railDark:false, railIcon:40, railRadius:11,
     surfaceMode:'flat', radius:10, shellBg:'surface',
     sectionRule:'strong', sectionSize:11, sectionLS:'0.06em',
     rowRule:true, rowPadY:'0.8rem',
-    heroBand:true, shortcuts:false, stepStyle:'bars', navStyle:'pill',
+    heroBand:true, shortcuts:false, stepStyle:'bars',
   },
   panel: {
     label:'Panel de trabajo',
-    hint:'Tarjetas, tablas densas y atajos de teclado. Riel oscuro.',
-    railW:56, railDark:true, railIcon:38, railRadius:10,
+    hint:'Tarjetas, tablas densas y atajos de teclado.',
     surfaceMode:'card', radius:10, shellBg:'bg',
     sectionRule:'none', sectionSize:10.5, sectionLS:'0.04em',
     rowRule:true, rowPadY:'0.5rem',
-    heroBand:false, shortcuts:true, stepStyle:'tabs', navStyle:'bar',
+    heroBand:false, shortcuts:true, stepStyle:'tabs',
   },
 };
 

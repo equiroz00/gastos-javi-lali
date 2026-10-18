@@ -1,10 +1,10 @@
 // ── src/App.tsx ───────────────────────────────────────────────────────────────
 import React, { useEffect } from 'react';
-import { Loader2, Home, Plus, BarChart2, ClipboardList, Settings2, LogOut, Wallet } from 'lucide-react';
+import { Loader2, LogOut, Wallet } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { auth } from './firebase.js';
-import { C, F, V, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
+import { C, F, USER_MAP, applyTheme, FONTS, MAXW, SHELL_MAXW, SP } from './constants.js';
 import { queryClient } from './lib/queryClient';
 import { parseExpenses, parsePayments, parsePlans, parseSettingsDoc } from './lib/schemas';
 import type { UserName, Settings, Expense, Plan, Payment } from './types.js';
@@ -27,6 +27,7 @@ import { useIsDesktop }  from './lib/useIsDesktop';
 const Stats = React.lazy(() => import('./components/Stats'));
 import NotificationPanel from './components/NotificationPanel';
 import { Toast, ConfirmDialog, PaymentModal } from './components/ui';
+import { MobileNav, DesktopSidebar, AddFab, contentBg, MOBILE_NAV_SPACE } from './components/Navigation';
 
 let _unsubs: Array<() => void> = [];
 let _unsubAuth: (() => void) | null = null;
@@ -41,16 +42,6 @@ function getGreeting(name: string | null): string {
   return name ? `${saludo}, ${name}` : saludo;
 }
 
-interface Tab { id: string; icon: React.ReactNode; label: string; }
-// 'add' is always at index 2 (center) — rendered as FAB
-const TABS: Tab[] = [
-  { id:'dashboard', icon:<Home          size={20} strokeWidth={1.8} />, label:'Inicio'    },
-  { id:'stats',     icon:<BarChart2     size={20} strokeWidth={1.8} />, label:'Stats'     },
-  { id:'add',       icon:<Plus          size={26} strokeWidth={2.5} />, label:'Agregar'   },
-  { id:'personal',  icon:<Wallet        size={20} strokeWidth={1.8} />, label:'Personal'  },
-  { id:'history',   icon:<ClipboardList size={20} strokeWidth={1.8} />, label:'Historial' },
-  { id:'settings',  icon:<Settings2     size={20} strokeWidth={1.8} />, label:'Config'    },
-];
 
 export default function App() {
   const isDesktop      = useIsDesktop();
@@ -298,12 +289,21 @@ export default function App() {
   const Header = (
     <div style={{ background:C.surface, padding:'0.8rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10, borderBottom:'1px solid '+C.border }}>
       <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
-        <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:C.accent, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-          <Wallet size={19} strokeWidth={2.2} color={C.white} />
-        </div>
+        {/* En web la marca vive en el menú lateral; acá quedaría duplicada. */}
+        {!isDesktop && (
+          <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:C.accent, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <Wallet size={19} strokeWidth={2.2} color={C.white} />
+          </div>
+        )}
         <div>
-          <div style={{ fontWeight:800, fontSize:'1.05rem', color:C.navy, lineHeight:1.1, fontFamily:F, letterSpacing:'-0.01em' }}>Javi &amp; Lali</div>
-          <div style={{ fontSize:'0.72rem', color:C.textMuted, fontFamily:F, marginTop:'0.05rem' }}>{getGreeting(currentUser)}</div>
+          {isDesktop ? (
+            <div style={{ fontWeight:800, fontSize:'1rem', color:C.navy, lineHeight:1.1, fontFamily:F }}>{getGreeting(currentUser)}</div>
+          ) : (
+            <>
+              <div style={{ fontWeight:800, fontSize:'1.05rem', color:C.navy, lineHeight:1.1, fontFamily:F, letterSpacing:'-0.01em' }}>Javi &amp; Lali</div>
+              <div style={{ fontSize:'0.72rem', color:C.textMuted, fontFamily:F, marginTop:'0.05rem' }}>{getGreeting(currentUser)}</div>
+            </>
+          )}
         </div>
       </div>
       <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
@@ -343,136 +343,47 @@ export default function App() {
     </>
   );
 
+  // El botón flotante no aparece dentro del propio formulario de alta.
+  const fab = view !== 'add' ? <AddFab onClick={() => setView('add')} isDesktop={isDesktop} /> : null;
+
   // ── DESKTOP layout ─────────────────────────────────────────────────────────
   if (isDesktop) {
-    // Riel de íconos a la izquierda. Las dos direcciones lo usan, con distinto
-    // peso: 'cuenta' lo pinta claro (sobre `beige`) y 'panel' lo pinta ink.
-    // Ojo: en el tema Oscuro `navy` es casi blanco, así que el riel "oscuro" se
-    // resuelve por contraste (`C.dark`) y no invirtiendo el color.
-    const railOnInk  = V.railDark && !C.dark;
-    const railBg     = V.railDark ? (C.dark ? C.beige : C.navy) : C.beige;
-    const railFg     = railOnInk ? C.onNavy : C.navy;
-    const railMuted  = railOnInk ? C.onNavy + '85' : C.textMuted;
-    const railActive = V.railDark
-      ? { background: railOnInk ? C.onNavy + '1F' : C.surface, color: railFg, boxShadow: 'none' }
-      : { background: C.surface, color: C.navy, boxShadow: '0 0 0 1px ' + C.border };
-    const sideNavTabs = TABS.filter(t => t.id !== 'add');
-
-    const railBtn = (active: boolean): React.CSSProperties => ({
-      width:V.railIcon, height:V.railIcon, borderRadius:V.railRadius, border:'none',
-      display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer',
-      background:active ? railActive.background : 'transparent',
-      color:active ? railActive.color : railMuted,
-      boxShadow:active ? railActive.boxShadow : 'none',
-    });
-
-    const Rail = (
-      <div style={{ width:V.railW, flexShrink:0, background:railBg, borderRight: V.railDark && !C.dark ? 'none' : '1px solid '+C.border, display:'flex', flexDirection:'column', alignItems:'center', padding:'0.85rem 0', gap:'0.35rem', height:'100vh', position:'sticky', top:0 }}>
-        <div style={{ width:32, height:32, borderRadius:9, background: V.railDark ? C.accent : C.navy, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginBottom:'0.5rem' }}>
-          <Wallet size={17} strokeWidth={2.2} color={V.railDark ? C.white : C.onNavy} />
-        </div>
-        {/* "Agregar" no figura en el riel de los mockups (ahí el alta es un panel
-            lateral). Se suma acá como cuadrado de acento para que la acción
-            principal siga a un clic desde cualquier pantalla. */}
-        <button onClick={() => setView('add')} title="Agregar gasto"
-          style={{ ...railBtn(view === 'add'), background:C.accent, color:C.white, marginBottom:'0.35rem' }}>
-          <Plus size={20} strokeWidth={2.6} />
-        </button>
-        {sideNavTabs.map(t => (
-          <button key={t.id} onClick={() => setView(t.id)} title={t.label} style={railBtn(view === t.id)}>
-            {t.icon}
-          </button>
-        ))}
-        <div style={{ marginTop:'auto' }}>
-          <span style={{ width:28, height:28, borderRadius:'50%', background:C.navy, color:C.onNavy, fontSize:'0.7rem', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:F }}>
-            {(currentUser || '?').charAt(0)}
-          </span>
-        </div>
-      </div>
-    );
-
     return (
-      <div style={{ minHeight:'100vh', background:C.bg, display:'flex', fontFamily:F }}>
+      <div style={{ minHeight:'100vh', background:contentBg(), display:'flex', fontFamily:F }}>
         <ConfirmDialog /><PaymentModal /><Toast />
-        {Rail}
+        <DesktopSidebar view={view} onSelect={setView} currentUser={currentUser} />
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
           {Header}
           {/* Main content — el scroll ocupa todo el ancho; un wrapper interno
               centra el contenido con un max-width único (MAXW). El fondo lo
               decide la variante: 'cuenta' trabaja sobre blanco, 'panel' sobre
-              el gris de sistema para que las tarjetas se despeguen. */}
-          <div style={{ flex:1, overflowY:'auto', paddingTop:SP.md, paddingBottom:SP.xxl, background: V.shellBg === 'surface' ? C.surface : C.bg }}>
+              el gris de sistema para que las tarjetas se despeguen. La pestaña
+              activa del menú lateral usa este mismo color para fundirse. */}
+          <div style={{ flex:1, overflowY:'auto', paddingTop:SP.md, paddingBottom:'6rem', background:contentBg() }}>
             <div style={{ maxWidth:MAXW, margin:'0 auto' }}>
               {SyncBar}
               {Content}
             </div>
           </div>
         </div>
+        {fab}
       </div>
     );
   }
 
   // ── MOBILE layout ──────────────────────────────────────────────────────────
-  // Dos formas de nav según la variante:
-  //   pill ('cuenta') → píldora ink flotante, despegada de los bordes.
-  //   bar  ('panel')  → barra al ras, estilo iOS, sobre la superficie.
-  const isPill   = V.navStyle === 'pill';
-  // La píldora es siempre ink: en el tema Oscuro `navy` es casi blanco, así que
-  // ahí se usa una superficie elevada en lugar de invertir.
-  const pillBg   = C.dark ? C.beige : C.navy;
-  const pillOn   = C.dark ? C.navy  : C.onNavy;
-  const navFg    = (active: boolean) =>
-    isPill ? (active ? pillOn : pillOn + '80')
-           : (active ? C.accent : C.textMuted);
-
-  const navWrap: React.CSSProperties = isPill
-    ? { position:'fixed', bottom:'calc(0.75rem + env(safe-area-inset-bottom))', left:'50%', transform:'translateX(-50%)', width:'calc(100% - 1.5rem)', maxWidth:'calc(' + SHELL_MAXW + ' - 1.5rem)', background:pillBg, borderRadius:'18px', display:'flex', alignItems:'center', padding:'0 0.5rem', height:'58px', zIndex:10, boxShadow:'0 8px 24px rgba(0,0,0,0.22)' }
-    : { position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:SHELL_MAXW, background:C.surface, borderTop:'1px solid '+C.border, display:'flex', alignItems:'center', zIndex:10, paddingBottom:'env(safe-area-inset-bottom)' };
-
   return (
-    <div style={{ minHeight:'100vh', background: V.shellBg === 'surface' ? C.surface : C.bg, display:'flex', flexDirection:'column', maxWidth:SHELL_MAXW, margin:'0 auto', fontFamily:F }}>
+    <div style={{ minHeight:'100vh', background:contentBg(), display:'flex', flexDirection:'column', maxWidth:SHELL_MAXW, margin:'0 auto', fontFamily:F }}>
       <ConfirmDialog /><PaymentModal /><Toast />
       {Header}
-      <div style={{ flex:1, overflowY:'auto', paddingBottom: isPill ? '6.5rem' : '5.5rem', paddingTop:'0.75rem' }}>
+      {/* Espacio inferior para la barra Y el botón flotante: sin esto, el último
+          elemento de una lista larga quedaba tapado por el botón. */}
+      <div style={{ flex:1, overflowY:'auto', paddingBottom:`calc(${MOBILE_NAV_SPACE + 80}px + env(safe-area-inset-bottom))`, paddingTop:'0.75rem' }}>
         {SyncBar}
         {Content}
       </div>
-
-      <div style={navWrap}>
-        {TABS.map(t => {
-          const isAdd = t.id === 'add';
-          const active = view === t.id;
-          if (isAdd) return (
-            <button
-              key={t.id}
-              onClick={() => setView('add')}
-              title="Agregar gasto"
-              style={ isPill
-                ? { width:'46px', height:'46px', borderRadius:'14px', border:'none', background:C.accent, color:C.white, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 0.25rem', cursor:'pointer', flexShrink:0 }
-                : { flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'0.18rem', padding:'0.5rem 0 0.45rem', border:'none', background:'none', cursor:'pointer', fontFamily:F } }
-            >
-              {isPill ? <Plus size={22} strokeWidth={2.6} /> : (
-                <>
-                  <span style={{ width:'30px', height:'30px', borderRadius:'9px', background:C.accent, color:C.white, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <Plus size={20} strokeWidth={2.6} />
-                  </span>
-                  <span style={{ fontSize:'0.6rem', color: active ? C.accent : C.textMuted, fontWeight: active ? 800 : 500 }}>Agregar</span>
-                </>
-              )}
-            </button>
-          );
-          return (
-            <button
-              key={t.id}
-              onClick={() => setView(t.id)}
-              style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding: isPill ? '0' : '0.55rem 0 0.45rem', border:'none', background:'none', cursor:'pointer', fontFamily:F, color:navFg(active), fontSize: isPill ? '0.59rem' : '0.6rem', fontWeight:active ? (isPill ? 700 : 800) : 500, gap: isPill ? '0.19rem' : '0.2rem' }}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
+      {fab}
+      <MobileNav view={view} onSelect={setView} />
     </div>
   );
 }
