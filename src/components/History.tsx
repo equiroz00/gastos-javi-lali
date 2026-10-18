@@ -191,7 +191,7 @@ export default function History() {
         // Con una tarjeta elegida, el titular responde "¿cuánto gasté con esta?".
         eyebrow={(cardFilter !== 'Todas' ? 'Total con ' + cardFilter : 'Total acumulado') + ' · ' + nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')}
         amount={fmt(totalAcum)}
-        sub={baseExpenses.length + ' gasto' + (baseExpenses.length !== 1 ? 's' : '') + ' registrados'}
+        sub={baseExpenses.length === 1 ? '1 gasto registrado' : baseExpenses.length + ' gastos registrados'}
       />
     </div>
   ) : null;
