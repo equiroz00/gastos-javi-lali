@@ -312,6 +312,22 @@ export function getPeriod(d: string, ps: Period[]): string {
   return 'Sin período';
 }
 
+// ── Tarjetas (filtro de Historial) ────────────────────────────────────────────
+// Una "tarjeta" es la combinación medio de pago + banco ("Visa · Galicia"), no
+// la marca sola: así llega el resumen, y el día de cierre se configura por banco.
+// Con la marca sola se mezclarían dos resúmenes distintos de la misma marca.
+export function cardKey(e: Pick<Expense, 'paymentMethod' | 'bank'>): string {
+  const method = (e.paymentMethod || '').trim() || 'Sin medio de pago';
+  const bank   = (e.bank || '').trim();
+  return bank ? method + ' · ' + bank : method;
+}
+
+// Opciones del filtro: solo las combinaciones que de verdad aparecen en los
+// gastos (ofrecer "AMEX · Macro" si nunca se usó solo agrega ruido).
+export function cardOptions(exps: Array<Pick<Expense, 'paymentMethod' | 'bank'>>): string[] {
+  return Array.from(new Set(exps.map(cardKey))).sort((a, b) => a.localeCompare(b, 'es'));
+}
+
 // ── Plans ─────────────────────────────────────────────────────────────────────
 
 // Arma el documento de un plan a partir del formulario. Lo usan tanto el alta
