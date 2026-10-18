@@ -313,6 +313,54 @@ export function getPeriod(d: string, ps: Period[]): string {
 }
 
 // ── Plans ─────────────────────────────────────────────────────────────────────
+
+// Arma el documento de un plan a partir del formulario. Lo usan tanto el alta
+// como la edición (antes cada una construía el objeto por su cuenta).
+//
+// REGLA CLAVE: el resultado NUNCA lleva un campo con valor `undefined`. El SDK de
+// Firestore rechaza esos campos LANZANDO una excepción al armar el batch, antes
+// del commit. Así se rompía la edición de cuotas: los planes creados antes del
+// 17/08/2026 no tienen `createdBy`, el campo quedaba en undefined, y "Guardar"
+// cortaba la función en seco — sin guardar, sin cerrar el editor y sin avisar.
+export function buildPlan(
+  id: string,
+  formData: Expense,
+  numInstallments: number,
+  paidInstallments: number,
+  startPeriod: string,
+  existing?: Pick<Plan, 'createdBy' | 'createdAt'>,
+): Plan {
+  const installmentAmount = Math.round(safeN(formData.amount) / numInstallments);
+  const amts = calcAmts(installmentAmount, formData.responsible);
+  const isPrivate = formData.visibilidad === 'privado';
+  // Al editar se conserva quién lo creó originalmente; si el plan es anterior a
+  // que existiera el campo, se deja ausente (no undefined).
+  const createdBy = existing?.createdBy ?? formData.createdBy;
+  return {
+    id,
+    description: formData.description,
+    totalAmount: safeN(formData.amount),
+    installmentAmount,
+    numInstallments,
+    paidInstallments: paidInstallments || 0,
+    startPeriod,
+    startDate: formData.date,
+    currency: formData.currency as Currency,
+    paidBy: formData.paidBy,
+    responsible: formData.responsible,
+    paymentMethod: formData.paymentMethod || '',
+    bank: formData.bank || '',
+    category: formData.category || '',
+    javiAmount: amts.javiAmount,
+    laliAmount: amts.laliAmount,
+    splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
+    visibilidad: isPrivate ? 'privado' : 'compartido',
+    ...(isPrivate && formData.ownerId ? { ownerId: formData.ownerId } : {}),
+    ...(createdBy ? { createdBy } : {}),
+    createdAt: existing?.createdAt || new Date().toISOString(),
+  };
+}
+
 export function generatePlanExpenses(plan: Plan, periods: Period[]): Expense[] {
   const paid = plan.paidInstallments || 0;
   const remaining = plan.numInstallments - paid;

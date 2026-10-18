@@ -36,6 +36,12 @@ if (recaptchaSiteKey) {
 // El multi-tab manager permite tener la app abierta en varias pestañas a la vez.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  // Sin esto, el SDK LANZA una excepción si un campo vale `undefined`, y lo hace
+  // al armar el batch, antes de enviarlo. Así se rompía la edición de cuotas:
+  // los planes viejos no tienen `createdBy` y "Guardar" no hacía nada. Con esta
+  // opción el campo simplemente no se escribe, que es lo que queremos decir con
+  // undefined. Es una red de seguridad: el origen también se corrigió (buildPlan).
+  ignoreUndefinedProperties: true,
 });
 export const auth     = getAuth(app);
 export const provider = new GoogleAuthProvider();

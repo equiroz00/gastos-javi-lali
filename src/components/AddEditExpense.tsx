@@ -36,6 +36,9 @@ interface FormState {
   javiAmount: number;
   laliAmount: number;
   visibilidad: Visibility;
+  // Dueño de un gasto/plan privado. Se carga al editar para no perderlo si la
+  // sesión de Firebase justo no está resuelta al guardar.
+  ownerId?: string;
   splitAmong?: SplitAmong;
   notes?: string;
   createdBy?: UserName;
@@ -86,12 +89,18 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   // Prefill del formulario al editar un plan "madre"
   function planToForm(p: Plan): FormState {
     const isBase = BASE_CURS.indexOf(p.currency) >= 0;
+    const isPrivate = p.visibilidad === 'privado';
     return {
       id: p.id, date: p.startDate, description: p.description, amount: String(p.totalAmount),
       category: p.category, paymentMethod: p.paymentMethod, bank: p.bank, paidBy: p.paidBy,
       responsible: p.responsible, currency: isBase ? p.currency : 'Otra',
       customCurrency: isBase ? '' : String(p.currency), javiAmount: 0, laliAmount: 0,
-      visibilidad: 'compartido', notes: '',
+      // Antes esto era 'compartido' FIJO: al editar un plan privado, el form lo
+      // trataba como compartido y al guardar lo convertía en compartido — sus
+      // cuotas pasaban a ser visibles para la otra persona. Se respeta el valor real.
+      visibilidad: isPrivate ? 'privado' : 'compartido',
+      ...(isPrivate && p.ownerId ? { ownerId: p.ownerId } : {}),
+      notes: '',
     };
   }
 
@@ -525,7 +534,11 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         laliAmount: owner === 'Lali' ? totalAmt : 0,
         splitAmong: { strategy: 'iguales', entries: [{ participant: owner }] },
         visibilidad: 'privado',
-        ownerId: auth.currentUser?.uid,
+        // La sesión manda (es lo que comparan las reglas), pero si justo no está
+        // resuelta —un instante al refrescar el token— se conserva el dueño que
+        // ya tenía el gasto/plan. Antes quedaba undefined y el doc se escribía
+        // privado SIN dueño: las reglas lo rechazaban.
+        ownerId: auth.currentUser?.uid ?? form.ownerId,
       } as Expense;
     }
     return {
@@ -570,7 +583,14 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     if (useCuotas && isRetro && !retroStartPer) e.retroStartPer = 'Seleccioná el período inicial.';
     const pc = privateConflict();
     if (pc) e.visibilidad = pc;
-    if (Object.keys(e).length) { setErrors(e); return; }
+    if (Object.keys(e).length) {
+      setErrors(e);
+      // "Guardar" existe también en el paso 1, pero estos errores solo se dibujan
+      // en el paso 2. Sin este salto la validación fallaba de forma INVISIBLE y el
+      // botón parecía no hacer nada (otro de los caminos del bug de cuotas).
+      if (step === 1 && (e.retroPaid || e.retroStartPer || e.visibilidad)) setStep(2);
+      return;
+    }
     const base = buildBase(isEditMode ? ((initialData && initialData.id) || genId()) : genId());
     if (!isEditMode && !isPlanEdit) {
       base.createdBy = currentUser || undefined;
@@ -721,12 +741,32 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     </>
   ) : null;
 
+  // Al editar un plan no se puede cambiar la visibilidad (el toggle de arriba no
+  // se muestra), pero sí hay que decir cuál es — y mostrar el error de la
+  // restricción de privados, que si no quedaría invisible y bloquearía el
+  // guardado sin explicación.
+  const planVisibilityInfo = isPlanEdit ? (
+    <>
+      {form.visibilidad === 'privado' && (
+        <p style={{ fontSize:'0.72rem', color:C.textMuted, margin:'0.5rem 0 0', lineHeight:1.4 }}>
+          🔒 Plan privado: solo vos lo ves, también sus cuotas.
+        </p>
+      )}
+      {errors.visibilidad && (
+        <p style={{ fontSize:'0.72rem', color:C.danger, margin:'0.5rem 0 0', lineHeight:1.45, fontWeight:600, background:C.danger+'14', border:'1px solid '+C.danger+'55', borderRadius:'0.6rem', padding:'0.5rem 0.65rem' }}>
+          {errors.visibilidad}
+        </p>
+      )}
+    </>
+  ) : null;
+
   // La división se muestra TAMBIÉN en privado: si se ocultara, el usuario no
   // podría ver por qué se le bloquea el guardado ni corregirlo sin volver a
   // Compartido. Se ve, se puede intentar, y la validación explica el límite.
   const splitSection = (
     <>
       {visibilidadToggle}
+      {planVisibilityInfo}
       {splitButton}
       {splitPreview}
     </>

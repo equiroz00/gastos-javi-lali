@@ -4,8 +4,8 @@ import { db, auth } from '../firebase.js';
 import { collection, doc, setDoc, deleteDoc, writeBatch, getDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import {
-  getPeriod, generatePlanExpenses, reassignExpensePeriods,
-  sanitize, calcAmts, safeN, catEm, fmt, genId, splitFromLegacy, expenseResolved,
+  getPeriod, generatePlanExpenses, reassignExpensePeriods, buildPlan,
+  sanitize, safeN, catEm, fmt, genId, expenseResolved,
 } from '../lib/helpers.js';
 import { DEFAULT_CATS, LEGACY_PAY_METHOD_MAP } from '../constants.js';
 import { queryClient } from '../lib/queryClient';
@@ -376,42 +376,21 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   // Plan actions
   handleAddPlan: (formData, numInstallments, paidInstallments, manualStartPeriod) => {
-    const state = get();
-    const paid = paidInstallments || 0;
-    const installmentAmount = Math.round(safeN(formData.amount) / numInstallments);
-    const amts = calcAmts(installmentAmount, formData.responsible);
     const startPeriod = manualStartPeriod || getPeriod(formData.date, getCfg().periods);
-    const plan: Plan = {
-      id: genId('plan'),
-      description: formData.description,
-      totalAmount: safeN(formData.amount),
-      installmentAmount,
-      numInstallments,
-      paidInstallments: paid,
-      startPeriod,
-      startDate: formData.date,
-      currency: formData.currency as Currency,
-      paidBy: formData.paidBy,
-      responsible: formData.responsible,
-      paymentMethod: formData.paymentMethod,
-      bank: formData.bank,
-      category: formData.category,
-      javiAmount: amts.javiAmount,
-      laliAmount: amts.laliAmount,
-      splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
-      // Antes esto era 'compartido' fijo: un plan marcado como privado se
-      // guardaba compartido y el otro usuario lo veía igual (y sus cuotas
-      // quedaban sin forma de editarse ni borrarse).
-      visibilidad: formData.visibilidad === 'privado' ? 'privado' : 'compartido',
-      ...(formData.visibilidad === 'privado' && formData.ownerId ? { ownerId: formData.ownerId } : {}),
-      createdBy: formData.createdBy,
-      createdAt: new Date().toISOString(),
-    };
+    const plan = buildPlan(genId('plan'), formData, numInstallments, paidInstallments || 0, startPeriod);
     const installments = generatePlanExpenses(plan, getCfg().periods);
+    // Armar el batch puede LANZAR (el SDK valida cada set al instante). Si eso
+    // pasa, se avisa y se sale sin tocar la caché: el formulario queda abierto
+    // con los datos, en vez de un botón que no hace nada.
     const batch = writeBatch(db);
-    checkPlanForWrite(plan);
-    batch.set(planDoc(plan.id), plan);
-    installments.forEach(inst => { checkExpenseForWrite(inst); batch.set(expenseDoc(inst.id), inst); });
+    try {
+      checkPlanForWrite(plan);
+      batch.set(planDoc(plan.id), plan);
+      installments.forEach(inst => { checkExpenseForWrite(inst); batch.set(expenseDoc(inst.id), inst); });
+    } catch (err) {
+      reportWriteError('handleAddPlan')(err);
+      return;
+    }
     batch.commit().catch(reportWriteError('handleAddPlan'));
     setExps([...installments, ...getExps()]);
     setPlans([...getPlans(), plan]);
@@ -423,44 +402,26 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   handleEditPlan: (planId, formData, numInstallments, paidInstallments, manualStartPeriod) => {
     const state = get();
     const existing = getPlans().find(p => p.id === planId);
-    const paid = paidInstallments || 0;
-    const installmentAmount = Math.round(safeN(formData.amount) / numInstallments);
-    const amts = calcAmts(installmentAmount, formData.responsible);
     const startPeriod = manualStartPeriod || getPeriod(formData.date, getCfg().periods);
-    const plan: Plan = {
-      id: planId,
-      description: formData.description,
-      totalAmount: safeN(formData.amount),
-      installmentAmount,
-      numInstallments,
-      paidInstallments: paid,
-      startPeriod,
-      startDate: formData.date,
-      currency: formData.currency as Currency,
-      paidBy: formData.paidBy,
-      responsible: formData.responsible,
-      paymentMethod: formData.paymentMethod,
-      bank: formData.bank,
-      category: formData.category,
-      javiAmount: amts.javiAmount,
-      laliAmount: amts.laliAmount,
-      splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
-      visibilidad: formData.visibilidad === 'privado' ? 'privado' : 'compartido',
-      ...(formData.visibilidad === 'privado' && formData.ownerId ? { ownerId: formData.ownerId } : {}),
-      // Al editar se conserva quién lo creó originalmente.
-      createdBy: existing?.createdBy ?? formData.createdBy,
-      createdAt: existing?.createdAt || new Date().toISOString(),
-    };
+    const plan = buildPlan(planId, formData, numInstallments, paidInstallments || 0, startPeriod, existing);
     const oldExps = getExps().filter(e => e.planId === planId);
     const installments = generatePlanExpenses(plan, getCfg().periods);
     const newIds = new Set(installments.map(i => i.id));
     const batch = writeBatch(db);
-    // Borrar solo las cuotas viejas que ya no existen (las que se mantienen se
-    // sobrescriben con set — evita escribir dos veces el mismo doc en el batch).
-    oldExps.filter(e => !newIds.has(e.id)).forEach(e => batch.delete(expenseDoc(e.id)));
-    checkPlanForWrite(plan);
-    batch.set(planDoc(plan.id), plan);
-    installments.forEach(inst => { checkExpenseForWrite(inst); batch.set(expenseDoc(inst.id), inst); });
+    // Armar el batch puede LANZAR (el SDK valida cada set al instante): era
+    // exactamente lo que rompía la edición de cuotas viejas. Si vuelve a pasar,
+    // se avisa y el editor queda abierto con los datos.
+    try {
+      // Borrar solo las cuotas viejas que ya no existen (las que se mantienen se
+      // sobrescriben con set — evita escribir dos veces el mismo doc en el batch).
+      oldExps.filter(e => !newIds.has(e.id)).forEach(e => batch.delete(expenseDoc(e.id)));
+      checkPlanForWrite(plan);
+      batch.set(planDoc(plan.id), plan);
+      installments.forEach(inst => { checkExpenseForWrite(inst); batch.set(expenseDoc(inst.id), inst); });
+    } catch (err) {
+      reportWriteError('handleEditPlan')(err);
+      return;
+    }
     batch.commit().catch(reportWriteError('handleEditPlan'));
     const otherExps = getExps().filter(e => e.planId !== planId);
     setExps([...installments, ...otherExps]);
