@@ -164,10 +164,10 @@ export default function Settings() {
     const isPanel = uiKey === 'panel';
     return (
       <span style={{ width:'100%', height:'52px', borderRadius:'0.4rem', overflow:'hidden', border:'1px solid '+C.border, display:'flex', background:isPanel ? C.bg : C.surface }}>
-        {/* riel */}
-        <span style={{ width:'11px', flexShrink:0, background:isPanel ? C.navy : C.beige, borderRight:isPanel ? 'none' : '1px solid '+C.border, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:'4px', gap:'3px' }}>
+        {/* menú: igual en las dos variantes (lo que cambia es el contenido) */}
+        <span style={{ width:'11px', flexShrink:0, background:bandColors().bg, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:'4px', gap:'3px' }}>
           {[0,1,2].map(i => (
-            <span key={i} style={{ width:'5px', height:'5px', borderRadius:'2px', background:isPanel ? (i===0 ? C.white : C.white+'66') : (i===0 ? C.navy : C.textMuted+'88') }} />
+            <span key={i} style={{ width:'5px', height:'5px', borderRadius:'2px', background: i===0 ? bandColors().on : bandColors().on+'66' }} />
           ))}
         </span>
         {/* contenido */}

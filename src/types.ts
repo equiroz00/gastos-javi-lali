@@ -179,11 +179,7 @@ export type UIKey = 'cuenta' | 'panel';
 export interface UIVariantConfig {
   label: string;
   hint: string;
-  // Riel de navegación en escritorio
-  railW: number;          // ancho en px
-  railDark: boolean;      // riel sobre ink (panel) vs. sobre gris claro (cuenta)
-  railIcon: number;       // lado del botón de ícono
-  railRadius: number;
+  // (El menú ya no es parte de la variante: ver components/Navigation.tsx.)
   // Superficies
   surfaceMode: 'flat' | 'card'; // filetes vs. tarjetas con borde
   radius: number;
@@ -199,7 +195,6 @@ export interface UIVariantConfig {
   heroBand: boolean;      // banda de acento con la cifra protagonista
   shortcuts: boolean;     // muestra atajos de teclado (⌘↵)
   stepStyle: 'bars' | 'tabs';   // progreso del alta de gasto
-  navStyle: 'pill' | 'bar';     // nav móvil: píldora flotante vs. barra al ras
 }
 
 export interface ThemeConfig {
