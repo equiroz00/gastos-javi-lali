@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Sentry } from './sentry';
 import { queryClient } from './lib/queryClient';
 import App from './App';
+import UpdateBanner from './components/UpdateBanner';
 
 // Pantalla de respaldo si la app crashea: en vez de quedar en blanco, muestra un
 // mensaje claro y un botón para recargar. El error ya quedó reportado en Sentry.
@@ -35,6 +36,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <Sentry.ErrorBoundary fallback={<CrashFallback />}>
       <QueryClientProvider client={queryClient}>
         <App />
+        {/* Fuera de App a propósito: se monta una sola vez y siempre (también en
+            el login), así el service worker se registra en cualquier pantalla. */}
+        <UpdateBanner />
       </QueryClientProvider>
     </Sentry.ErrorBoundary>
   </React.StrictMode>,

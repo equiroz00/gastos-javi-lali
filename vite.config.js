@@ -19,7 +19,17 @@ export default defineConfig({
     // PWA: instalable en el teléfono + caché del shell de la app para abrir
     // sin conexión (los datos offline los maneja Firestore con IndexedDB).
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' (no 'autoUpdate'): la versión nueva se descarga y QUEDA EN
+      // ESPERA hasta que el usuario toca "Actualizar" en el aviso, o hasta que
+      // cierra la app del todo y la vuelve a abrir. Con 'autoUpdate' el service
+      // worker nuevo borraba enseguida los archivos de la versión vieja: si la
+      // app estaba abierta y se entraba a Stats (que se carga bajo demanda), la
+      // página vieja pedía un archivo que ya no existía y la pestaña fallaba.
+      registerType: 'prompt',
+      // El registro lo hace UpdateBanner con useRegisterSW (para poder avisar y
+      // buscar versiones nuevas periódicamente); el script automático solo
+      // registraba, nunca chequeaba ni recargaba.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
         name: 'Gastos Javi & Lali',
