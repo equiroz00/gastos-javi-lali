@@ -1,8 +1,8 @@
 // ── components/AddEditExpense.tsx ─────────────────────────────────────────────
 import React, { useRef, useState } from 'react';
-import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin, CreditCard, Check, Trash2 } from 'lucide-react';
-import { C, F, V, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, sanitize, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote, nextClosingDate, shortDate } from '../lib/helpers';
+import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin, CreditCard, Check, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote, nextClosingDate, shortDate } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats, usePeople, useCustomPayMethods, useCustomBanks, useBankClosingDays } from '../lib/queries';
@@ -65,7 +65,6 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const saveCustomPayMethods = useAppStore(s => s.saveCustomPayMethods);
   const saveCustomBanks   = useAppStore(s => s.saveCustomBanks);
   const handleAdd         = useAppStore(s => s.handleAdd);
-  const handleAddMultiple = useAppStore(s => s.handleAddMultiple);
   const handleEdit        = useAppStore(s => s.handleEdit);
   const handleAddPlan     = useAppStore(s => s.handleAddPlan);
   const handleEditPlan    = useAppStore(s => s.handleEditPlan);
@@ -109,7 +108,14 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
 
   const [form, setForm]                   = useState<FormState>(editingPlan ? planToForm(editingPlan) : (initialData || blankForm()));
   const [errors, setErrors]               = useState<Record<string, string>>({});
-  const [step, setStep]                   = useState(isEditMode ? 2 : 1);
+  // Tres pasos: 1 Nuevo Gasto · 2 Detalles · 3 Guardar (resumen). Al editar
+  // algo que ya existe se abre directo en el resumen, con todos los pasos
+  // habilitados: cambiar un solo dato son dos toques.
+  const isEditing = isEditMode || !!editingPlan;
+  const [step, setStep]                   = useState<1 | 2 | 3>(isEditing ? 3 : 1);
+  // Paso más lejano alcanzado: las burbujas permiten volver a cualquiera ya
+  // visitado; avanzar a uno nuevo exige pasar la validación con "Siguiente".
+  const [maxStep, setMaxStep]             = useState<1 | 2 | 3>(isEditing ? 3 : 1);
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [showNewCat, setShowNewCat]       = useState(false);
   const [newCatName, setNewCatName]       = useState('');
@@ -123,7 +129,6 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const [isRetro, setIsRetro]             = useState(planHasPaid);
   const [retroPaid, setRetroPaid]         = useState(planHasPaid ? String(editingPlan!.paidInstallments) : '');
   const [retroStartPer, setRetroStartPer] = useState(planHasPaid ? editingPlan!.startPeriod : '');
-  const [queue, setQueue]                 = useState<Expense[]>([]);
   const [dupWarning, setDupWarning]       = useState<Expense | null>(null);
 
   // ── Escaneo de facturas (Sprint 14) — human-in-the-loop: nada se auto-guarda,
@@ -349,9 +354,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       ? 'Guardar cambios del plan ✓'
     : useCuotas
       ? 'Registrar ' + remaining + ' cuota' + (remaining !== 1 ? 's' : '') + ' ✓'
-      : queue.length > 0
-        ? 'Guardar ' + (queue.length + 1) + ' gastos ✓'
-        : 'Guardar gasto ✓';
+      : 'Guardar gasto ✓';
 
   // Reparto resuelto por participante (fuente de verdad: splitAmong del modal).
   const splitResolved = form.splitAmong ? resolveSplit(totalAmt, form.splitAmong) : null;
@@ -550,57 +553,82 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     } as Expense;
   }
 
-  function enqueue() {
-    const e: Record<string, string> = {};
-    if (!form.description.trim()) e.description = 'Requerido';
-    if (!form.amount || parseFloat(String(form.amount)) <= 0) e.amount = 'Monto inválido';
-    const pcq = privateConflict();
-    if (pcq) e.visibilidad = pcq;
-    if (Object.keys(e).length) { setErrors(e); return; }
-    const item = sanitize({
-      ...buildBase(genId()),
-      createdBy: currentUser || undefined,
-      createdAt: new Date().toISOString(),
-    }, allCats);
-    setQueue(q => [...q, item]);
-    setForm(f => ({ ...f, description: '', amount: '', javiAmount: 0, laliAmount: 0 }));
-    setErrors({});
-  }
+  // ── Validación por paso ────────────────────────────────────────────────────
+  // Cada error sabe en qué paso se dibuja. Así, si al guardar falla algo, se
+  // salta a ESE paso: un error nunca queda escondido en un paso que no se ve
+  // (fue uno de los caminos por los que "Guardar" parecía no hacer nada).
+  const STEP_OF_ERROR: Record<string, 1 | 2> = {
+    description: 1, amount: 1, visibilidad: 1,
+    retroPaid: 2, retroStartPer: 2,
+  };
 
-  function goToStep2() {
+  function validate(upTo: 1 | 2 | 3): Record<string, string> {
     const e: Record<string, string> = {};
     if (!form.description.trim()) e.description = 'Requerido';
     if (!form.amount || parseFloat(String(form.amount)) <= 0) e.amount = 'Monto inválido';
-    if (Object.keys(e).length) { setErrors(e); return; }
-    setErrors({}); setStep(2);
-  }
-
-  function submit() {
-    const e: Record<string, string> = {};
-    if (!form.description.trim()) e.description = 'Requerido';
-    if (!form.amount || parseFloat(String(form.amount)) <= 0) e.amount = 'Monto inválido';
-    if (useCuotas && isRetro && paidNum >= finalCuotas) e.retroPaid = 'Las cuotas ya pagadas deben ser menos que el total.';
-    if (useCuotas && isRetro && !retroStartPer) e.retroStartPer = 'Seleccioná el período inicial.';
     const pc = privateConflict();
     if (pc) e.visibilidad = pc;
-    if (Object.keys(e).length) {
-      setErrors(e);
-      // "Guardar" existe también en el paso 1, pero estos errores solo se dibujan
-      // en el paso 2. Sin este salto la validación fallaba de forma INVISIBLE y el
-      // botón parecía no hacer nada (otro de los caminos del bug de cuotas).
-      if (step === 1 && (e.retroPaid || e.retroStartPer || e.visibilidad)) setStep(2);
-      return;
+    if (upTo >= 2) {
+      if (useCuotas && isRetro && paidNum >= finalCuotas) e.retroPaid = 'Las cuotas ya pagadas deben ser menos que el total.';
+      if (useCuotas && isRetro && !retroStartPer) e.retroStartPer = 'Seleccioná el período inicial.';
     }
+    return e;
+  }
+
+  // Muestra los errores y lleva al primer paso que tenga alguno. Devuelve si pasó.
+  function check(upTo: 1 | 2 | 3): boolean {
+    const e = validate(upTo);
+    setErrors(e);
+    const keys = Object.keys(e);
+    if (!keys.length) return true;
+    const first = Math.min(...keys.map(k => STEP_OF_ERROR[k] ?? 1)) as 1 | 2;
+    setStep(first);
+    return false;
+  }
+
+  function goTo(n: 1 | 2 | 3) {
+    setStep(n);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function next() {
+    if (step === 3) return;
+    if (!check(step)) return;
+    const n = (step + 1) as 2 | 3;
+    setMaxStep(m => (n > m ? n : m));
+    goTo(n);
+  }
+
+  // Deja el formulario listo para otro gasto. Se conservan fecha, moneda,
+  // medio de pago, banco y visibilidad: al cargar varios tickets seguidos lo
+  // habitual es que sean del mismo día y de la misma tarjeta.
+  function resetForAnother() {
+    setForm(f => ({
+      ...blankForm(),
+      date: f.date, currency: f.currency, customCurrency: f.customCurrency,
+      paymentMethod: f.paymentMethod, bank: f.bank,
+    }));
+    setUseCuotas(false); setIsRetro(false); setRetroPaid(''); setRetroStartPer('');
+    setNumCuotas(12); setCustomCuotas('');
+    setErrors({}); setDupWarning(null); setAcSuggestions([]);
+    setAutoFilled(new Set()); setScanExtra(null); setNearbyPlaces([]);
+    setMaxStep(1); goTo(1);
+  }
+
+  function submit(another = false) {
+    if (!check(3)) return;
     const base = buildBase(isEditMode ? ((initialData && initialData.id) || genId()) : genId());
     if (!isEditMode && !isPlanEdit) {
       base.createdBy = currentUser || undefined;
       base.createdAt = new Date().toISOString();
     }
+    // "Guardar y cargar otro": se guarda SIN salir del formulario (stay).
+    const opts = { stay: another };
     if (isPlanEdit) { handleEditPlan(editingPlan!.id, base, finalCuotas, isRetro ? paidNum : 0, isRetro ? retroStartPer : null); }
     else if (isEditMode) { handleEdit(base); }
-    else if (useCuotas && finalCuotas > 1) { handleAddPlan(base, finalCuotas, isRetro ? paidNum : 0, isRetro ? retroStartPer : null); }
-    else if (queue.length > 0) { handleAddMultiple([...queue, sanitize({ ...base, id: genId() }, allCats)]); }
-    else { handleAdd(base); }
+    else if (useCuotas && finalCuotas > 1) { handleAddPlan(base, finalCuotas, isRetro ? paidNum : 0, isRetro ? retroStartPer : null, opts); }
+    else { handleAdd(base, opts); }
+    if (another) resetForAnother();
   }
 
   function cancel() {
@@ -760,79 +788,97 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
     </>
   ) : null;
 
-  // La división se muestra TAMBIÉN en privado: si se ocultara, el usuario no
-  // podría ver por qué se le bloquea el guardado ni corregirlo sin volver a
-  // Compartido. Se ve, se puede intentar, y la validación explica el límite.
-  const splitSection = (
+  // División: solo para gastos COMPARTIDOS. La visibilidad se elige en el paso
+  // 1, y si es privado acá ni siquiera aparece la opción de dividir: la regla
+  // "un privado es 100% tuyo" pasa a ser imposible de romper, en vez de
+  // permitir el intento y bloquearlo recién al guardar.
+  const splitSection = form.visibilidad === 'privado' ? (
+    <div style={{ marginTop:'0.75rem', background:C.bg, border:'1px solid '+C.border, borderRadius:'0.85rem', padding:'0.65rem 0.85rem', fontSize:'0.75rem', color:C.textMuted, lineHeight:1.45 }}>
+      🔒 Gasto privado: es 100% tuyo, así que no se divide. Para dividirlo, volvé al paso 1 y marcalo como <strong style={{ color:C.navy }}>Compartido</strong>.
+    </div>
+  ) : (
     <>
-      {visibilidadToggle}
-      {planVisibilityInfo}
+      <Lbl>¿Cómo se divide?</Lbl>
       {splitButton}
       {splitPreview}
     </>
   );
 
-  // ── Queue section ─────────────────────────────────────────────────────────
-  const queueSection = queue.length > 0 ? (
-    <div style={{ marginTop:'0.75rem', background:C.bg, borderRadius:'0.85rem', border:'1px solid '+C.border, overflow:'hidden' }}>
-      <div style={{ padding:'0.5rem 0.85rem', fontSize:'0.72rem', fontWeight:700, color:C.textMuted, borderBottom:'1px solid '+C.border }}>
-        {queue.length} gasto{queue.length !== 1 ? 's' : ''} en cola
-      </div>
-      {queue.map((item, i) => (
-        <div key={item.id} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.5rem 0.85rem', borderBottom:i < queue.length - 1 ? '1px solid '+C.border : 'none' }}>
-          <CatIcon category={item.category} size={15} color={C.navy} />
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontWeight:700, fontSize:'0.82rem', color:C.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.description}</div>
-            <div style={{ fontSize:'0.68rem', color:C.textMuted }}>{fmt(safeN(item.amount), item.currency || 'ARS')}</div>
-          </div>
-          <button onClick={() => setQueue(q => q.filter((_, j) => j !== i))} style={{ background:'none', border:'none', color:C.danger, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}>
-            <X size={15} strokeWidth={2} />
-          </button>
-        </div>
-      ))}
-    </div>
-  ) : null;
-
-  // ── Indicador de pasos ────────────────────────────────────────────────────
-  // Las dos direcciones lo resuelven distinto (mockups 3a vs 3b):
-  //   cuenta → barras de progreso + contador "1 / 2".
-  //   panel  → pestañas navegables, con tilde en los pasos ya completados.
-  // Al editar no hay recorrido de dos pasos, así que no se muestra.
-  const STEP_LABELS = ['Lo esencial', 'Cuotas y detalles'];
-  const stepIndicator = (isEditMode || isPlanEdit) ? null : V.stepStyle === 'tabs' ? (
-    <div style={{ display:'flex', gap:'0.4rem', borderBottom:'1px solid '+C.border, marginBottom:'0.9rem' }}>
-      {STEP_LABELS.map((label, i) => {
-        const n = i + 1;
-        const active = step === n;
-        const done   = step > n;
+  // ── Indicador de pasos: burbujas 1 · 2 · 3 ─────────────────────────────────
+  // Igual en las dos variantes. La activa va rellena; las ya completadas, con
+  // tilde; las que faltan, en contorno. Se puede tocar cualquiera ya visitada
+  // para volver; a una nueva se llega con "Siguiente" (que valida el paso).
+  // Al editar, el 1 dice "Gasto": "Nuevo Gasto" no tendría sentido.
+  const STEPS: Array<{ n: 1 | 2 | 3; label: string }> = [
+    { n:1, label: isEditing ? 'Gasto' : 'Nuevo Gasto' },
+    { n:2, label: 'Detalles' },
+    { n:3, label: 'Guardar' },
+  ];
+  const BUBBLE = 34;
+  const stepIndicator = (
+    <nav aria-label="Pasos" style={{ display:'flex', alignItems:'flex-start', marginBottom:'1.25rem' }}>
+      {STEPS.map(({ n, label }, i) => {
+        const active  = step === n;
+        // Completado = ya se pasó por él (está antes del actual o del más lejano).
+        const done    = !active && (n < step || n < maxStep);
+        const reached = n <= maxStep;
         return (
-          <button
-            key={label}
-            type="button"
-            onClick={() => { if (done) setStep(n); }}
-            disabled={!done && !active}
-            style={{ height:'34px', padding:'0 0.7rem', border:'none', background:'transparent', borderBottom:'2px solid ' + (active ? C.navy : 'transparent'), color: active ? C.navy : C.textMuted, fontFamily:F, fontSize:'0.72rem', fontWeight: active ? 700 : 600, cursor: done ? 'pointer' : 'default', display:'flex', alignItems:'center', gap:'0.35rem' }}
-          >
-            {done && <Check size={13} strokeWidth={2.6} color={C.ok} />}
-            {n} · {label}
-          </button>
+          <React.Fragment key={n}>
+            {i > 0 && (
+              // Línea entre burbujas: se "llena" a medida que se avanza.
+              <span aria-hidden="true" style={{ flex:1, height:'3px', borderRadius:'999px', marginTop:(BUBBLE / 2 - 1.5) + 'px', background: n <= maxStep ? C.accent : C.border, transition:'background 0.25s' }} />
+            )}
+            <button
+              type="button"
+              onClick={() => { if (reached && !active) goTo(n); }}
+              disabled={!reached}
+              aria-current={active ? 'step' : undefined}
+              style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'0.35rem', background:'none', border:'none', padding:0, cursor: reached && !active ? 'pointer' : 'default', fontFamily:F, width:'5.2rem', flexShrink:0 }}
+            >
+              <span style={{
+                width:BUBBLE, height:BUBBLE, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+                fontWeight:800, fontSize:'0.88rem', transition:'all 0.25s',
+                background: active ? C.accent : done ? C.accent + '22' : C.surface,
+                color: active ? C.white : done ? C.accent : C.textMuted,
+                border: '2px solid ' + (active || done ? C.accent : C.border),
+                boxShadow: active ? '0 4px 12px ' + C.accent + '55' : 'none',
+              }}>
+                {done && !active ? <Check size={16} strokeWidth={3} /> : n}
+              </span>
+              <span style={{ fontSize:'0.7rem', fontWeight: active ? 800 : 600, color: active ? C.navy : reached ? C.navy : C.textMuted, whiteSpace:'nowrap' }}>{label}</span>
+            </button>
+          </React.Fragment>
         );
       })}
-    </div>
-  ) : (
-    <div style={{ display:'flex', alignItems:'center', gap:'0.55rem', marginBottom:'0.9rem' }}>
-      {STEP_LABELS.map((label, i) => (
-        <span key={label} style={{ flex:1, height:'3px', borderRadius:'999px', background: step >= i + 1 ? C.navy : C.border, display:'block' }} />
-      ))}
-      <span style={{ fontSize:'0.64rem', fontWeight:700, color:C.textMuted, letterSpacing:'0.04em', flexShrink:0 }}>{step} / {STEP_LABELS.length}</span>
-    </div>
+    </nav>
+  );
+
+  // Botonera de los pasos 1 y 2. El 3 tiene la suya (guardar).
+  const primaryBtn: React.CSSProperties = { flex:1, padding:'0.95rem', background:C.gradMain, color:C.white, border:'none', borderRadius:'1rem', fontWeight:900, fontSize:'0.98rem', cursor:'pointer', fontFamily:F, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.4rem' };
+  const backBtn: React.CSSProperties = { padding:'0.95rem 1.1rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'1rem', color:C.navy, fontWeight:700, fontSize:'0.9rem', cursor:'pointer', fontFamily:F, display:'flex', alignItems:'center', gap:'0.3rem' };
+  const cancelBtn = (
+    <button onClick={cancel} style={{ width:'100%', padding:'0.6rem', background:'none', border:'none', color:C.textMuted, fontSize:'0.85rem', cursor:'pointer', fontFamily:F, marginTop:'0.25rem' }}>Cancelar</button>
+  );
+  const stepNav = (
+    <>
+      <div style={{ display:'flex', gap:'0.5rem', marginTop:'1.25rem' }}>
+        {step > 1 && (
+          <button onClick={() => goTo((step - 1) as 1 | 2)} style={backBtn}>
+            <ChevronLeft size={18} strokeWidth={2.4} />Atrás
+          </button>
+        )}
+        <button onClick={next} style={primaryBtn}>
+          {step === 1 ? 'Siguiente: Detalles' : 'Siguiente: Revisar'}
+          <ChevronRight size={18} strokeWidth={2.6} />
+        </button>
+      </div>
+      {cancelBtn}
+    </>
   );
 
   // ── Paso 1 ────────────────────────────────────────────────────────────────
   const step1 = (
     <div>
-      {(isEditMode || isPlanEdit) && <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'1rem' }}>Editar plan — Lo esencial</div>}
-
       {!isEditMode && !isPlanEdit && (
         <div style={{ marginBottom:'1rem' }}>
           <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }} onChange={handleReceiptFile} />
@@ -895,7 +941,7 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
                     </div>
                   ))}
                   <div style={{ fontSize:'0.68rem', color:C.textMuted, marginTop:'0.35rem', fontStyle:'italic' }}>
-                    Se copiaron a las notas del gasto (en "Más detalles"), así quedan guardados.
+                    Se copiaron a las notas del gasto (en el paso 2, Detalles), así quedan guardados.
                   </div>
                 </div>
               )}
@@ -903,6 +949,12 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
           )}
         </div>
       )}
+
+      {/* Compartido / Privado: va primero porque decide qué se pregunta en el
+          paso 2 (un privado no se divide). Al editar un plan no se puede
+          cambiar; se informa cuál es. */}
+      {visibilidadToggle}
+      {planVisibilityInfo}
 
       <Lbl>Descripción</Lbl>
       {descField(true)}
@@ -979,58 +1031,25 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         </div>
       )}
 
-      {splitSection}
-      {queueSection}
-
-      <button onClick={submit} style={{ width:'100%', padding:'1rem', background:C.gradMain, color:C.white, border:'none', borderRadius:'1rem', fontWeight:900, fontSize:'1rem', cursor:'pointer', fontFamily:F, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', marginTop:'1rem' }}>{btnLabel}</button>
-      {!isPlanEdit && (
-        <button onClick={enqueue} style={{ width:'100%', padding:'0.75rem', background:'transparent', border:'1px dashed '+C.accent, borderRadius:'1rem', color:C.accent, fontWeight:700, fontSize:'0.88rem', cursor:'pointer', fontFamily:F, marginTop:'0.5rem' }}>+ Agregar otro gasto</button>
-      )}
-      <button onClick={goToStep2} style={{ width:'100%', padding:'0.75rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'1rem', color:C.navy, fontWeight:700, fontSize:'0.88rem', cursor:'pointer', fontFamily:F, marginTop:'0.5rem' }}>{isPlanEdit ? 'Configurar cuotas y detalles' : 'Más detalles'}</button>
-      <button onClick={cancel} style={{ width:'100%', padding:'0.6rem', background:'none', border:'none', color:C.textMuted, fontSize:'0.85rem', cursor:'pointer', fontFamily:F, marginTop:'0.1rem' }}>Cancelar</button>
+      {stepNav}
     </div>
   );
 
   // ── Paso 2 ────────────────────────────────────────────────────────────────
   const step2 = (
     <div>
-      {(isEditMode || isPlanEdit) && (
-        <div style={{ fontSize:'0.7rem', color:C.textMuted, fontWeight:700, textAlign:'center', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:'0.75rem' }}>
-          {isEditMode ? 'Editar gasto' : 'Editar plan — Cuotas y detalles'}
+      {/* Recordatorio de qué gasto se está detallando (lo del paso 1). */}
+      <div style={{ background:C.bg, borderRadius:'0.85rem', padding:'0.65rem 0.9rem', border:'1px solid '+C.border, display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.5rem' }}>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:700, color:C.navy, fontSize:'0.88rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {form.visibilidad === 'privado' && '🔒 '}{form.description || 'Sin descripción'}
+          </div>
+          <div style={{ fontSize:'0.72rem', color:C.textMuted, marginTop:'0.1rem' }}>{shortDate(form.date)}</div>
         </div>
-      )}
+        <div style={{ fontFamily:MONO, fontWeight:800, color:C.navy, fontSize:'0.95rem', flexShrink:0 }}>{fmt(totalAmt, cur)}</div>
+      </div>
 
-      {isEditMode ? (
-        <div style={{ background:C.bg, borderRadius:'0.85rem', padding:'0.75rem', marginBottom:'0.5rem', border:'1px solid '+C.border }}>
-          <Lbl>Descripción</Lbl>
-          {descField(false)}
-          <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.5rem' }}>
-            <div style={{ flex:1 }}>
-              <Lbl>Monto</Lbl>
-              <input style={inpStyle()} type="number" value={form.amount} onChange={e => onAmountChange(e.target.value)} placeholder="0" />
-            </div>
-            <div style={{ flex:1 }}>
-              <Lbl>Fecha</Lbl>
-              <input style={inpStyle()} type="date" value={form.date} onChange={e => set('date', e.target.value)} />
-            </div>
-          </div>
-          {periods.length > 0 && (
-            <div style={{ textAlign:'center', fontSize:'0.72rem', color:C.textMuted, marginTop:'0.4rem' }}>
-              Período: <strong style={{ color:C.navy }}>{getPeriod(form.date, periods)}</strong>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div style={{ background:C.bg, borderRadius:'0.85rem', padding:'0.65rem 0.9rem', marginBottom:'0.75rem', border:'1px solid '+C.border, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div>
-            <div style={{ fontWeight:700, color:C.navy, fontSize:'0.88rem' }}>{form.description || 'Sin descripción'}</div>
-            <div style={{ fontSize:'0.72rem', color:C.textMuted, marginTop:'0.1rem' }}>{form.date}{form.amount ? ' · ' + fmt(totalAmt, cur) : ''}</div>
-          </div>
-          <button onClick={() => setStep(1)} style={{ background:'transparent', border:'1px solid '+C.border, borderRadius:'0.6rem', padding:'0.2rem 0.6rem', fontSize:'0.7rem', color:C.textMuted, cursor:'pointer', fontFamily:F, fontWeight:700, flexShrink:0, marginLeft:'0.5rem', display:'inline-flex', alignItems:'center', gap:'0.25rem' }}>
-            <Pencil size={11} strokeWidth={2.2} />Editar
-          </button>
-        </div>
-      )}
+      {splitSection}
 
       <Lbl>Categoría</Lbl>
       <select value={form.category} onChange={e => set('category', e.target.value)} style={selStyle}>
@@ -1135,8 +1154,6 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       />
       {autoFilled.has('notes') && <p style={{ fontSize:'0.68rem', color:'#92400e', margin:'0.2rem 0 0' }}>Ítems leídos de la foto — editalos o borralos si no los querés guardar.</p>}
 
-      {splitSection}
-
       {!isEditMode && (
         <>
           {/* El toggle único/cuotas no se muestra al editar un plan. Sí en
@@ -1227,12 +1244,96 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
         </>
       )}
 
-      <button onClick={submit} style={{ width:'100%', padding:'1rem', background:C.gradMain, color:C.white, border:'none', borderRadius:'1rem', fontWeight:900, fontSize:'1rem', cursor:'pointer', fontFamily:F, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', marginTop:'1rem' }}>{btnLabel}</button>
-      {/* Borrar el plan entero. Antes esto no existía: el botón del historial
-          decía "Editar o borrar el plan completo" y traía acá, donde no había
-          ninguna forma de borrar. El único borrado vivía escondido en Inicio. */}
+      {stepNav}
+    </div>
+  );
+
+  // ── Paso 3: resumen + guardar ─────────────────────────────────────────────
+  // Todo el gasto de un vistazo, en bloques. Cada bloque tiene "Editar", que
+  // lleva al paso donde se cambia. Al editar algo existente se abre acá.
+  const period    = getPeriod(form.date, periods);
+  const closing   = nextClosingDate(form.date, bankClosingDays[form.bank]);
+  const isPrivate = form.visibilidad === 'privado';
+  const SummaryBlock = ({ title, toStep, children }: { title: string; toStep: 1 | 2; children: React.ReactNode }) => (
+    <div style={{ padding:'0.85rem 0', borderBottom:'1px solid '+C.border }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.45rem' }}>
+        <span style={{ fontSize:'0.68rem', fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:C.textMuted }}>{title}</span>
+        <button onClick={() => goTo(toStep)} style={{ background:'transparent', border:'1px solid '+C.border, borderRadius:'0.6rem', padding:'0.2rem 0.6rem', fontSize:'0.7rem', color:C.navy, cursor:'pointer', fontFamily:F, fontWeight:700, display:'inline-flex', alignItems:'center', gap:'0.25rem' }}>
+          <Pencil size={11} strokeWidth={2.2} />Editar
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+  const SummaryRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div style={{ display:'flex', justifyContent:'space-between', gap:'0.75rem', fontSize:'0.82rem', padding:'0.18rem 0' }}>
+      <span style={{ color:C.textMuted, flexShrink:0 }}>{label}</span>
+      <span style={{ color:C.navy, fontWeight:600, textAlign:'right', minWidth:0, overflowWrap:'anywhere' }}>{value}</span>
+    </div>
+  );
+
+  const step3 = (
+    <div>
+      {/* Titular: qué y cuánto */}
+      <div style={{ background:C.bg, border:'1px solid '+C.border, borderRadius:'1rem', padding:'1rem 1.1rem', display:'flex', alignItems:'center', gap:'0.75rem' }}>
+        <div style={{ width:'40px', height:'40px', borderRadius:'12px', background:C.accent + '1A', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <CatIcon category={form.category} size={20} color={C.accent} />
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontWeight:800, color:C.navy, fontSize:'0.98rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{form.description || 'Sin descripción'}</div>
+          <div style={{ fontSize:'0.72rem', color:C.textMuted, marginTop:'0.1rem' }}>{isPrivate ? '🔒 Privado' : 'Compartido'} · {form.category}</div>
+        </div>
+        <div style={{ fontFamily:MONO, fontWeight:800, color:C.navy, fontSize:'1.15rem', flexShrink:0 }}>{fmt(totalAmt, cur)}</div>
+      </div>
+
+      <SummaryBlock title={isEditing ? 'Gasto' : 'Nuevo gasto'} toStep={1}>
+        <SummaryRow label="Fecha" value={shortDate(form.date)} />
+        {periods.length > 0 && <SummaryRow label="Período" value={period} />}
+        <SummaryRow label="Moneda" value={cur} />
+        <SummaryRow label="Visibilidad" value={isPrivate ? '🔒 Privado — solo vos lo ves' : 'Compartido'} />
+      </SummaryBlock>
+
+      <SummaryBlock title="Detalles" toStep={2}>
+        <SummaryRow label="División" value={isPrivate ? '100% tuyo' : splitSummary.trim()} />
+        <SummaryRow label="Medio de pago" value={form.paymentMethod + (form.bank ? ' · ' + form.bank : '')} />
+        {closing && <SummaryRow label="Resumen" value={'cierra el ' + shortDate(closing)} />}
+        {(useCuotas && !isEditMode) && (
+          <SummaryRow
+            label="Cuotas"
+            value={finalCuotas + ' de ' + fmt(installmentAmt, cur) + (isRetro && paidNum > 0 ? ' · ' + paidNum + ' ya pagadas' : '')}
+          />
+        )}
+        {form.notes?.trim() && <SummaryRow label="Notas" value={form.notes.trim()} />}
+      </SummaryBlock>
+
+      {/* Errores que no pertenecen a un paso visible: por las dudas se listan acá. */}
+      {Object.keys(errors).length > 0 && (
+        <p style={{ fontSize:'0.75rem', color:C.danger, fontWeight:600, margin:'0.75rem 0 0' }}>
+          ⚠ Revisá los datos marcados antes de guardar.
+        </p>
+      )}
+
+      <div style={{ display:'flex', gap:'0.5rem', marginTop:'1.25rem' }}>
+        {!isEditing && (
+          <button onClick={() => goTo(2)} style={backBtn}>
+            <ChevronLeft size={18} strokeWidth={2.4} />Atrás
+          </button>
+        )}
+        <button onClick={() => submit(false)} style={primaryBtn}>{btnLabel}</button>
+      </div>
+      {/* Solo al crear: guarda y deja el formulario listo para el próximo gasto. */}
+      {!isEditing && (
+        <button
+          onClick={() => submit(true)}
+          style={{ width:'100%', padding:'0.8rem', background:'transparent', border:'1px dashed '+C.accent, borderRadius:'1rem', color:C.accent, fontWeight:800, fontSize:'0.9rem', cursor:'pointer', fontFamily:F, marginTop:'0.5rem', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.35rem' }}
+        >
+          <Plus size={16} strokeWidth={2.6} />Guardar y cargar otro
+        </button>
+      )}
+      {/* Borrar el plan entero. El botón del historial dice "Editar o borrar el
+          plan completo" y trae acá; antes no había ninguna forma de borrar. */}
       {isPlanEdit && deletePlanBtn}
-      <button onClick={cancel} style={{ width:'100%', padding:'0.75rem', background:'none', border:'none', color:C.textMuted, fontSize:'0.9rem', cursor:'pointer', fontFamily:F, marginTop:'0.25rem' }}>Cancelar</button>
+      {cancelBtn}
     </div>
   );
 
@@ -1249,12 +1350,16 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
           onCancel={() => setShowSplitModal(false)}
         />
       )}
-      <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:'0.5rem' }}>
-        {(isEditMode || isPlanEdit) && <Pencil size={18} strokeWidth={2.3} color={C.accent} />}
-        {isEditMode ? 'Editar gasto' : isPlanEdit ? 'Editar plan de cuotas' : 'Nuevo gasto'}
-      </h2>
+      {/* Al crear, las burbujas ya dicen "Nuevo Gasto"; el título solo hace
+          falta al editar, para saber qué se está modificando. */}
+      {isEditing && (
+        <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:900, fontSize:FS.title, color:C.navy, margin:'0 0 0.9rem' }}>
+          <Pencil size={18} strokeWidth={2.3} color={C.accent} />
+          {isEditMode ? 'Editar gasto' : 'Editar plan de cuotas'}
+        </h2>
+      )}
       {stepIndicator}
-      {step === 1 ? step1 : step2}
+      {step === 1 ? step1 : step === 2 ? step2 : step3}
     </div>
   );
 }

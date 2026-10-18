@@ -208,12 +208,12 @@ interface AppActions {
   showToast:           (expense: Expense)             => void;
   showMsg:             (msg: string, ms?: number)     => void;
   handleSignOut:       () => void;
-  handleAdd:           (expense: Expense)             => void;
-  handleAddMultiple:   (exps: Expense[])              => void;
+  // stay: guardar sin salir del formulario ("Guardar y cargar otro").
+  handleAdd:           (expense: Expense, opts?: { stay?: boolean }) => void;
   handleEdit:          (expense: Expense)             => void;
   requestDelete:       (id: string, expense: Expense) => void;
   confirmDelete:       () => void;
-  handleAddPlan:       (formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
+  handleAddPlan:       (formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null, opts?: { stay?: boolean }) => void;
   handleEditPlan:      (planId: string, formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
   handleCancelPlan:    (planId: string) => void;
   openPaymentModal:    (from: string, to: string, amount: number, currency: Currency, period?: string) => void;
@@ -324,30 +324,16 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   // Expense actions
-  handleAdd: expense => {
+  handleAdd: (expense, opts) => {
     const state = get();
     const allCats = DEFAULT_CATS.concat(getCats());
     const s = sanitize({ ...expense, id: genId() }, allCats);
     checkExpenseForWrite(s);
     setExps([s, ...getExps()]);
-    set({ view: 'dashboard' });
+    if (!opts?.stay) set({ view: 'dashboard' });
     setDoc(expenseDoc(s.id), s).catch(reportWriteError('handleAdd'));
     state.showToast(s);
     (state as any)._logActivity('add', s);
-  },
-
-  handleAddMultiple: exps => {
-    const state = get();
-    const allCats = DEFAULT_CATS.concat(getCats());
-    const sanitized = exps.map(e => sanitize(e, allCats));
-    const batch = writeBatch(db);
-    sanitized.forEach(s => { checkExpenseForWrite(s); batch.set(expenseDoc(s.id), s); });
-    batch.commit().catch(reportWriteError('handleAddMultiple'));
-    setExps([...sanitized, ...getExps()]);
-    set({ view: 'dashboard' });
-    const last = sanitized[sanitized.length - 1];
-    state.showToast(last);
-    (state as any)._logActivity('add', last);
   },
 
   handleEdit: expense => {
@@ -375,7 +361,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   // Plan actions
-  handleAddPlan: (formData, numInstallments, paidInstallments, manualStartPeriod) => {
+  handleAddPlan: (formData, numInstallments, paidInstallments, manualStartPeriod, opts) => {
     const startPeriod = manualStartPeriod || getPeriod(formData.date, getCfg().periods);
     const plan = buildPlan(genId('plan'), formData, numInstallments, paidInstallments || 0, startPeriod);
     const installments = generatePlanExpenses(plan, getCfg().periods);
@@ -394,7 +380,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
     batch.commit().catch(reportWriteError('handleAddPlan'));
     setExps([...installments, ...getExps()]);
     setPlans([...getPlans(), plan]);
-    set({ view: 'dashboard' });
+    if (!opts?.stay) set({ view: 'dashboard' });
   },
 
   // Edita el plan "madre" y regenera sus cuotas. Mantiene el mismo id de plan.

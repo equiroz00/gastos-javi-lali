@@ -43,7 +43,7 @@ export const UI_VARIANTS: Record<UIKey, UIVariantConfig> = {
     surfaceMode:'flat', radius:10, shellBg:'surface',
     sectionRule:'strong', sectionSize:11, sectionLS:'0.06em',
     rowRule:true, rowPadY:'0.8rem',
-    heroBand:true, shortcuts:false, stepStyle:'bars',
+    heroBand:true, shortcuts:false,
   },
   panel: {
     label:'Panel de trabajo',
@@ -51,7 +51,7 @@ export const UI_VARIANTS: Record<UIKey, UIVariantConfig> = {
     surfaceMode:'card', radius:10, shellBg:'bg',
     sectionRule:'none', sectionSize:10.5, sectionLS:'0.04em',
     rowRule:true, rowPadY:'0.5rem',
-    heroBand:false, shortcuts:true, stepStyle:'tabs',
+    heroBand:false, shortcuts:true,
   },
 };
 
