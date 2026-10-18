@@ -7,7 +7,7 @@ import {
   catEm, catLb, normCat, sortByDate, pctChange, getWeekStart,
   calcAmts, divideAmount, resolveSplit, splitFromLegacy, calcBal, calcNetBal,
   computeBalances, simplifyDebts, lastPayment, getPeriod,
-  generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize,
+  generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize, buildPlan,
   mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER, shortDate, periodRange, nextClosingDate,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
@@ -440,6 +440,56 @@ function plan(over: Partial<Plan> = {}): Plan {
 // Historial y en el balance aunque el PLAN esté oculto. Las reglas de Firestore
 // filtran por el campo de cada gasto, no por el del plan, así que la herencia
 // tiene que pasar por acá sí o sí.
+// buildPlan arma el doc del plan para Firestore. El SDK rechaza (lanzando, al
+// armar el batch) cualquier campo con valor `undefined` — así se rompió la
+// edición de cuotas de los planes anteriores al 17/08/2026, que no tienen
+// createdBy. Estos tests fijan que el doc nunca lleve un undefined.
+describe('buildPlan · documento apto para Firestore', () => {
+  const sinUndefined = (o: object) =>
+    Object.entries(o).filter(([, v]) => v === undefined).map(([k]) => k);
+
+  it('editar un plan VIEJO sin createdBy no deja campos undefined (el bug de cuotas)', () => {
+    // formData sin createdBy (el form de edición no lo trae) + plan existente sin createdBy.
+    const form = exp({ amount: 600000, responsible: 'Ambos', createdBy: undefined });
+    const p = buildPlan('plan_viejo', form, 6, 0, 'May 2026', { createdAt: '2026-05-10T10:00:00.000Z' });
+    expect(sinUndefined(p)).toEqual([]);
+    expect('createdBy' in p).toBe(false);
+  });
+
+  it('al editar conserva el createdBy y el createdAt originales del plan', () => {
+    const form = exp({ createdBy: 'Lali' });
+    const p = buildPlan('plan_1', form, 3, 0, 'May 2026', { createdBy: 'Javi', createdAt: '2026-05-10T10:00:00.000Z' });
+    expect(p.createdBy).toBe('Javi');
+    expect(p.createdAt).toBe('2026-05-10T10:00:00.000Z');
+  });
+
+  it('un plan nuevo toma el createdBy del formulario', () => {
+    const p = buildPlan('plan_n', exp({ createdBy: 'Lali' }), 3, 0, 'May 2026');
+    expect(p.createdBy).toBe('Lali');
+    expect(sinUndefined(p)).toEqual([]);
+  });
+
+  it('un plan privado conserva visibilidad y ownerId (no se vuelve compartido al editar)', () => {
+    const form = exp({ visibilidad: 'privado', ownerId: 'uid-javi', responsible: 'Javi', paidBy: 'Javi' });
+    const p = buildPlan('plan_p', form, 6, 0, 'May 2026', { createdBy: 'Javi', createdAt: 'x' });
+    expect(p.visibilidad).toBe('privado');
+    expect(p.ownerId).toBe('uid-javi');
+  });
+
+  it('un plan compartido no arrastra ownerId aunque el form lo traiga', () => {
+    const p = buildPlan('plan_c', exp({ visibilidad: 'compartido', ownerId: 'uid-javi' }), 6, 0, 'May 2026');
+    expect(p.visibilidad).toBe('compartido');
+    expect('ownerId' in p).toBe(false);
+  });
+
+  it('las cuotas generadas desde un plan viejo tampoco llevan undefined', () => {
+    const p = buildPlan('plan_viejo', exp({ amount: 600000, createdBy: undefined }), 6, 0, 'May 2026', { createdAt: 'x' });
+    const insts = generatePlanExpenses(p, PERIODS);
+    expect(insts.length).toBeGreaterThan(0);
+    expect(insts.flatMap(sinUndefined)).toEqual([]);
+  });
+});
+
 describe('generatePlanExpenses · privacidad heredada del plan', () => {
   it('un plan privado genera cuotas privadas, todas con el ownerId del dueño', () => {
     const insts = generatePlanExpenses(
