@@ -5,7 +5,8 @@ import { C, F, V, MONO, PENDING_PER, SP, FS, DEFAULT_CATS } from '../constants';
 import { fmt, safeN, calcBal, sortByDate, shortDate, cardKey, cardOptions } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats, usePayments } from '../lib/queries';
-import { Card, ScrollFilter, ScreenHeader, AmountBand, SectionLabel, Row } from './ui';
+import { Card, ScrollFilter, ScreenHeader, AmountBand, SectionLabel, Row, BentoAuto } from './ui';
+import { useIsDesktop } from '../lib/useIsDesktop';
 import ExpenseList from './ExpenseList';
 import type { Expense } from '../types';
 
@@ -104,6 +105,7 @@ export default function History() {
   const settings          = useSettings();
   const customCats        = useCustomCats();
   const payments          = usePayments();
+  const isDesktop         = useIsDesktop();
   const requestDelete     = useAppStore(s => s.requestDelete);
   const setEditingExpense = useAppStore(s => s.setEditingExpense);
 
@@ -199,7 +201,8 @@ export default function History() {
   // Pagos entre los dos — sección propia del rediseño (mockup 2a). Antes esta
   // información solo estaba dentro del detalle de Inicio.
   const paymentsSection = sortedPays.length > 0 ? (
-    <div style={{ marginTop:SP.lg }}>
+    // En web va en su celda de la grilla: sin el margen superior de la pila móvil.
+    <div style={{ marginTop: isDesktop ? 0 : SP.lg }}>
       <SectionLabel>Pagos entre ustedes</SectionLabel>
       <div>
         {sortedPays.slice(0, 8).map((p, i) => (
@@ -254,8 +257,42 @@ export default function History() {
     </div>
   ) : null;
 
+  // Lista de ciclos (o "sin resultados"). En móvil va apilada; en web, en su
+  // celda ancha de la grilla con los pagos al lado.
+  const ciclosSection = filteredPeriods.length === 0 && !showExpMatches ? (
+    <Card style={{ textAlign:'center', padding:'3rem', color:C.textMuted }}>
+      <div style={{ display:'flex', justifyContent:'center', marginBottom:'0.5rem' }}>
+        <Search size={32} strokeWidth={1.6} color={C.textMuted} />
+      </div>
+      No se encontraron resultados
+    </Card>
+  ) : filteredPeriods.length > 0 ? (
+    <>
+      {V.heroBand && <SectionLabel>Ciclos</SectionLabel>}
+      <div style={{ display:'flex', flexDirection:'column', gap: V.heroBand ? 0 : '0.75rem', maxHeight:allSorted.length > 3 ? '65vh' : undefined, overflowY:allSorted.length > 3 ? 'auto' : undefined }}>
+        {displayPeriods.map(period => (
+          <PeriodBlock
+            key={period}
+            period={period}
+            exps={applySort(grouped[period] || [])}
+            range={rangeOf(period)}
+            isOpen={!!openMap[period]}
+            isSelected={selectedPeriods.indexOf(period) >= 0}
+            isPending={period === PENDING_PER}
+            hasSelection={hasSelection}
+            onToggle={() => { if (hasSelection) toggleSelect(period); else toggleOpen(period); }}
+            onDelete={requestDelete}
+            onEdit={setEditingExpense}
+          />
+        ))}
+      </div>
+    </>
+  ) : null;
+
   return (
-    <div style={{ padding:SP.lg, paddingBottom:SP.xxl, maxWidth:'min(760px, 100%)', margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
+    // En web sin el tope de 760px de antes (dejaba la pantalla casi vacía): el
+    // ancho lo limita el shell, como en el resto de las pantallas.
+    <div style={{ padding:SP.lg, paddingBottom:SP.xxl, maxWidth: isDesktop ? undefined : 'min(760px, 100%)', margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
       {chrome}
       {!V.heroBand && <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, marginBottom:SP.md }}>Historial</h2>}
       <input
@@ -327,37 +364,21 @@ export default function History() {
         </div>
       )}
 
-      {filteredPeriods.length === 0 && !showExpMatches ? (
-        <Card style={{ textAlign:'center', padding:'3rem', color:C.textMuted }}>
-          <div style={{ display:'flex', justifyContent:'center', marginBottom:'0.5rem' }}>
-            <Search size={32} strokeWidth={1.6} color={C.textMuted} />
-          </div>
-          No se encontraron resultados
-        </Card>
-      ) : filteredPeriods.length > 0 ? (
+      {/* Web: grilla con los ciclos (ancho) y los pagos al lado. Los ciclos van
+          en celda "sin caja": en 'panel' cada ciclo ya es su propia tarjeta. */}
+      {isDesktop ? (
+        (ciclosSection || paymentsSection) && (
+          <BentoAuto items={[
+            ...(ciclosSection   ? [{ key:'ciclos', node:ciclosSection,   w:2 as const, bare:true }] : []),
+            ...(paymentsSection ? [{ key:'pagos',  node:paymentsSection }] : []),
+          ]} />
+        )
+      ) : (
         <>
-          {V.heroBand && <SectionLabel>Ciclos</SectionLabel>}
-          <div style={{ display:'flex', flexDirection:'column', gap: V.heroBand ? 0 : '0.75rem', maxHeight:allSorted.length > 3 ? '65vh' : undefined, overflowY:allSorted.length > 3 ? 'auto' : undefined }}>
-            {displayPeriods.map(period => (
-              <PeriodBlock
-                key={period}
-                period={period}
-                exps={applySort(grouped[period] || [])}
-                range={rangeOf(period)}
-                isOpen={!!openMap[period]}
-                isSelected={selectedPeriods.indexOf(period) >= 0}
-                isPending={period === PENDING_PER}
-                hasSelection={hasSelection}
-                onToggle={() => { if (hasSelection) toggleSelect(period); else toggleOpen(period); }}
-                onDelete={requestDelete}
-                onEdit={setEditingExpense}
-              />
-            ))}
-          </div>
+          {ciclosSection}
+          {paymentsSection}
         </>
-      ) : null}
-
-      {paymentsSection}
+      )}
     </div>
   );
 }

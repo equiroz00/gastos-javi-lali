@@ -7,7 +7,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Home, BarChart2, Wallet, ClipboardList, Settings2, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { C, F, V, SHELL_MAXW } from '../constants';
-import { bandColors } from './ui';
+import { bandColors, contentBg } from './ui';
 
 export interface NavItem { id: string; label: string; Icon: LucideIcon; }
 
@@ -20,9 +20,9 @@ export const NAV_ITEMS: NavItem[] = [
   { id:'settings',  label:'Config',    Icon:Settings2     },
 ];
 
-// Fondo del área de contenido. La pestaña activa del menú web se pinta de este
-// color para "fundirse" con el contenido.
-export const contentBg = () => (V.shellBg === 'surface' ? C.surface : C.bg);
+// Fondo del área de contenido (definido en ui.tsx, lo usa también la grilla).
+// La pestaña activa del menú web se pinta de este color para "fundirse".
+export { contentBg };
 
 // ── Barra inferior (móvil) ────────────────────────────────────────────────────
 // La pestaña activa sube a una burbuja que asoma sobre la barra, abrazada por

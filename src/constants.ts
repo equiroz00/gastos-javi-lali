@@ -71,7 +71,10 @@ export const SP = {
 // Ancho máximo del contenido en escritorio. Un único valor de referencia: el
 // shell lo centra con margin:0 auto y cada pantalla NO vuelve a fijar su propio
 // max-width (si no se contradicen entre sí).
-export const MAXW = '1040px';
+// Era 1040px y dejaba franjas vacías a los costados en cualquier pantalla de
+// más de ~1300px. Con la grilla bento el contenido usa todo el ancho; el tope
+// solo evita que en un monitor ultra-ancho las tarjetas se estiren de más.
+export const MAXW = '1680px';
 
 // Ancho del contenedor de una columna (móvil/tablet). Fluido: usa el ancho
 // disponible hasta un máximo cómodo, en vez de toparse seco en 480px y dejar

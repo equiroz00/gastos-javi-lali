@@ -6,7 +6,7 @@ import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sort
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, usePayments, usePlans, useSettings } from '../lib/queries';
-import { Card, DonutRing, MetricStrip, bandColors } from './ui';
+import { Card, DonutRing, MetricStrip, bandColors, BentoGrid, BentoCell, Metric, useGridSize } from './ui';
 import ExpenseList from './ExpenseList';
 import type { Expense, Payment, Period, Currency } from '../types';
 
@@ -431,6 +431,7 @@ function UnifiedHeader({ periods = [], selPeriod, setSelPeriod, periodExps = [],
 // ── Dashboard ──────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const isDesktop = useIsDesktop();
+  const gridSize  = useGridSize();
   const expenses          = useExpenses();
   const settings          = useSettings();
   const plans             = usePlans();
@@ -474,17 +475,18 @@ export default function Dashboard() {
   const lp         = lastPayment(payments, primaryCur);
   const miPct      = cicloTotal > 0 ? Math.round(miParte / cicloTotal * 1000) / 10 : 0;
 
-  const metricStrip = (
-    <MetricStrip items={[
-      { label:'Gastado en el ciclo', value: fmtS(cicloTotal, primaryCur), sub: curExps.length + ' gasto' + (curExps.length !== 1 ? 's' : '') },
-      { label:'Tu parte',            value: fmtS(miParte, primaryCur),    sub: miPct + '% del total' },
-      { label:'Cuotas del ciclo',    value: fmtS(cuotasMes, primaryCur),
-        sub: cuotasSinPeriodo ? cuotasSinPeriodo + ' cuota' + (cuotasSinPeriodo !== 1 ? 's' : '') + ' sin período' : 'todas asignadas',
-        subColor: cuotasSinPeriodo ? C.warn : C.textMuted },
-      { label:'Último pago',         value: lp ? fmtS(safeN(lp.amount), lp.currency || primaryCur) : '—',
-        sub: lp ? lp.from + ' → ' + lp.to + ' · ' + shortDate(lp.date) : 'sin pagos' },
-    ]} />
-  );
+  // Las mismas cuatro métricas: juntas en una tira (móvil) o cada una en su
+  // celda de la grilla (web).
+  const metricItems = [
+    { label:'Gastado en el ciclo', value: fmtS(cicloTotal, primaryCur), sub: curExps.length + ' gasto' + (curExps.length !== 1 ? 's' : '') },
+    { label:'Tu parte',            value: fmtS(miParte, primaryCur),    sub: miPct + '% del total' },
+    { label:'Cuotas del ciclo',    value: fmtS(cuotasMes, primaryCur),
+      sub: cuotasSinPeriodo ? cuotasSinPeriodo + ' cuota' + (cuotasSinPeriodo !== 1 ? 's' : '') + ' sin período' : 'todas asignadas',
+      subColor: cuotasSinPeriodo ? C.warn : C.textMuted },
+    { label:'Último pago',         value: lp ? fmtS(safeN(lp.amount), lp.currency || primaryCur) : '—',
+      sub: lp ? lp.from + ' → ' + lp.to + ' · ' + shortDate(lp.date) : 'sin pagos' },
+  ];
+  const metricStrip = <MetricStrip items={metricItems} />;
 
   const weekSection = (
     <div>
@@ -509,6 +511,27 @@ export default function Dashboard() {
     </div>
   );
 
+  // "Esta semana" para una celda de la grilla: el título y la lista van
+  // directo adentro de la celda (que ya es la tarjeta). Con la Card propia de
+  // la versión móvil quedaría una tarjeta dentro de otra.
+  const weekBody = (
+    <>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.5rem' }}>
+        <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, fontSize:'0.88rem', margin:0 }}>
+          <Calendar size={16} strokeWidth={2.2} color={C.accent} />Esta semana
+        </h2>
+        <span style={{ fontSize:'0.68rem', color:C.textMuted }}>{weekExps.length} gasto{weekExps.length !== 1 ? 's' : ''}</span>
+      </div>
+      {weekExps.length === 0 ? (
+        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'1.5rem', color:C.textMuted, fontSize:'0.85rem' }}>No hay gastos esta semana</div>
+      ) : (
+        <div style={{ maxHeight:'calc(6 * 68px)', overflowY:'auto', margin:'0 -0.25rem' }}>
+          <ExpenseList expenses={weekExps} onDelete={requestDelete} onEdit={setEditingExpense} />
+        </div>
+      )}
+    </>
+  );
+
   const plansSection = plans.length > 0 ? (
     <ActivePlans />
   ) : (
@@ -518,22 +541,32 @@ export default function Dashboard() {
     </Card>
   );
 
-  // ── DESKTOP layout — arriba 3 columnas, abajo 2 columnas ─────────────────────
+  // ── DESKTOP — grilla bento ─────────────────────────────────────────────────
+  // Distribución sin huecos (referencia: Finexy). En monitor:
+  //   [ Balance 5×2 ][ M1 ][ M2 ][ ¿Quién pagó? 3×2 ]
+  //   [             ][ M3 ][ M4 ][                 ]
+  //   [ Esta semana 8         ][ Cuotas activas 4  ]
+  // Cada fila suma 12 columnas en los tres tamaños (en 'cuenta' un hueco se
+  // vería gris). La tarjeta verde de "Último pago" no va: repetía la métrica.
   if (isDesktop) {
+    const m = metricItems.map((it, i) => (
+      <BentoCell key={'m' + i} span={gridSize === 'xl' ? 2 : gridSize === 'lg' ? 3 : 6}><Metric {...it} /></BentoCell>
+    ));
+    const balance = <BentoCell key="bal" span={gridSize === 'xl' ? 5 : gridSize === 'lg' ? 6 : 12} rows={gridSize === 'md' ? 1 : 2} fill>{headerBlock}</BentoCell>;
+    const whoPaid = <BentoCell key="who" span={gridSize === 'xl' ? 3 : gridSize === 'lg' ? 5 : 12} rows={gridSize === 'xl' ? 2 : 1} fill>{whoPaidBlock}</BentoCell>;
+    const week    = <BentoCell key="week" span={gridSize === 'xl' ? 8 : gridSize === 'lg' ? 7 : 12}>{weekBody}</BentoCell>;
+    const cuotas  = plans.length > 0
+      ? <BentoCell key="cuotas" span={gridSize === 'xl' ? 4 : 12}><ActivePlans /></BentoCell>
+      : <BentoCell key="cuotas" span={gridSize === 'xl' ? 4 : 12} fill>{plansSection}</BentoCell>;
+    // El orden importa: la grilla ubica cada celda en el primer lugar libre.
+    const cells = gridSize === 'xl'
+      ? [balance, m[0], m[1], whoPaid, m[2], m[3], week, cuotas]
+      : gridSize === 'lg'
+        ? [balance, m[0], m[1], m[2], m[3], whoPaid, week, cuotas]
+        : [balance, ...m, whoPaid, week, cuotas];
     return (
-      <div style={{ padding:SP.lg, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap:SP.lg, alignItems:'start' }}>
-        {/* Col 1: balance · ¿quién pagó más? · último pago */}
-        <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
-          {headerBlock}
-          {metricStrip}
-          {whoPaidBlock}
-          {lastPayBlock}
-        </div>
-        {/* Col 2: esta semana · cuotas activas */}
-        <div style={{ display:'flex', flexDirection:'column', gap:SP.lg }}>
-          {weekSection}
-          {plansSection}
-        </div>
+      <div style={{ padding:SP.lg }}>
+        <BentoGrid>{cells}</BentoGrid>
       </div>
     );
   }

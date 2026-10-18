@@ -7,7 +7,8 @@ import React, { useState } from 'react';
 import { Wallet, TrendingUp, TrendingDown, Lock, Users } from 'lucide-react';
 import { C, V, MONO, SP, FS, PALETTE, PENDING_PER, DEFAULT_CATS } from '../constants';
 import { fmt, fmtS, safeN, catLb, normCat, pctChange, expenseResolved } from '../lib/helpers';
-import { Card, ScrollFilter, CatIcon, ScreenHeader, AmountBand, BandPills, SectionLabel, bandColors } from './ui';
+import { Card, ScrollFilter, CatIcon, ScreenHeader, AmountBand, BandPills, SectionLabel, bandColors, BentoAuto } from './ui';
+import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
 import type { Expense, Currency, UserName } from '../types';
@@ -37,6 +38,7 @@ export default function PersonalScreen() {
   const settings    = useSettings();
   const customCats  = useCustomCats();
   const currentUser = useAppStore(s => s.currentUser) as UserName;
+  const isDesktop   = useIsDesktop();
 
   const allCatsFull   = [...DEFAULT_CATS, ...(customCats || [])];
   const configPeriods = settings.periods || [];
@@ -148,8 +150,11 @@ export default function PersonalScreen() {
             <span>Tus categorías</span>
             <span style={{ fontSize:'0.64rem', fontWeight:500, letterSpacing:0, textTransform:'none', color:C.textMuted }}>sobre tu parte</span>
           </SectionLabel>
+          {/* En web, varias columnas para usar el ancho (una sola columna dejaba
+              media pantalla vacía). Cada fila lleva su filete inferior. */}
+          <div style={{ display:'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(280px, 1fr))' : '1fr', columnGap:'2.5rem' }}>
           {cats.map((c, i) => (
-            <div key={c.label} style={{ padding:'0.7rem 0', borderBottom: i < cats.length - 1 ? '1px solid '+C.border : 'none' }}>
+            <div key={c.label} style={{ padding:'0.7rem 0', borderBottom: isDesktop || i < cats.length - 1 ? '1px solid '+C.border : 'none' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
                 <CatIcon category={c.label} size={15} color={C.textMuted} />
                 <span style={{ flex:1, fontSize:'0.8rem', fontWeight:600, color:C.navy }}>{c.label}</span>
@@ -160,57 +165,78 @@ export default function PersonalScreen() {
               </div>
             </div>
           ))}
+          </div>
         </>
       )}
     </div>
   );
 
+  // ── "Panel de trabajo" ─────────────────────────────────────────────────────
+  const titularCard = (
+    <Card>
+      <div style={{ fontSize:'0.78rem', color:C.textMuted, fontWeight:700 }}>
+        Gastaste vos {period === 'Todos' ? 'en total' : 'este ciclo'}
+      </div>
+      <div style={{ fontSize:FS.amount, fontWeight:900, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', margin:'0.2rem 0 0.15rem' }}>
+        {fmt(total, cur)}
+      </div>
+      {delta !== null && (
+        <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.75rem', fontWeight:700, color: delta > 0 ? C.danger : C.ok }}>
+          {delta > 0 ? <TrendingUp size={14} strokeWidth={2.4} /> : <TrendingDown size={14} strokeWidth={2.4} />}
+          {Math.abs(delta)}% vs. ciclo anterior
+        </div>
+      )}
+    </Card>
+  );
+
+  // De dónde viene: privado vs. mi parte de lo compartido.
+  const sourceCard = (
+    <Card>
+      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.85rem', fontSize:'0.9rem' }}>De dónde viene</h3>
+      <SourceRow icon={<Lock size={14} strokeWidth={2.2} />}  label="Gastos privados"            value={privado}    total={total} cur={cur} color={C.accent} />
+      <SourceRow icon={<Users size={14} strokeWidth={2.2} />} label="Mi parte de lo compartido"  value={compartido} total={total} cur={cur} color={C.navy} />
+    </Card>
+  );
+
+  // En web, varias columnas: una lista larga y angosta dejaba media pantalla vacía.
+  const catsCard = cats.length > 0 ? (
+    <Card>
+      <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.85rem', fontSize:'0.9rem' }}>Por categoría</h3>
+      <div style={{ display:'grid', gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(260px, 1fr))' : '1fr', columnGap:'2rem' }}>
+        {cats.map((c, i) => (
+          <div key={c.label} style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.55rem' }}>
+            <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:PALETTE[i % PALETTE.length], flexShrink:0 }} />
+            <span style={{ flex:1, fontSize:'0.78rem', color:C.navy, fontWeight:600, display:'flex', alignItems:'center', gap:'0.35rem', minWidth:0 }}>
+              <CatIcon category={c.label} size={14} color={C.navy} />{c.label}
+            </span>
+            <span style={{ fontSize:'0.78rem', color:C.navy, fontWeight:700, fontFamily:MONO }}>{fmtS(c.value, cur)}</span>
+            <span style={{ fontSize:'0.7rem', color:C.textMuted, width:'2.5rem', textAlign:'right' }}>{c.pct}%</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  ) : null;
+
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
       {title}
       {filters}
-      <div style={{ display:'flex', flexDirection:'column', gap:SP.md, marginTop:SP.md }}>
-
-        {/* Titular: cuánto gasté yo */}
-        <Card>
-          <div style={{ fontSize:'0.78rem', color:C.textMuted, fontWeight:700 }}>
-            Gastaste vos {period === 'Todos' ? 'en total' : 'este ciclo'}
-          </div>
-          <div style={{ fontSize:FS.amount, fontWeight:900, color:C.navy, fontFamily:MONO, letterSpacing:'-0.02em', margin:'0.2rem 0 0.15rem' }}>
-            {fmt(total, cur)}
-          </div>
-          {delta !== null && (
-            <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.75rem', fontWeight:700, color: delta > 0 ? C.danger : C.ok }}>
-              {delta > 0 ? <TrendingUp size={14} strokeWidth={2.4} /> : <TrendingDown size={14} strokeWidth={2.4} />}
-              {Math.abs(delta)}% vs. ciclo anterior
-            </div>
-          )}
-        </Card>
-
-        {/* De dónde viene: privado vs. mi parte de lo compartido */}
-        <Card>
-          <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.85rem', fontSize:'0.9rem' }}>De dónde viene</h3>
-          <SourceRow icon={<Lock size={14} strokeWidth={2.2} />}  label="Gastos privados"            value={privado}    total={total} cur={cur} color={C.accent} />
-          <SourceRow icon={<Users size={14} strokeWidth={2.2} />} label="Mi parte de lo compartido"  value={compartido} total={total} cur={cur} color={C.navy} />
-        </Card>
-
-        {/* Por categoría */}
-        {cats.length > 0 && (
-          <Card>
-            <h3 style={{ fontWeight:800, color:C.navy, margin:'0 0 0.85rem', fontSize:'0.9rem' }}>Por categoría</h3>
-            {cats.map((c, i) => (
-              <div key={c.label} style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.55rem' }}>
-                <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:PALETTE[i % PALETTE.length], flexShrink:0 }} />
-                <span style={{ flex:1, fontSize:'0.78rem', color:C.navy, fontWeight:600, display:'flex', alignItems:'center', gap:'0.35rem' }}>
-                  <CatIcon category={c.label} size={14} color={C.navy} />{c.label}
-                </span>
-                <span style={{ fontSize:'0.78rem', color:C.navy, fontWeight:700, fontFamily:MONO }}>{fmtS(c.value, cur)}</span>
-                <span style={{ fontSize:'0.7rem', color:C.textMuted, width:'2.5rem', textAlign:'right' }}>{c.pct}%</span>
-              </div>
-            ))}
-          </Card>
-        )}
-      </div>
+      {isDesktop ? (
+        // Web: grilla bento — [ Titular 4 ][ De dónde viene 8 ] / [ Categorías 12 ].
+        <div style={{ marginTop:SP.md }}>
+          <BentoAuto items={[
+            { key:'titular', node:titularCard, fill:true },
+            { key:'source',  node:sourceCard,  w:2, fill:true },
+            ...(catsCard ? [{ key:'cats', node:catsCard, w:3 as const, fill:true }] : []),
+          ]} />
+        </div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:SP.md, marginTop:SP.md }}>
+          {titularCard}
+          {sourceCard}
+          {catsCard}
+        </div>
+      )}
     </div>
   );
 }

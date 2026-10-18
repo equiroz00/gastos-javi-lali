@@ -12,7 +12,8 @@ import { C, F, V, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP, FS } from '../c
 import { fmtS, fmt, safeN, catEm, catLb, normCat, pctChange, sortByDate, expenseResolved } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
-import { Card, ScrollFilter, ChartSelector, ScreenHeader, AmountBand, BandPills, bandColors } from './ui';
+import { Card, ScrollFilter, ChartSelector, ScreenHeader, AmountBand, BandPills, bandColors, BentoAuto } from './ui';
+import type { BentoItem } from '../lib/bento';
 import type { Expense, Currency } from '../types';
 
 const PERSONALIZADO = 'Personalizado';
@@ -599,42 +600,33 @@ export default function Stats() {
   const showEvolArea = configPeriods.length >= 2;
   const canCompare = prevExps.length > 0;
 
-  // ── DESKTOP — dos columnas según el período seleccionado ────────────────────
+  // ── DESKTOP — grilla bento ──────────────────────────────────────────────────
+  // Qué bloques aparecen depende del período (con "Todos" hay evolución Javi vs
+  // Lali; en ciclos posteriores, comparación y proyección). El acomodador
+  // automático llena filas de 12 columnas con los que haya, sin dejar huecos.
+  // La evolución apilada es "ancha" (w:2): se lee mejor con espacio horizontal.
+  // Los bloques van SIN WrapAvoid (su margen inferior es para apilar en móvil).
   if (isDesktop) {
-    const colStyle: React.CSSProperties = { display:'flex', flexDirection:'column' };
-    const twoCol: React.CSSProperties = { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap:SP.lg, alignItems:'start', marginTop:SP.md };
+    const cat  = <Card><h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}><Layers size={15} strokeWidth={2.2} color={C.accent} />Gasto por categoría</h3><ChartSelector value={catChart} onChange={setCatChart} /><div style={{ height:280, overflowY:'auto' }}><CategoryChart data={catData} type={catChart} cur={cur} /></div></Card>;
+    const pm   = <Card><h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.5rem', fontSize:'0.9rem' }}><CreditCard size={15} strokeWidth={2.2} color={C.accent} />Métodos de pago</h3><ChartSelector value={pmChart} onChange={setPmChart} /><div style={{ height:280, overflowY:'auto' }}><PMChart data={pmData} type={pmChart} cur={cur} /></div></Card>;
+    const top  = <TopGastos filtered={filtered} cur={cur} />;
+    const comp = <CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} />;
+    const proy = <ProyeccionCard filtered={filtered} period={period} cur={cur} configPeriods={configPeriods} />;
 
-    // Nodos de evolución envueltos para que aporten su propio margen inferior,
-    // igual que las demás tarjetas (WrapAvoid).
-    const evolAreaNode = showEvolArea ? <WrapAvoid>{evolucionArea}</WrapAvoid> : null;
-    const evolJaviNode = evolucionJaviLaliNode ? <WrapAvoid>{evolucionJaviLaliNode}</WrapAvoid> : null;
-
-    let body: React.ReactNode;
+    const items: BentoItem[] = [];
     if (period === 'Todos') {
-      // Col1: categoría · métodos · top 5 — Col2: evolución área · evolución Javi/Lali
-      body = (
-        <div style={twoCol}>
-          <div style={colStyle}>{catCard}{pmCard}{topGastosNode}</div>
-          <div style={colStyle}>{evolAreaNode}{evolJaviNode}</div>
-        </div>
-      );
-    } else if (!canCompare) {
-      // Primer ciclo (sin período anterior): distribución 2x2 (cat·pm / top·evolución)
-      body = (
-        <div style={twoCol}>
-          <div style={colStyle}>{catCard}{topGastosNode}{showProy && proyeccionNode}</div>
-          <div style={colStyle}>{pmCard}{evolAreaNode}</div>
-        </div>
-      );
+      items.push({ key:'cat', node:cat, fill:true }, { key:'pm', node:pm, fill:true }, { key:'top', node:top, fill:true });
+      if (showEvolArea) items.push({ key:'evol', node:evolucionArea, w:2, fill:true });
+      if (evolucionJaviLaliNode) items.push({ key:'javilali', node:evolucionJaviLaliNode, fill:true });
     } else {
-      // Ciclos posteriores: Col1 categoría · métodos · top 5 — Col2 comparación · evolución
-      body = (
-        <div style={twoCol}>
-          <div style={colStyle}>{catCard}{pmCard}{topGastosNode}</div>
-          <div style={colStyle}>{catComparacionNode}{evolAreaNode}{showProy && proyeccionNode}</div>
-        </div>
-      );
+      items.push({ key:'cat', node:cat, fill:true }, { key:'pm', node:pm, fill:true });
+      // Ciclos posteriores: la comparación con el anterior completa la primera fila.
+      if (canCompare) items.push({ key:'comp', node:comp, fill:true });
+      if (showEvolArea) items.push({ key:'evol', node:evolucionArea, w:2, fill:true });
+      items.push({ key:'top', node:top, fill:true });
+      if (showProy) items.push({ key:'proy', node:proy, fill:true });
     }
+    const body = <div style={{ marginTop:SP.md }}><BentoAuto items={items} /></div>;
 
     return (
       <div style={{ padding:SP.lg, paddingBottom:SP.xxl }}>
