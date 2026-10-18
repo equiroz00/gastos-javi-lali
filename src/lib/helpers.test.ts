@@ -9,6 +9,7 @@ import {
   computeBalances, simplifyDebts, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize, buildPlan,
   mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER, shortDate, periodRange, nextClosingDate,
+  cardKey, cardOptions,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
@@ -817,5 +818,37 @@ describe('nextClosingDate', () => {
     expect(nextClosingDate('2026-08-10', 32)).toBe('');
     expect(nextClosingDate('', 5)).toBe('');
     expect(nextClosingDate('10/08/2026', 5)).toBe('');
+  });
+});
+
+// ── Tarjetas (filtro de Historial) ────────────────────────────────────────────
+// Una tarjeta es medio + banco: dos Visa de bancos distintos son dos resúmenes.
+describe('cardKey / cardOptions', () => {
+  it('combina medio de pago y banco', () => {
+    expect(cardKey({ paymentMethod: 'Visa', bank: 'Galicia' })).toBe('Visa · Galicia');
+  });
+  it('sin banco usa solo el medio de pago', () => {
+    expect(cardKey({ paymentMethod: 'Efectivo', bank: '' })).toBe('Efectivo');
+  });
+  it('sin medio de pago no queda vacío', () => {
+    expect(cardKey({ paymentMethod: '', bank: '' })).toBe('Sin medio de pago');
+  });
+  it('recorta espacios para no duplicar opciones', () => {
+    expect(cardKey({ paymentMethod: ' Visa ', bank: 'Galicia ' })).toBe('Visa · Galicia');
+  });
+  it('la misma marca en dos bancos son dos tarjetas distintas', () => {
+    const opts = cardOptions([
+      { paymentMethod: 'Visa', bank: 'Galicia' },
+      { paymentMethod: 'Visa', bank: 'BBVA' },
+      { paymentMethod: 'Visa', bank: 'Galicia' }, // repetida
+    ]);
+    expect(opts).toEqual(['Visa · BBVA', 'Visa · Galicia']);
+  });
+  it('solo ofrece combinaciones que aparecen en los gastos, ordenadas', () => {
+    const opts = cardOptions([
+      { paymentMethod: 'Visa', bank: 'Galicia' },
+      { paymentMethod: 'AMEX', bank: 'BBVA' },
+    ]);
+    expect(opts).toEqual(['AMEX · BBVA', 'Visa · Galicia']);
   });
 });

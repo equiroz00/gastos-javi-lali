@@ -1,8 +1,8 @@
 // ── components/History.tsx ────────────────────────────────────────────────────
 import React, { useState } from 'react';
-import { Search, ChevronRight, CircleCheck } from 'lucide-react';
+import { Search, ChevronRight, CircleCheck, X } from 'lucide-react';
 import { C, F, V, MONO, PENDING_PER, SP, FS, DEFAULT_CATS } from '../constants';
-import { fmt, safeN, calcBal, sortByDate, shortDate } from '../lib/helpers';
+import { fmt, safeN, calcBal, sortByDate, shortDate, cardKey, cardOptions } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats, usePayments } from '../lib/queries';
 import { Card, ScrollFilter, ScreenHeader, AmountBand, SectionLabel, Row } from './ui';
@@ -111,6 +111,7 @@ export default function History() {
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]);
   const [openMap, setOpenMap]                 = useState<Record<string, boolean>>({});
   const [catFilter, setCatFilter]             = useState('Todas');
+  const [cardFilter, setCardFilter]           = useState('Todas');
   const [sortOrder, setSortOrder]             = useState<'date' | 'amount-desc' | 'amount-asc'>('date');
 
   // Opciones = catálogo completo (default + personalizadas) más las categorías
@@ -122,8 +123,14 @@ export default function History() {
     ...customCats,
     ...expenses.map(e => e.category).filter(Boolean),
   ]))];
-  // Filtro por categoría aplicado antes de agrupar por período
-  const baseExpenses = catFilter === 'Todas' ? expenses : expenses.filter(e => e.category === catFilter);
+  // Tarjetas = combinaciones medio de pago + banco que aparecen en los gastos.
+  const cardOpts = ['Todas', ...cardOptions(expenses)];
+  // Filtros por categoría y por tarjeta, aplicados antes de agrupar por período.
+  // Se combinan: "Alimentación" + "Visa · Galicia" muestra solo lo que cumple ambos.
+  const baseExpenses = expenses.filter(e =>
+    (catFilter  === 'Todas' || e.category === catFilter) &&
+    (cardFilter === 'Todas' || cardKey(e) === cardFilter)
+  );
 
   // Orden de los gastos dentro de cada bloque / resultados de búsqueda
   function applySort(list: Expense[]): Expense[] {
@@ -181,9 +188,10 @@ export default function History() {
     <div style={{ margin:'-'+SP.lg+' -'+SP.lg+' '+SP.lg }}>
       <ScreenHeader crumb="Historial" current={nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')} />
       <AmountBand
-        eyebrow={'Total acumulado · ' + nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')}
+        // Con una tarjeta elegida, el titular responde "¿cuánto gasté con esta?".
+        eyebrow={(cardFilter !== 'Todas' ? 'Total con ' + cardFilter : 'Total acumulado') + ' · ' + nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')}
         amount={fmt(totalAcum)}
-        sub={baseExpenses.length + ' gasto' + (baseExpenses.length !== 1 ? 's' : '') + ' registrados'}
+        sub={baseExpenses.length === 1 ? '1 gasto registrado' : baseExpenses.length + ' gastos registrados'}
       />
     </div>
   ) : null;
@@ -210,6 +218,42 @@ export default function History() {
     </div>
   ) : null;
 
+  const filterSel: React.CSSProperties = {
+    flex:'1 1 160px', minWidth:0, border:'1px solid '+C.border, borderRadius:'0.75rem',
+    padding:'0.45rem 0.7rem', fontSize:'0.8rem', fontWeight:600, outline:'none',
+    cursor:'pointer', fontFamily:F, color:C.navy, background:C.surface,
+  };
+
+  // Chips de filtros activos (mockup 2b). En el celular el texto del desplegable
+  // se corta, así que el chip deja claro qué se está filtrando y lo quita de un
+  // toque. Debajo, cuántos gastos y cuánto suman con esos filtros.
+  const activeFilters = [
+    catFilter  !== 'Todas' ? { label: catFilter,  clear: () => setCatFilter('Todas') }  : null,
+    cardFilter !== 'Todas' ? { label: cardFilter, clear: () => setCardFilter('Todas') } : null,
+  ].filter(Boolean) as Array<{ label: string; clear: () => void }>;
+
+  const filterChips = activeFilters.length > 0 ? (
+    <div style={{ marginBottom:'0.6rem' }}>
+      <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', alignItems:'center' }}>
+        {activeFilters.map(f => (
+          <button
+            key={f.label}
+            onClick={() => { f.clear(); setSelectedPeriods([]); }}
+            title="Quitar filtro"
+            style={{ height:'28px', padding:'0 0.6rem', borderRadius:'8px', border:'none', background:C.navy, color:C.onNavy, fontSize:'0.72rem', fontWeight:700, fontFamily:F, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:'0.35rem', maxWidth:'100%' }}
+          >
+            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.label}</span>
+            <X size={12} strokeWidth={2.6} style={{ flexShrink:0 }} />
+          </button>
+        ))}
+      </div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', fontSize:'0.72rem', color:C.textMuted, marginTop:'0.4rem' }}>
+        <span>{baseExpenses.length} gasto{baseExpenses.length !== 1 ? 's' : ''}</span>
+        <span style={{ fontFamily:MONO, color:C.navy, fontWeight:700 }}>{fmt(totalAcum)}</span>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div style={{ padding:SP.lg, paddingBottom:SP.xxl, maxWidth:'min(760px, 100%)', margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
       {chrome}
@@ -221,14 +265,22 @@ export default function History() {
         style={{ width:'100%', border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.5rem 0.75rem', fontSize:'0.82rem', outline:'none', fontFamily:F, color:C.navy, background:C.surface, boxSizing:'border-box', marginBottom:'0.6rem' }}
       />
 
-      {/* Filtro por categoría + orden */}
+      {/* Filtros por categoría y tarjeta + orden */}
       <div style={{ display:'flex', gap:'0.5rem', marginBottom:'0.6rem', flexWrap:'wrap', alignItems:'center' }}>
         <select
           value={catFilter}
           onChange={e => { setCatFilter(e.target.value); setSelectedPeriods([]); }}
-          style={{ flex:'1 1 160px', minWidth:0, border:'1px solid '+C.border, borderRadius:'0.75rem', padding:'0.45rem 0.7rem', fontSize:'0.8rem', fontWeight:600, outline:'none', cursor:'pointer', fontFamily:F, color:C.navy, background:C.surface }}
+          style={{ ...filterSel, borderColor: catFilter !== 'Todas' ? C.accent : C.border }}
         >
           {catOptions.map(c => <option key={c} value={c}>{c === 'Todas' ? 'Todas las categorías' : c}</option>)}
+        </select>
+        <select
+          value={cardFilter}
+          onChange={e => { setCardFilter(e.target.value); setSelectedPeriods([]); }}
+          aria-label="Filtrar por tarjeta"
+          style={{ ...filterSel, borderColor: cardFilter !== 'Todas' ? C.accent : C.border }}
+        >
+          {cardOpts.map(c => <option key={c} value={c}>{c === 'Todas' ? 'Todas las tarjetas' : c}</option>)}
         </select>
         <div style={{ display:'flex', gap:'0.3rem' }}>
           {([['date', 'Fecha'], ['amount-desc', 'Mayor $'], ['amount-asc', 'Menor $']] as const).map(([val, label]) => {
@@ -245,6 +297,8 @@ export default function History() {
           })}
         </div>
       </div>
+
+      {filterChips}
 
       {showExpMatches && (
         <div style={{ marginBottom:'0.75rem' }}>
