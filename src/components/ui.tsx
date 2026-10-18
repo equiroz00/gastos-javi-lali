@@ -8,6 +8,8 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { C, F, V, MONO, FS, CHART_TYPES } from '../constants';
 import { fmt, safeN, catLb, todayStr, genId, allParticipants } from '../lib/helpers';
+import { gridSizeFor, packBento } from '../lib/bento';
+import type { GridSize, BentoItem } from '../lib/bento';
 import { usePeople } from '../lib/queries';
 import useAppStore from '../store/useAppStore';
 
@@ -68,17 +70,131 @@ export function UserDot({ user, style }: { user: string; style?: React.CSSProper
 //            inferior y respira con el ancho completo (mockups de 2a/3a).
 export function Card({ style, children }: { style?: React.CSSProperties; children?: React.ReactNode }) {
   const flat = V.surfaceMode === 'flat';
+  // ¿Esta Card ocupa ella sola una celda de la grilla bento? (BentoCell fill)
+  const fill = React.useContext(BentoFillCtx);
   // Una tarjeta que pinta su PROPIO fondo (degradado del último pago, banda de
   // acento, avisos tintados) necesita su recuadro aunque la variante sea plana:
   // sin padding horizontal el texto queda pegado contra el borde de color.
   // Solo los bloques sin fondo propio se dejan fluir a todo el ancho.
   const tinted = !!(style && (style.background || style.backgroundColor));
-  const base: React.CSSProperties = flat
+  let base: React.CSSProperties = flat
     ? (tinted
         ? { border:'none', borderRadius:V.radius+'px', padding:'0.85rem 1rem' }
         : { background:'transparent', border:'none', borderBottom:'1px solid '+C.border, borderRadius:0, padding:'0.15rem 0 1rem' })
     : { background:C.surface, borderRadius:V.radius+'px', padding:'1rem', border:'1px solid '+C.border };
-  return <div style={{ ...base, ...style }}>{children}</div>;
+  if (fill) {
+    // Dentro de una celda la Card ES la celda: se estira a la altura de la fila
+    // (así todas las de una fila miden lo mismo). En 'cuenta' las líneas entre
+    // celdas las dibuja la grilla, así que se saca la regla inferior propia y
+    // se le da el fondo del contenido (sin él se vería el color de las líneas).
+    if (flat) base = tinted
+      ? { border:'none', borderRadius:0, padding:'1.1rem 1.25rem' }
+      : { background:contentBg(), border:'none', borderRadius:0, padding:'1.1rem 1.25rem' };
+    base = { ...base, flex:1, boxSizing:'border-box', minWidth:0 };
+  }
+  // Las Cards anidadas adentro ya no ocupan la celda: se cierra el contexto.
+  return <div style={{ ...base, ...style }}><BentoFillCtx.Provider value={false}>{children}</BentoFillCtx.Provider></div>;
+}
+
+// Fondo del área de contenido según la variante ('cuenta' trabaja sobre la
+// superficie; 'panel' sobre el gris de sistema para que las tarjetas resalten).
+export const contentBg = () => (V.shellBg === 'surface' ? C.surface : C.bg);
+
+// ── Grilla bento (versión web) ────────────────────────────────────────────────
+// Distribución sin huecos, como en las referencias: 12 columnas, cada bloque
+// ocupa N columnas (y a veces 2 filas), y los de una misma fila se estiran a la
+// misma altura. Cada variante con su estilo:
+//   panel  → tarjetas separadas por un margen.
+//   cuenta → bloques pegados, separados por líneas finas. El truco: la grilla
+//            tiene el color de las líneas de fondo y 1px de separación; cada
+//            celda pinta el fondo del contenido encima, y lo que queda a la
+//            vista en esa separación son las líneas.
+// Por ese truco, en 'cuenta' cada fila tiene que sumar 12 columnas exactas: un
+// hueco se vería como un parche gris. Las pantallas eligen la distribución
+// según el tamaño (useGridSize) para cumplir eso en cada ancho.
+export function useGridSize(): GridSize {
+  const [size, setSize] = useState<GridSize>(() => gridSizeFor(window.innerWidth));
+  useEffect(() => {
+    const onResize = () => setSize(gridSizeFor(window.innerWidth));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return size;
+}
+
+const BentoFillCtx = React.createContext(false);
+
+export function BentoGrid({ children, style }: { children?: React.ReactNode; style?: React.CSSProperties }) {
+  const flat = V.surfaceMode === 'flat';
+  return (
+    <div style={{
+      display:'grid', gridTemplateColumns:'repeat(12, minmax(0, 1fr))',
+      gap: flat ? '1px' : '1rem',
+      background: flat ? C.border : 'transparent',
+      borderTop: flat ? '1px solid '+C.border : 'none',
+      borderBottom: flat ? '1px solid '+C.border : 'none',
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// Una celda de la grilla.
+//   fill → la celda no dibuja nada: su único hijo (una Card) la ocupa entera.
+//          Para bloques que ya son una Card (balance, ¿quién pagó más?, etc.).
+//   sin fill → la celda dibuja el recuadro y el contenido va adentro tal cual.
+//          Para secciones con título y listas.
+//   bare → en 'panel' la celda no dibuja caja: para contenido que ya trae sus
+//          propias tarjetas (los ciclos de Historial), así no queda una tarjeta
+//          dentro de otra. En 'cuenta' igual pinta el fondo (si no, gris).
+export function BentoCell({ span, rows = 1, fill, bare, children, style }: {
+  span: number; rows?: number; fill?: boolean; bare?: boolean; children?: React.ReactNode; style?: React.CSSProperties;
+}) {
+  const flat = V.surfaceMode === 'flat';
+  const placement: React.CSSProperties = {
+    gridColumn:'span ' + span, gridRow: rows > 1 ? 'span ' + rows : undefined,
+    minWidth:0, display:'flex', flexDirection:'column',
+  };
+  if (fill) {
+    // Red de seguridad: si el bloque de adentro decide no dibujarse (algunos
+    // devuelven null según los datos), en 'cuenta' la celda vacía dejaría ver
+    // el color de las líneas como un parche. Con el fondo propio, a lo sumo
+    // queda una celda en blanco.
+    const safety: React.CSSProperties = flat ? { background:contentBg() } : {};
+    return <BentoFillCtx.Provider value={true}><div style={{ ...placement, ...safety, ...style }}>{children}</div></BentoFillCtx.Provider>;
+  }
+  const box: React.CSSProperties = flat
+    ? { background:contentBg(), padding:'1.1rem 1.25rem' }
+    : bare
+      ? {}
+      : { background:C.surface, border:'1px solid '+C.border, borderRadius:V.radius+'px', padding:'1rem 1.1rem' };
+  return <div style={{ ...placement, ...box, ...style }}>{children}</div>;
+}
+
+export function BentoAuto({ items }: { items: BentoItem[] }) {
+  const size = useGridSize();
+  return (
+    <BentoGrid>
+      {packBento(items, size).map(it => (
+        <BentoCell key={it.key} span={it.span} fill={it.fill} bare={it.bare}>{it.node}</BentoCell>
+      ))}
+    </BentoGrid>
+  );
+}
+
+// Contenido de una métrica suelta (etiqueta, cifra, bajada) — para ponerla en
+// su propia celda de la grilla. MetricStrip las agrupa en una tira (móvil).
+export function Metric({ label, value, sub, subColor }: {
+  label: React.ReactNode; value: React.ReactNode; sub?: React.ReactNode; subColor?: string;
+}) {
+  return (
+    <>
+      <div style={{ fontSize:'0.68rem', fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:C.textMuted, fontFamily:F }}>{label}</div>
+      <div style={{ marginTop:'0.4rem', fontFamily:MONO, fontSize:'1.35rem', fontWeight:700, color:C.navy, overflowWrap:'anywhere' }}>{value}</div>
+      {sub ? <div style={{ marginTop:'0.15rem', fontSize:'0.72rem', color: subColor || C.textMuted, fontWeight:600 }}>{sub}</div> : null}
+    </>
+  );
 }
 
 // Encabezado de sección.

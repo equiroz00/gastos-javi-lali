@@ -4,7 +4,7 @@ import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown, Users,
 import { C, F, V, THEMES, FONTS, UI_VARIANTS, coerceTheme, coerceFont, coerceUI, SP, FS, BANKS } from '../constants';
 import { mergeOptions } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
-import { Card, ScreenHeader, SectionLabel, bandColors } from './ui';
+import { Card, ScreenHeader, SectionLabel, bandColors, BentoAuto } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import { useSettings, usePeople, useCustomBanks, useBankClosingDays } from '../lib/queries';
 
@@ -422,18 +422,21 @@ export default function Settings() {
         {!V.heroBand && <h2 style={{ fontWeight:900, fontSize:FS.title, color:C.navy, margin:0 }}>Configuración</h2>}
         {/* Apariencia: en 'cuenta' agrupa con versalita + filete; en 'panel' con banner */}
         {V.heroBand ? <SectionLabel>Apariencia</SectionLabel> : appearanceBanner}
-        {uiCard}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'stretch' }}>
-          {themeCard}
-          {fontCard}
-        </div>
+        {/* Grilla bento: interfaz, tema y tipografía en una fila (4 + 4 + 4). */}
+        <BentoAuto items={[
+          { key:'ui',    node:uiCard,    fill:true },
+          { key:'theme', node:themeCard, fill:true },
+          { key:'font',  node:fontCard,  fill:true },
+        ]} />
         {V.heroBand ? <SectionLabel>Datos · compartidos con {currentUser === 'Javi' ? 'Lali' : 'Javi'}</SectionLabel> : sharedBanner}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap:SP.lg, alignItems:'stretch' }}>
-          {periodsCard}
-          {peopleCard}
-          {closingCard}
-          {csvCard}
-        </div>
+        {/* Períodos es ancho (lista + alta); el resto completa las filas:
+            [ Períodos 8 ][ Personas 4 ] / [ Cierre 4 ][ CSV 8 ]. */}
+        <BentoAuto items={[
+          { key:'periods', node:periodsCard, w:2, fill:true },
+          { key:'people',  node:peopleCard,  fill:true },
+          { key:'closing', node:closingCard, fill:true },
+          { key:'csv',     node:csvCard,     fill:true },
+        ]} />
         {saveBtn}
       </div>
     );
