@@ -194,7 +194,6 @@ export interface UIVariantConfig {
   // Rasgos propios
   heroBand: boolean;      // banda de acento con la cifra protagonista
   shortcuts: boolean;     // muestra atajos de teclado (⌘↵)
-  stepStyle: 'bars' | 'tabs';   // progreso del alta de gasto
 }
 
 export interface ThemeConfig {
