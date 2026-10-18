@@ -600,8 +600,11 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   }
 
   // Deja el formulario listo para otro gasto. Se conservan fecha, moneda,
-  // medio de pago, banco y visibilidad: al cargar varios tickets seguidos lo
-  // habitual es que sean del mismo día y de la misma tarjeta.
+  // medio de pago y banco: al cargar varios tickets seguidos lo habitual es que
+  // sean del mismo día y de la misma tarjeta. La visibilidad NO se conserva a
+  // propósito: cada gasto arranca Compartido y "Privado" es siempre una
+  // elección explícita — si quedara pegado, un gasto compartido cargado
+  // después se le ocultaría a la otra persona sin que nadie lo note.
   function resetForAnother() {
     setForm(f => ({
       ...blankForm(),
