@@ -19,16 +19,24 @@ export default defineConfig({
     // PWA: instalable en el teléfono + caché del shell de la app para abrir
     // sin conexión (los datos offline los maneja Firestore con IndexedDB).
     VitePWA({
-      // 'prompt' (no 'autoUpdate'): la versión nueva se descarga y QUEDA EN
-      // ESPERA hasta que el usuario toca "Actualizar" en el aviso, o hasta que
-      // cierra la app del todo y la vuelve a abrir. Con 'autoUpdate' el service
-      // worker nuevo borraba enseguida los archivos de la versión vieja: si la
-      // app estaba abierta y se entraba a Stats (que se carga bajo demanda), la
-      // página vieja pedía un archivo que ya no existía y la pestaña fallaba.
-      registerType: 'prompt',
-      // El registro lo hace UpdateBanner con useRegisterSW (para poder avisar y
-      // buscar versiones nuevas periódicamente); el script automático solo
-      // registraba, nunca chequeaba ni recargaba.
+      // 'autoUpdate': cada versión nueva toma el control APENAS se descarga
+      // (skipWaiting + clientsClaim en el sw.js). La siguiente vez que se abre o
+      // recarga la app, ya es la nueva. UpdateBanner además avisa "Hay una
+      // versión nueva" para recargar en el momento.
+      //
+      // Se probó 'prompt' (la versión nueva espera a que el usuario toque
+      // "Actualizar") y se descartó: el aviso que la activa vive en la versión
+      // NUEVA, así que la primera vez quedaba esperando para siempre — la página
+      // seguía en la vieja hasta cerrar TODAS las ventanas de la app, cosa que
+      // en el celular casi nunca pasa. Se reprodujo sirviendo una versión y
+      // después la otra en el mismo origen.
+      //
+      // El riesgo de 'autoUpdate' (una página vieja abierta pide un archivo que
+      // la versión nueva ya borró, p. ej. al entrar a Stats) lo cubre
+      // UpdateBanner: ante ese error recarga sola.
+      registerType: 'autoUpdate',
+      // El registro lo hace UpdateBanner a mano (para buscar versiones nuevas
+      // periódicamente y avisar); el script automático solo registraba.
       injectRegister: false,
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
@@ -44,6 +52,14 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // La versión nueva se activa sola al instalarse (skipWaiting) y toma el
+        // control de las páginas abiertas (clientsClaim). Hay que decirlo
+        // EXPLÍCITO: con vite-plugin-pwa 1.x, 'autoUpdate' no lo pone en el
+        // sw.js — espera que la página le mande un mensaje, y el script de
+        // registro viejo nunca lo mandaba. Por eso la app quedaba vieja en el
+        // celular hasta cerrar todas sus ventanas.
+        skipWaiting: true,
+        clientsClaim: true,
         // No interceptar las rutas internas de Firebase Auth (popup de Google).
         navigateFallbackDenylist: [/^\/__/],
         runtimeCaching: [
