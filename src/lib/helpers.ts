@@ -246,6 +246,20 @@ export function calcNetBal(exps: Expense[], payments: Payment[], currency: Curre
 
 // Universo de participantes: los dos titulares (implícitos) + las etiquetas de
 // Config. Se usa para los selectores de la UI (quién pagó / entre quiénes).
+// Valida el nombre de una persona nueva antes de guardarla. Lo usan la
+// división de gastos y Configuración, así ambos aplican la misma regla.
+// Normaliza espacios y rechaza duplicados sin distinguir mayúsculas ni tildes
+// ("caro" o "Cáro" no crean una segunda "Caro").
+export function validatePersonName(raw: string, existing: string[]): { ok: true; name: string } | { ok: false; error: string } {
+  const name = (raw || '').replace(/\s+/g, ' ').trim();
+  if (!name) return { ok: false, error: 'Escribí un nombre.' };
+  if (name.length > 30) return { ok: false, error: 'Máximo 30 caracteres.' };
+  const key = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const dup = existing.find(p => key(p) === key(name));
+  if (dup) return { ok: false, error: dup + ' ya está en la lista.' };
+  return { ok: true, name };
+}
+
 export function allParticipants(people: string[] = []): string[] {
   return ['Javi', 'Lali', ...people.filter(p => p && p !== 'Javi' && p !== 'Lali')];
 }

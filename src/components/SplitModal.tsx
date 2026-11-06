@@ -2,10 +2,16 @@
 // Reparto de un gasto entre N participantes (Sprint 13). Produce un `splitAmong`
 // normalizado (estrategia iguales/montos/porcentajes/shares) + quién pagó.
 import React, { useState } from 'react';
-import { X, Check } from 'lucide-react';
+import { X, Check, ChevronDown, Plus, UserPlus } from 'lucide-react';
 import { C, F, MONO } from '../constants';
-import { fmt, safeN, round2, resolveSplit } from '../lib/helpers';
+import { fmt, safeN, round2, resolveSplit, validatePersonName } from '../lib/helpers';
+import { usePeople } from '../lib/queries';
+import useAppStore from '../store/useAppStore';
 import type { SplitAmong, SplitStrategy } from '../types';
+
+// Los dos dueños de la app. El resto ("otros") son etiquetas guardadas en
+// settings/main.people, compartidas entre los dos.
+const COUPLE = ['Javi', 'Lali'];
 
 interface SplitModalProps {
   amount: number;
@@ -50,6 +56,32 @@ export default function SplitModal({ amount, currency, participants, paidBy: ini
   function toggle(p: string) {
     setSelected(sel => sel.includes(p) ? (sel.length > 1 ? sel.filter(x => x !== p) : sel) : [...sel, p]);
   }
+
+  // ── Otras personas ("Otro ▾") ──────────────────────────────────────────────
+  // Lista viva (usePeople): una persona agregada acá aparece al instante y queda
+  // guardada para siempre, para los dos. Se suman también las que ya figuran en
+  // este gasto aunque después se hayan borrado de la lista, para no perderlas.
+  const people     = usePeople();
+  const savePeople = useAppStore(s => s.savePeople);
+  const savedOthers = people.filter(p => !COUPLE.includes(p));
+  const others = [...savedOthers, ...selected.filter(p => !COUPLE.includes(p) && !savedOthers.includes(p))];
+  const selectedOthers = selected.filter(p => !COUPLE.includes(p));
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [newName, setNewName]   = useState('');
+  const [nameErr, setNameErr]   = useState('');
+
+  function addPerson() {
+    const res = validatePersonName(newName, [...COUPLE, ...people]);
+    if (!res.ok) { setNameErr(res.error); return; }
+    savePeople([...people, res.name]);
+    setSelected(sel => sel.includes(res.name) ? sel : [...sel, res.name]);
+    setNewName(''); setNameErr('');
+  }
+
+  // Quién pagó: solo Javi o Lali. Si un gasto viejo figura pagado por un
+  // tercero, se muestra igual para no cambiarlo sin querer al editar.
+  const payers = COUPLE.includes(initPaidBy) || !initPaidBy ? COUPLE : [...COUPLE, initPaidBy];
 
   // Al elegir una estrategia, precargo valores sensatos (50/50, 1 y 1, montos
   // iguales) para que el preview arranque bien en vez de en cero.
@@ -104,15 +136,15 @@ export default function SplitModal({ amount, currency, participants, paidBy: ini
         {/* ¿Quién pagó? */}
         <p style={{ fontSize: '0.78rem', color: C.textMuted, fontWeight: 700, margin: '0 0 0.4rem' }}>¿Quién pagó?</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
-          {participants.map(p => (
+          {payers.map(p => (
             <button key={p} onClick={() => setPaidBy(p)} style={chip(paidBy === p)}>{p}</button>
           ))}
         </div>
 
-        {/* ¿Entre quiénes? */}
+        {/* ¿Entre quiénes? — Javi y Lali siempre; los demás, desde "Otro ▾". */}
         <p style={{ fontSize: '0.78rem', color: C.textMuted, fontWeight: 700, margin: '0 0 0.4rem' }}>¿Entre quiénes se divide?</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
-          {participants.map(p => {
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: menuOpen ? '0.5rem' : '1rem', alignItems: 'center' }}>
+          {COUPLE.map(p => {
             const on = selected.includes(p);
             return (
               <button key={p} onClick={() => toggle(p)} style={chip(on)}>
@@ -120,7 +152,60 @@ export default function SplitModal({ amount, currency, participants, paidBy: ini
               </button>
             );
           })}
+          {selectedOthers.map(p => (
+            <button key={p} onClick={() => toggle(p)} title={'Sacar a ' + p} style={{ ...chip(true), display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+              {p}<X size={12} strokeWidth={3} />
+            </button>
+          ))}
+          <button
+            onClick={() => setMenuOpen(o => !o)}
+            aria-expanded={menuOpen}
+            style={{ ...chip(false), borderStyle: 'dashed', color: C.navy, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+          >
+            Otro <ChevronDown size={13} strokeWidth={2.5} style={{ transform: menuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+          </button>
         </div>
+
+        {menuOpen && (
+          <div style={{ border: '1px solid ' + C.border, borderRadius: '0.9rem', background: C.bg, padding: '0.5rem', marginBottom: '1rem' }}>
+            {others.length === 0 && (
+              <p style={{ fontSize: '0.72rem', color: C.textMuted, margin: '0.25rem 0.35rem 0.5rem' }}>
+                Todavía no agregaste a nadie. La persona que sumes acá queda guardada para los próximos gastos.
+              </p>
+            )}
+            {others.map(p => {
+              const on = selected.includes(p);
+              return (
+                <button key={p} onClick={() => toggle(p)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.5rem 0.45rem', background: 'none', border: 'none', borderRadius: '0.55rem', cursor: 'pointer', fontFamily: F, color: C.navy, fontSize: '0.85rem', fontWeight: on ? 800 : 600, textAlign: 'left' }}>
+                  <span style={{ width: '18px', height: '18px', borderRadius: '5px', border: '2px solid ' + (on ? C.accent : C.border), background: on ? C.accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {on && <Check size={12} strokeWidth={3.5} color={C.white} />}
+                  </span>
+                  {p}
+                </button>
+              );
+            })}
+            {/* Alta de una persona nueva: queda guardada y ya elegida. */}
+            <div style={{ display: 'flex', gap: '0.4rem', marginTop: others.length ? '0.35rem' : 0, paddingTop: others.length ? '0.5rem' : 0, borderTop: others.length ? '1px solid ' + C.border : 'none' }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <UserPlus size={14} strokeWidth={2.2} color={C.textMuted} style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  value={newName}
+                  onChange={e => { setNewName(e.target.value); setNameErr(''); }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPerson(); } }}
+                  placeholder="Agregar persona nueva"
+                  maxLength={30}
+                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid ' + (nameErr ? C.danger : C.border), borderRadius: '0.6rem', padding: '0.5rem 0.6rem 0.5rem 1.9rem', fontSize: '0.82rem', outline: 'none', fontFamily: F, color: C.navy, background: C.surface }}
+                />
+              </div>
+              <button onClick={addPerson} disabled={!newName.trim()}
+                style={{ flexShrink: 0, padding: '0 0.8rem', borderRadius: '0.6rem', border: 'none', background: newName.trim() ? C.navy : C.border, color: newName.trim() ? C.onNavy : C.textMuted, fontWeight: 800, fontSize: '0.8rem', cursor: newName.trim() ? 'pointer' : 'default', fontFamily: F, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <Plus size={14} strokeWidth={2.8} />Agregar
+              </button>
+            </div>
+            {nameErr && <p style={{ fontSize: '0.7rem', color: C.danger, margin: '0.35rem 0.2rem 0' }}>{nameErr}</p>}
+          </div>
+        )}
 
         {/* Estrategia */}
         <p style={{ fontSize: '0.78rem', color: C.textMuted, fontWeight: 700, margin: '0 0 0.4rem' }}>Estrategia</p>

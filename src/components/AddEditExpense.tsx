@@ -372,9 +372,12 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
   const javiPct = totalAmt > 0 ? Math.round(javiAmt / totalAmt * 100) : 50;
 
   // Split button summary label
-  const splitN = form.splitAmong?.entries?.length ?? 2;
-  const splitSummary = splitN > 2
-    ? ' ' + form.paidBy + ' pagó · entre ' + splitN
+  // Con terceros se nombra a todos: "entre 3" no dejaba ver quiénes.
+  const splitNames = (form.splitAmong?.entries ?? []).map(e => e.participant);
+  const listNames = (ns: string[]) => ns.length > 1 ? ns.slice(0, -1).join(', ') + ' y ' + ns[ns.length - 1] : ns.join('');
+  const hasOthers = splitNames.some(n => n !== 'Javi' && n !== 'Lali');
+  const splitSummary = hasOthers || splitNames.length > 2
+    ? ' ' + form.paidBy + ' pagó · entre ' + listNames(splitNames)
     : ' ' + form.paidBy + ' · ' + javiPct + '% / ' + (100 - javiPct) + '%';
 
   const inpStyle = (extra?: React.CSSProperties): React.CSSProperties => ({

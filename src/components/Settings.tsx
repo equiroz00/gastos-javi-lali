@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Palette, SlidersHorizontal, Download, CalendarDays, ChevronDown, Users, X, CreditCard } from 'lucide-react';
 import { C, F, V, THEMES, FONTS, UI_VARIANTS, coerceTheme, coerceFont, coerceUI, SP, FS, BANKS } from '../constants';
-import { mergeOptions } from '../lib/helpers';
+import { mergeOptions, validatePersonName } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
 import { Card, ScreenHeader, SectionLabel, bandColors, BentoAuto } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
@@ -64,12 +64,11 @@ export default function Settings() {
   }
 
   function addPerson() {
-    const name = newPerson.trim();
-    if (!name) return;
-    if (['Javi', 'Lali', ...people].some(p => p.toLowerCase() === name.toLowerCase())) {
-      setPersonError('Esa persona ya existe.'); return;
-    }
-    savePeople([...people, name]);
+    if (!newPerson.trim()) return;
+    // Misma regla que al agregar desde la división de un gasto.
+    const res = validatePersonName(newPerson, ['Javi', 'Lali', ...people]);
+    if (!res.ok) { setPersonError(res.error); return; }
+    savePeople([...people, res.name]);
     setNewPerson(''); setPersonError('');
   }
 
