@@ -18,7 +18,7 @@ import LoginScreen       from './components/LoginScreen';
 import Dashboard         from './components/Dashboard';
 import AddEditExpense    from './components/AddEditExpense';
 import History           from './components/History';
-import PersonalScreen    from './components/PersonalScreen';
+
 import SettingsScreen    from './components/Settings';
 import { useIsDesktop }  from './lib/useIsDesktop';
 
@@ -27,7 +27,7 @@ import { useIsDesktop }  from './lib/useIsDesktop';
 const Stats = React.lazy(() => import('./components/Stats'));
 import NotificationPanel from './components/NotificationPanel';
 import { Toast, ConfirmDialog, PaymentModal } from './components/ui';
-import { MobileNav, DesktopSidebar, AddFab, contentBg, MOBILE_NAV_SPACE } from './components/Navigation';
+import { MobileNav, DesktopSidebar, AddFab, ScopeToggle, contentBg, MOBILE_NAV_SPACE } from './components/Navigation';
 
 let _unsubs: Array<() => void> = [];
 let _unsubAuth: (() => void) | null = null;
@@ -55,6 +55,7 @@ export default function App() {
   const userTheme      = useAppStore(s => s.userTheme);
   const userFont       = useAppStore(s => s.userFont);
   const userUI         = useAppStore(s => s.userUI);
+  const userScope      = useAppStore(s => s.userScope);
 
   const setCurrentUser    = useAppStore(s => s.setCurrentUser);
   const setAuthDenied     = useAppStore(s => s.setAuthDenied);
@@ -239,6 +240,7 @@ export default function App() {
             if (prefs.theme)      setUserTheme(prefs.theme);
             if (prefs.font)       setUserFont(prefs.font);
             if (prefs.ui)         setUserUI(prefs.ui);
+            if (prefs.scope === 'mine' || prefs.scope === 'shared') useAppStore.getState().setUserScope(prefs.scope);
             if (prefs.lastReadTs) setLastReadTs(prefs.lastReadTs);
           }
           fired.prefs = true; checkDone();
@@ -337,7 +339,9 @@ export default function App() {
       {view === 'dashboard' && <Dashboard />}
       {view === 'add'       && <AddEditExpense />}
       {view === 'stats'     && <React.Suspense fallback={statsFallback}><Stats /></React.Suspense>}
-      {view === 'personal'  && <PersonalScreen />}
+      {/* 'personal' ya no es una pestaña: su contenido es la vista Solo tuyo.
+          Si llega por un enlace viejo o el historial, se muestra Inicio. */}
+      {view === 'personal'  && <Dashboard />}
       {view === 'history'   && <History />}
       {view === 'settings'  && <SettingsScreen />}
     </>
@@ -345,6 +349,13 @@ export default function App() {
 
   // El botón flotante no aparece dentro del propio formulario de alta.
   const fab = view !== 'add' ? <AddFab onClick={() => setView('add')} isDesktop={isDesktop} /> : null;
+
+  // Interruptor "Compartidos / Solo tuyo": en las pantallas con montos.
+  // Configuración y el formulario de alta no lo llevan.
+  const showScope = view === 'dashboard' || view === 'stats' || view === 'history' || view === 'personal';
+  const scopeBar = showScope
+    ? <ScopeToggle scope={userScope} onChange={s => useAppStore.getState().saveUserScope(s)} />
+    : null;
 
   // ── DESKTOP layout ─────────────────────────────────────────────────────────
   if (isDesktop) {
@@ -361,7 +372,7 @@ export default function App() {
               activa del menú lateral usa este mismo color para fundirse. */}
           <div style={{ flex:1, overflowY:'auto', paddingTop:SP.md, paddingBottom:'6rem', background:contentBg() }}>
             <div style={{ maxWidth:MAXW, margin:'0 auto' }}>
-              {SyncBar}
+              {scopeBar}{SyncBar}
               {Content}
             </div>
           </div>
@@ -379,7 +390,7 @@ export default function App() {
       {/* Espacio inferior para la barra Y el botón flotante: sin esto, el último
           elemento de una lista larga quedaba tapado por el botón. */}
       <div style={{ flex:1, overflowY:'auto', paddingBottom:`calc(${MOBILE_NAV_SPACE + 80}px + env(safe-area-inset-bottom))`, paddingTop:'0.75rem' }}>
-        {SyncBar}
+        {scopeBar}{SyncBar}
         {Content}
       </div>
       {fab}

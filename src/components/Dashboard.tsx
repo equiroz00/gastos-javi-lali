@@ -1,14 +1,15 @@
 // ── components/Dashboard.tsx ──────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil } from 'lucide-react';
-import { C, F, V, MONO, PENDING_PER, SP, FS } from '../constants';
-import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment, periodRange, shortDate } from '../lib/helpers';
+import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil, Users, Lock, Layers } from 'lucide-react';
+import { C, F, V, MONO, PENDING_PER, SP, FS, PALETTE } from '../constants';
+import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment, periodRange, shortDate, myShare, originalOf, catLb } from '../lib/helpers';
+import { useScope, useScopedExpenses } from '../lib/useScope';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, usePayments, usePlans, useSettings } from '../lib/queries';
-import { Card, DonutRing, MetricStrip, bandColors, BentoGrid, BentoCell, Metric, useGridSize } from './ui';
+import { Card, DonutRing, MetricStrip, bandColors, BentoGrid, BentoCell, Metric, useGridSize, CatIcon } from './ui';
 import ExpenseList from './ExpenseList';
-import type { Expense, Payment, Period, Currency } from '../types';
+import type { Expense, Payment, Period, Currency, Plan } from '../types';
 
 // ── Moneda primaria de un conjunto de gastos (la de mayor total) ────────────────
 function primaryCurrency(exps: Expense[]): Currency {
@@ -18,13 +19,27 @@ function primaryCurrency(exps: Expense[]): Currency {
   return curs[0] || 'ARS';
 }
 
+// Fracción de un plan que es de `user` (1 si no hay usuario = "Compartidos").
+// El plan se evalúa como un gasto de una cuota: misma lógica exacta que myShare.
+function planFrac(plan: Plan, user?: string | null): number {
+  if (!user) return 1;
+  const inst = safeN(plan.installmentAmount);
+  if (inst <= 0) return 0;
+  const share = myShare({ amount: inst, visibilidad: plan.visibilidad, splitAmong: plan.splitAmong, paidBy: plan.paidBy, javiAmount: plan.javiAmount, laliAmount: plan.laliAmount } as Expense, user);
+  return share / inst;
+}
+
 // ── ActivePlans ────────────────────────────────────────────────────────────────
-function ActivePlans() {
-  const plans      = usePlans();
+// mineFor: en "Solo tuyo", solo los planes donde esa persona tiene parte, y
+// los montos mostrados son su parte (la misma regla que myShare para gastos).
+function ActivePlans({ mineFor }: { mineFor?: string | null } = {}) {
+  const allPlans   = usePlans();
   const expenses   = useExpenses();
   const cancelPlan = useAppStore(s => s.handleCancelPlan);
   const editPlan   = useAppStore(s => s.setEditingPlan);
   const [search, setSearch] = useState('');
+  const fracOf = (plan: Plan) => planFrac(plan, mineFor);
+  const plans = mineFor ? allPlans.filter(p => fracOf(p) > 0) : allPlans;
   if (!plans.length) return null;
   const filtered = search.trim() === '' ? plans : plans.filter(p => p.description.toLowerCase().indexOf(search.toLowerCase()) >= 0);
   return (
@@ -54,7 +69,11 @@ function ActivePlans() {
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'0.4rem' }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:800, color:C.navy, fontSize:'0.88rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{plan.description}</div>
-                  <div style={{ fontSize:'0.7rem', color:C.textMuted, marginTop:'0.1rem' }}>{fmt(plan.installmentAmount, plan.currency)}/mes · Total: {fmt(plan.totalAmount, plan.currency)}</div>
+                  <div style={{ fontSize:'0.7rem', color:C.textMuted, marginTop:'0.1rem' }}>
+                    {mineFor
+                      ? <>Tu parte: {fmt(Math.round(plan.installmentAmount * fracOf(plan)), plan.currency)}/mes · de {fmt(plan.totalAmount, plan.currency)}</>
+                      : <>{fmt(plan.installmentAmount, plan.currency)}/mes · Total: {fmt(plan.totalAmount, plan.currency)}</>}
+                  </div>
                 </div>
                 <div style={{ textAlign:'right', flexShrink:0, marginLeft:'0.5rem' }}>
                   <div style={{ fontWeight:800, color:C.accent, fontSize:'0.82rem' }}>{assigned}/{plan.numInstallments}</div>
@@ -166,6 +185,112 @@ function LastPaymentCard({ payments, cur }: { payments: Payment[]; cur: Currency
       <div style={{ fontWeight:900, color:C.white, fontSize:'1.3rem', marginTop:'0.2rem', fontFamily:MONO }}>{fmt(safeN(lp.amount), lp.currency || 'ARS')}</div>
       <div style={{ fontSize:'0.72rem', color:'rgba(255,255,255,0.85)', marginTop:'0.15rem' }}>{lp.from} → {lp.to}</div>
       <div style={{ fontSize:'0.68rem', color:'rgba(255,255,255,0.65)' }}>{lp.date}</div>
+    </Card>
+  );
+}
+
+// ── "Solo tuyo": banda "Gastaste vos" ─────────────────────────────────────────
+// Reemplaza al saldo (que es por definición compartido). Recibe gastos YA
+// adaptados (scopeExpenses): cada monto es tu parte, así que solo suma.
+function MineHeader({ periods, selPeriod, setSelPeriod, periodExps, prevTotal, cur }: {
+  periods: Period[]; selPeriod: string; setSelPeriod: (p: string) => void;
+  periodExps: Expense[]; prevTotal: number | null; cur: Currency;
+}) {
+  const band = V.heroBand;
+  const B    = bandColors();
+  const ink  = band ? B.on  : C.navy;
+  const dim  = band ? B.dim : C.textMuted;
+  const curExps   = periodExps.filter(e => (e.currency || 'ARS') === cur);
+  const total     = curExps.reduce((s, e) => s + safeN(e.amount), 0);
+  const privados  = curExps.filter(e => originalOf(e).visibilidad === 'privado').reduce((s, e) => s + safeN(e.amount), 0);
+  const compartido = total - privados;
+  const delta = prevTotal != null ? pctChange(total, prevTotal) : null;
+  const selRange = periodRange(periods.find(p => p.name === selPeriod));
+
+  const bar = (label: string, Icon: typeof Users, value: number, color: string) => {
+    const pct = total > 0 ? Math.round(value / total * 100) : 0;
+    return (
+      <div style={{ marginTop:'0.65rem' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'0.75rem', color:ink }}>
+          <span style={{ display:'flex', alignItems:'center', gap:'0.35rem' }}><Icon size={13} strokeWidth={2.2} />{label}</span>
+          <span style={{ fontFamily:MONO, fontWeight:700 }}>{fmtS(value, cur)}</span>
+        </div>
+        <div style={{ height:'6px', borderRadius:'999px', background: band ? B.on + '2E' : C.beige, marginTop:'0.3rem', overflow:'hidden' }}>
+          <span style={{ display:'block', width:pct + '%', height:'100%', background:color }} />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Card style={ band
+      ? { padding:'1.35rem 1.25rem 1.2rem', background:B.bg, border:'none', borderRadius:0, color:B.on }
+      : { padding:'1rem 1.1rem', background:C.accent + '14' } }>
+      <div style={{ display:'inline-flex', flexDirection:'column', alignItems:'flex-start', marginBottom:'0.85rem' }}>
+        <div style={{ position:'relative', display:'inline-flex', alignItems:'center' }}>
+          <select
+            value={selPeriod}
+            onChange={e => setSelPeriod(e.target.value)}
+            style={{ appearance:'none', WebkitAppearance:'none', border:'1px solid '+C.border, borderRadius:'999px', padding:'0.3rem 1.7rem 0.3rem 0.8rem', fontSize:'0.78rem', fontWeight:700, color:C.navy, background:C.bg, outline:'none', cursor:'pointer', fontFamily:F } as React.CSSProperties}
+          >
+            <option value="Todos">Todos los períodos</option>
+            {periods.slice().reverse().map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+          </select>
+          <ChevronDown size={14} strokeWidth={2.2} color={C.textMuted} style={{ position:'absolute', right:'0.6rem', pointerEvents:'none' }} />
+        </div>
+        {selRange && <span style={{ fontSize:'0.64rem', color:dim, marginTop:'0.2rem', paddingLeft:'0.85rem', fontFamily:MONO }}>{selRange}</span>}
+      </div>
+      <div style={{ fontSize:'0.68rem', color:dim, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+        Gastaste vos {selPeriod === 'Todos' ? 'en total' : 'este ciclo'}
+      </div>
+      <div style={{ display:'flex', alignItems:'baseline', gap:'0.6rem', flexWrap:'wrap', marginTop:'0.15rem' }}>
+        <div style={{ fontSize:FS.hero, fontWeight:800, color:ink, fontFamily:MONO, letterSpacing:'-0.02em', lineHeight:1.05, overflowWrap:'anywhere' }}>{fmt(total, cur)}</div>
+        {delta !== null && (
+          // En la banda, una píldora clara: el rojo/verde directo sobre el
+          // violeta casi no se leía.
+          <span style={{ fontSize:'0.72rem', fontWeight:800, padding:'0.15rem 0.5rem', borderRadius:'999px',
+            background: band ? B.on + '26' : (delta > 0 ? C.danger : C.ok) + '1A',
+            color: band ? B.on : (delta > 0 ? C.danger : C.ok) }}>
+            {delta > 0 ? '▲' : '▼'} {Math.abs(delta)}% vs. ciclo anterior
+          </span>
+        )}
+      </div>
+      {bar('Tu parte de lo compartido', Users, compartido, C.accent)}
+      {bar('Privados tuyos', Lock, privados, band ? B.on + 'B3' : C.navy)}
+    </Card>
+  );
+}
+
+// "Solo tuyo": en qué se te fue, en el lugar de "¿Quién pagó más?".
+function MineCategories({ periodExps, cur }: { periodExps: Expense[]; cur: Currency }) {
+  const curExps = periodExps.filter(e => (e.currency || 'ARS') === cur);
+  const total = curExps.reduce((s, e) => s + safeN(e.amount), 0);
+  const byCat: Record<string, number> = {};
+  curExps.forEach(e => { const k = catLb(e.category) || 'Sin categoría'; byCat[k] = (byCat[k] || 0) + safeN(e.amount); });
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return (
+    <Card>
+      <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}>
+        <Layers size={15} strokeWidth={2.2} color={C.accent} />Tus categorías
+      </h3>
+      {cats.length === 0 ? (
+        <p style={{ fontSize:'0.8rem', color:C.textMuted, margin:0 }}>Sin gastos tuyos en este período.</p>
+      ) : cats.map(([label, value], i) => {
+        const pct = total > 0 ? Math.round(value / total * 100) : 0;
+        return (
+          <div key={label} style={{ marginBottom: i < cats.length - 1 ? '0.6rem' : 0 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'0.45rem' }}>
+              <CatIcon category={label} size={14} color={C.textMuted} />
+              <span style={{ flex:1, fontSize:'0.78rem', fontWeight:600, color:C.navy, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{label}</span>
+              <span style={{ fontSize:'0.78rem', fontWeight:700, color:C.navy, fontFamily:MONO }}>{fmtS(value, cur)}</span>
+              <span style={{ fontSize:'0.68rem', color:C.textMuted, width:'2.4rem', textAlign:'right' }}>{pct}%</span>
+            </div>
+            <div style={{ height:'4px', borderRadius:'999px', background:C.beige, marginTop:'0.3rem', overflow:'hidden' }}>
+              <span style={{ display:'block', width:pct + '%', height:'100%', background:PALETTE[i % PALETTE.length] }} />
+            </div>
+          </div>
+        );
+      })}
     </Card>
   );
 }
@@ -446,20 +571,39 @@ export default function Dashboard() {
 
   useEffect(() => { if (latestPeriod && !selPeriod) setSelPeriod(latestPeriod); }, [latestPeriod]);
 
+  // "Compartidos / Solo tuyo". En "Solo tuyo" todo sale de la lista adaptada
+  // (cada monto ya es tu parte); el saldo y "¿quién pagó más?" no se muestran,
+  // así que nunca se calculan sobre esa lista.
+  const { isMine, user } = useScope();
+  const scoped = useScopedExpenses();
+  const base   = isMine ? scoped : expenses;
+
   const periodExps = (selPeriod && selPeriod !== 'Todos')
-    ? expenses.filter(e => e.period === selPeriod)
-    : expenses.filter(e => e.period !== PENDING_PER);
+    ? base.filter(e => e.period === selPeriod)
+    : base.filter(e => e.period !== PENDING_PER);
   const weekStart = getWeekStart();
-  const weekExps = sortByDate(expenses.filter(e => e.date && new Date(e.date + 'T12:00:00') >= weekStart && e.period !== PENDING_PER));
+  const weekExps = sortByDate(base.filter(e => e.date && new Date(e.date + 'T12:00:00') >= weekStart && e.period !== PENDING_PER));
 
   const primaryCur = primaryCurrency(periodExps);
 
+  // Ciclo anterior (para la variación de "Gastaste vos").
+  const selIdx   = periods.findIndex(p => p.name === selPeriod);
+  const prevName = selIdx > 0 ? periods[selIdx - 1].name : null;
+  const prevTotal = prevName
+    ? base.filter(e => e.period === prevName && (e.currency || 'ARS') === primaryCur).reduce((s, e) => s + safeN(e.amount), 0)
+    : null;
+  const myPlansCount = isMine ? plans.filter(p => planFrac(p, user) > 0).length : plans.length;
+
   // ── Sections defined once, reused in both layouts ────────────────────────────
-  const headerBlock = (
+  const headerBlock = isMine ? (
+    <MineHeader periods={periods} selPeriod={selPeriod} setSelPeriod={setSelPeriod} periodExps={periodExps} prevTotal={prevTotal} cur={primaryCur} />
+  ) : (
     <UnifiedHeader periods={periods} selPeriod={selPeriod} setSelPeriod={setSelPeriod} periodExps={periodExps} payments={payments} allExpenses={expenses} />
   );
-  const whoPaidBlock  = <WhoPaidMore periodExps={periodExps} cur={primaryCur} />;
-  const lastPayBlock  = <LastPaymentCard payments={payments} cur={primaryCur} />;
+  const whoPaidBlock  = isMine
+    ? <MineCategories periodExps={periodExps} cur={primaryCur} />
+    : <WhoPaidMore periodExps={periodExps} cur={primaryCur} />;
+  const lastPayBlock  = isMine ? null : <LastPaymentCard payments={payments} cur={primaryCur} />;
 
   // ── Tira de métricas del ciclo (mockup 1b) ─────────────────────────────────
   // Cuatro celdas separadas por reglas verticales, debajo de la banda del saldo:
@@ -477,7 +621,21 @@ export default function Dashboard() {
 
   // Las mismas cuatro métricas: juntas en una tira (móvil) o cada una en su
   // celda de la grilla (web).
-  const metricItems = [
+  // "Solo tuyo": los montos ya son tu parte. "Gastaste vos" está en la banda,
+  // así que las métricas desglosan.
+  const nGastos = (n: number) => n + (n === 1 ? ' gasto' : ' gastos');
+  const privTotal = curExps.filter(e => originalOf(e).visibilidad === 'privado').reduce((s, e) => s + safeN(e.amount), 0);
+  const mineItems = [
+    { label:'Privados tuyos',        value: fmtS(privTotal, primaryCur),
+      sub: nGastos(curExps.filter(e => originalOf(e).visibilidad === 'privado').length) },
+    { label:'Tu parte compartida',   value: fmtS(cicloTotal - privTotal, primaryCur),
+      sub: nGastos(curExps.filter(e => originalOf(e).visibilidad !== 'privado').length) },
+    { label:'Tus cuotas del ciclo',  value: fmtS(cuotasMes, primaryCur),
+      sub: myPlansCount + ' plan' + (myPlansCount !== 1 ? 'es' : '') + ' activo' + (myPlansCount !== 1 ? 's' : '') },
+    { label:'Promedio por gasto',    value: fmtS(curExps.length ? cicloTotal / curExps.length : 0, primaryCur),
+      sub: nGastos(curExps.length) + (curExps.length === 1 ? ' tuyo' : ' tuyos') },
+  ];
+  const sharedItems = [
     { label:'Gastado en el ciclo', value: fmtS(cicloTotal, primaryCur), sub: curExps.length + ' gasto' + (curExps.length !== 1 ? 's' : '') },
     { label:'Tu parte',            value: fmtS(miParte, primaryCur),    sub: miPct + '% del total' },
     { label:'Cuotas del ciclo',    value: fmtS(cuotasMes, primaryCur),
@@ -486,6 +644,7 @@ export default function Dashboard() {
     { label:'Último pago',         value: lp ? fmtS(safeN(lp.amount), lp.currency || primaryCur) : '—',
       sub: lp ? lp.from + ' → ' + lp.to + ' · ' + shortDate(lp.date) : 'sin pagos' },
   ];
+  const metricItems = isMine ? mineItems : sharedItems;
   const metricStrip = <MetricStrip items={metricItems} />;
 
   const weekSection = (
@@ -532,8 +691,8 @@ export default function Dashboard() {
     </>
   );
 
-  const plansSection = plans.length > 0 ? (
-    <ActivePlans />
+  const plansSection = myPlansCount > 0 ? (
+    <ActivePlans mineFor={isMine ? user : null} />
   ) : (
     <Card style={{ padding:SP.xl, textAlign:'center', color:C.textMuted, fontSize:'0.82rem', display:'flex', alignItems:'center', justifyContent:'center', gap:SP.sm }}>
       <CreditCard size={20} strokeWidth={2} color={C.textMuted} />
@@ -555,8 +714,8 @@ export default function Dashboard() {
     const balance = <BentoCell key="bal" span={gridSize === 'xl' ? 5 : gridSize === 'lg' ? 6 : 12} rows={gridSize === 'md' ? 1 : 2} fill>{headerBlock}</BentoCell>;
     const whoPaid = <BentoCell key="who" span={gridSize === 'xl' ? 3 : gridSize === 'lg' ? 5 : 12} rows={gridSize === 'xl' ? 2 : 1} fill>{whoPaidBlock}</BentoCell>;
     const week    = <BentoCell key="week" span={gridSize === 'xl' ? 8 : gridSize === 'lg' ? 7 : 12}>{weekBody}</BentoCell>;
-    const cuotas  = plans.length > 0
-      ? <BentoCell key="cuotas" span={gridSize === 'xl' ? 4 : 12}><ActivePlans /></BentoCell>
+    const cuotas  = myPlansCount > 0
+      ? <BentoCell key="cuotas" span={gridSize === 'xl' ? 4 : 12}><ActivePlans mineFor={isMine ? user : null} /></BentoCell>
       : <BentoCell key="cuotas" span={gridSize === 'xl' ? 4 : 12} fill>{plansSection}</BentoCell>;
     // El orden importa: la grilla ubica cada celda en el primer lugar libre.
     const cells = gridSize === 'xl'
@@ -579,7 +738,7 @@ export default function Dashboard() {
       {whoPaidBlock}
       {lastPayBlock}
       {weekSection}
-      <ActivePlans />
+      <ActivePlans mineFor={isMine ? user : null} />
     </div>
   );
 }

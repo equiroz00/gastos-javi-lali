@@ -136,6 +136,8 @@ export interface AppState {
   userTheme: string;
   userFont: string;
   userUI: string;
+  // Vista "Compartidos" / "Solo tuyo" (por persona, como el tema).
+  userScope: 'shared' | 'mine';
 
   // Activity log (notifications)
   activityLog: ActivityEntry[];

@@ -11,7 +11,8 @@ import {
 import { C, F, V, PALETTE, PENDING_PER, DEFAULT_CATS , MONO, SP, FS } from '../constants';
 import { fmtS, fmt, safeN, catEm, catLb, normCat, pctChange, sortByDate, expenseResolved } from '../lib/helpers';
 import useAppStore from '../store/useAppStore';
-import { useExpenses, useSettings, useCustomCats } from '../lib/queries';
+import { useSettings, useCustomCats } from '../lib/queries';
+import { useScope, useScopedExpenses } from '../lib/useScope';
 import { Card, ScrollFilter, ChartSelector, ScreenHeader, AmountBand, BandPills, bandColors, BentoAuto } from './ui';
 import type { BentoItem } from '../lib/bento';
 import type { Expense, Currency } from '../types';
@@ -371,7 +372,11 @@ function TopGastos({ filtered, cur }: { filtered: Expense[]; cur: Currency }) {
 // viven ahora en la pestaña Inicio. Stats se queda solo con lo analítico.
 export default function Stats() {
   const isDesktop  = useIsDesktop();
-  const expenses   = useExpenses();
+  // "Compartidos / Solo tuyo": en "Solo tuyo" cada gasto ya llega con tu parte
+  // como monto (scopeExpenses), así que categorías, métodos de pago, evolución,
+  // top 5 y comparación se calculan solos sobre tu parte.
+  const { isMine } = useScope();
+  const expenses   = useScopedExpenses();
   const settings   = useSettings();
   const customCats = useCustomCats();
 
@@ -495,7 +500,9 @@ export default function Stats() {
           : undefined}
       />
       <AmountBand
-        eyebrow={period === 'Todos' ? 'Gasto total' : 'Gasto total del ciclo'}
+        eyebrow={isMine
+          ? (period === 'Todos' ? 'Gastaste vos en total' : 'Gastaste vos este ciclo')
+          : (period === 'Todos' ? 'Gasto total' : 'Gasto total del ciclo')}
         amount={fmtS(total, cur)}
         sub={<>{filtered.length} gasto{filtered.length !== 1 ? 's' : ''} · promedio <span style={{ fontFamily:MONO }}>{fmtS(total / Math.max(1, filtered.length), cur)}</span></>}
         aside={<BandPills items={bandPeriods} selected={period} onSelect={setPeriod} />}
@@ -570,7 +577,8 @@ export default function Stats() {
   const catComparacionNode = <WrapAvoid><CatComparacion filtered={filtered} prevExps={prevExps} allCatsFull={allCatsFull} cur={cur} /></WrapAvoid>;
   const evolucionArea      = <EvolucionArea allExpenses={expenses} allCatsFull={allCatsFull} configPeriods={configPeriods} cur={cur} />;
 
-  const evolucionJaviLaliNode = (period === 'Todos' && perData.length > 1) ? (
+  // "Javi vs Lali" es una comparación entre los dos: en "Solo tuyo" no aplica.
+  const evolucionJaviLaliNode = (!isMine && period === 'Todos' && perData.length > 1) ? (
     <Card>
       <h3 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, margin:'0 0 0.75rem', fontSize:'0.9rem' }}><BarChart3 size={15} strokeWidth={2.2} color={C.accent} />Evolución Javi vs Lali</h3>
       <ResponsiveContainer width="100%" height={180}>

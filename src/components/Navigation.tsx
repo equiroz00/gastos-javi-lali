@@ -4,7 +4,7 @@
 // las variantes se distinguen por el contenido (filetes vs. tarjetas), no por
 // el menú.
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Home, BarChart2, Wallet, ClipboardList, Settings2, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Home, BarChart2, Wallet, ClipboardList, Settings2, Plus, PanelLeftClose, PanelLeftOpen, Users, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { C, F, V, SHELL_MAXW } from '../constants';
 import { bandColors, contentBg } from './ui';
@@ -15,7 +15,6 @@ export interface NavItem { id: string; label: string; Icon: LucideIcon; }
 export const NAV_ITEMS: NavItem[] = [
   { id:'dashboard', label:'Inicio',    Icon:Home          },
   { id:'stats',     label:'Stats',     Icon:BarChart2     },
-  { id:'personal',  label:'Personal',  Icon:Wallet        },
   { id:'history',   label:'Historial', Icon:ClipboardList },
   { id:'settings',  label:'Config',    Icon:Settings2     },
 ];
@@ -161,6 +160,45 @@ export function MobileNav({ view, onSelect }: { view: string; onSelect: (id: str
 // Alto total que ocupa la barra inferior (para dejar espacio al contenido y
 // ubicar el botón flotante por encima).
 export const MOBILE_NAV_SPACE = 10 + BAR_H + TOP;
+
+// ── Interruptor "Compartidos / Solo tuyo" ─────────────────────────────────────
+// Uno solo para toda la app: lo dibuja el marco (App.tsx) arriba de Inicio,
+// Stats e Historial, así es imposible que una pantalla quede en un modo y otra
+// en otro. Se recuerda por persona.
+export function ScopeToggle({ scope, onChange }: { scope: 'shared' | 'mine'; onChange: (s: 'shared' | 'mine') => void }) {
+  const opts: Array<{ key: 'shared' | 'mine'; label: string; Icon: LucideIcon }> = [
+    { key:'shared', label:'Compartidos', Icon:Users },
+    { key:'mine',   label:'Solo tuyo',   Icon:User  },
+  ];
+  return (
+    <div role="radiogroup" aria-label="Qué gastos ver" style={{ display:'flex', justifyContent:'center', padding:'0.6rem 1rem 0' }}>
+      <div style={{ display:'inline-flex', background:C.beige, borderRadius:'999px', padding:'3px', gap:'2px', width:'100%', maxWidth:'360px' }}>
+        {opts.map(({ key, label, Icon }) => {
+          const active = scope === key;
+          return (
+            <button
+              key={key}
+              role="radio"
+              aria-checked={active}
+              onClick={() => { if (!active) onChange(key); }}
+              style={{
+                flex:1, height:'34px', borderRadius:'999px', border:'none', cursor: active ? 'default' : 'pointer', fontFamily:F,
+                display:'flex', alignItems:'center', justifyContent:'center', gap:'0.35rem',
+                // Activo en sólido: blanco sobre gris claro casi no se distinguía.
+                background: active ? C.navy : 'transparent',
+                color: active ? C.onNavy : C.textMuted,
+                fontWeight: active ? 800 : 600, fontSize:'0.8rem',
+                boxShadow: active ? '0 2px 6px rgba(0,0,0,0.18)' : 'none', transition:'all 0.2s',
+              }}
+            >
+              <Icon size={15} strokeWidth={2.2} color={active ? C.onNavy : C.textMuted} />{label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ── Botón flotante "Agregar" ──────────────────────────────────────────────────
 // En móvil va arriba de la barra, a la derecha, por encima de la zona donde

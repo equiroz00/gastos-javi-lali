@@ -9,7 +9,7 @@ import {
   computeBalances, simplifyDebts, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize, buildPlan,
   mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER, shortDate, periodRange, nextClosingDate,
-  cardKey, cardOptions,
+  cardKey, cardOptions, myShare, scopeExpenses, originalOf,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
@@ -850,5 +850,85 @@ describe('cardKey / cardOptions', () => {
       { paymentMethod: 'AMEX', bank: 'BBVA' },
     ]);
     expect(opts).toEqual(['AMEX · BBVA', 'Visa · Galicia']);
+  });
+});
+
+// ── "Compartidos / Solo tuyo" ─────────────────────────────────────────────────
+// La función que decide cuánto de cada gasto es tuyo. Si falla, todos los
+// números del modo "Solo tuyo" quedan mal: por eso se cubren todos los casos.
+describe('myShare', () => {
+  const both = (strategy: any, j?: number, l?: number) => ({
+    strategy, entries: j == null ? [{ participant: 'Javi' }, { participant: 'Lali' }]
+      : [{ participant: 'Javi', value: j }, { participant: 'Lali', value: l }],
+  });
+  it('privado propio: el monto entero', () => {
+    const e = exp({ amount: 30000, visibilidad: 'privado', ownerId: 'u', splitAmong: { strategy: 'iguales', entries: [{ participant: 'Javi' }] } });
+    expect(myShare(e, 'Javi')).toBe(30000);
+  });
+  it('privado ajeno: 0 (nunca se cuenta como propio)', () => {
+    const e = exp({ amount: 30000, visibilidad: 'privado', ownerId: 'u', paidBy: 'Lali', splitAmong: { strategy: 'iguales', entries: [{ participant: 'Lali' }] } });
+    expect(myShare(e, 'Javi')).toBe(0);
+  });
+  it('compartido 50/50', () => {
+    expect(myShare(exp({ amount: 100000, splitAmong: both('iguales') }), 'Javi')).toBe(50000);
+  });
+  it('porcentajes 60/40', () => {
+    const e = exp({ amount: 400000, splitAmong: both('porcentajes', 60, 40) });
+    expect(myShare(e, 'Javi')).toBe(240000);
+    expect(myShare(e, 'Lali')).toBe(160000);
+  });
+  it('montos exactos', () => {
+    expect(myShare(exp({ amount: 1000, splitAmong: both('montos', 700, 300) }), 'Lali')).toBe(300);
+  });
+  it('con un tercero: un tercio cada uno', () => {
+    const e = exp({ amount: 90000, splitAmong: { strategy: 'iguales', entries: [{ participant: 'Javi' }, { participant: 'Lali' }, { participant: 'Caro' }] } });
+    expect(myShare(e, 'Javi')).toBe(30000);
+  });
+  it('compartido donde no participo: 0', () => {
+    expect(myShare(exp({ amount: 20000, paidBy: 'Lali', splitAmong: { strategy: 'iguales', entries: [{ participant: 'Lali' }] } }), 'Javi')).toBe(0);
+  });
+  it('gasto viejo sin splitAmong: usa los montos legacy', () => {
+    expect(myShare(exp({ amount: 100, javiAmount: 70, laliAmount: 30, splitAmong: undefined }), 'Javi')).toBe(70);
+  });
+});
+
+describe('scopeExpenses', () => {
+  const list = [
+    exp({ id: 'a', amount: 100000,
+          splitAmong: { strategy: 'iguales', entries: [{ participant: 'Javi' }, { participant: 'Lali' }] } }), // 50/50 → 50.000
+    exp({ id: 'b', amount: 20000, paidBy: 'Lali', javiAmount: 0, laliAmount: 20000,
+          splitAmong: { strategy: 'iguales', entries: [{ participant: 'Lali' }] } }), // no participo
+    exp({ id: 'c', amount: 30000, visibilidad: 'privado', ownerId: 'u',
+          splitAmong: { strategy: 'iguales', entries: [{ participant: 'Javi' }] } }),  // privado mío
+  ];
+  it('"Compartidos" devuelve la lista intacta (misma referencia)', () => {
+    expect(scopeExpenses(list, 'shared', 'Javi')).toBe(list);
+  });
+  it('"Solo tuyo": excluye donde mi parte es 0 y el monto pasa a ser mi parte', () => {
+    const s = scopeExpenses(list, 'mine', 'Javi');
+    expect(s.map(e => e.id)).toEqual(['a', 'c']);
+    expect(s.map(e => e.amount)).toEqual([50000, 30000]);
+  });
+  it('la suma coincide con la suma de myShare (el titular y la lista dan lo mismo)', () => {
+    const total = scopeExpenses(list, 'mine', 'Javi').reduce((t, e) => t + e.amount, 0);
+    expect(total).toBe(list.reduce((t, e) => t + myShare(e, 'Javi'), 0));
+  });
+  it('guarda el total real y el original, y originalOf lo recupera intacto', () => {
+    const [a] = scopeExpenses(list, 'mine', 'Javi');
+    expect(a._fullAmount).toBe(100000);
+    expect(originalOf(a)).toBe(list[0]);
+    expect(originalOf(a).amount).toBe(100000);
+  });
+  it('la copia tiene un reparto coherente con su monto (100% mío)', () => {
+    const [a] = scopeExpenses(list, 'mine', 'Javi');
+    expect(a.splitAmong).toEqual({ strategy: 'iguales', entries: [{ participant: 'Javi' }] });
+    expect(a.javiAmount).toBe(50000);
+    expect(a.laliAmount).toBe(0);
+  });
+  it('originalOf de un gasto común devuelve el mismo', () => {
+    expect(originalOf(list[0])).toBe(list[0]);
+  });
+  it('sin usuario no transforma', () => {
+    expect(scopeExpenses(list, 'mine', null)).toBe(list);
   });
 });

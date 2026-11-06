@@ -228,6 +228,52 @@ export function expenseResolved(e: Expense): Record<string, number> {
   return resolveSplit(safeN(e.amount), e.splitAmong ?? splitFromLegacy(e.javiAmount, e.laliAmount));
 }
 
+// ── Vista "Compartidos / Solo tuyo" ───────────────────────────────────────────
+// ÚNICO lugar que decide "cuánto de este gasto es mío". Inicio, Stats e
+// Historial no hacen su propia cuenta: usan scopeExpenses.
+export type Scope = 'shared' | 'mine';
+
+// Copia de un gasto vista como "solo tuyo": el monto ya es tu parte. Guarda el
+// original (_orig) para editar/borrar — nunca se debe escribir la copia — y el
+// total real (_fullAmount) para mostrarlo chico al lado.
+export type ScopedExpense = Expense & { _orig?: Expense; _fullAmount?: number };
+
+export function myShare(e: Expense, user: string): number {
+  if (e.visibilidad === 'privado') {
+    // Un privado es 100% de su dueño. (La caché solo trae los privados propios,
+    // pero se chequea igual: nunca contar como mío un privado ajeno.)
+    const owner = e.splitAmong?.entries?.[0]?.participant ?? e.paidBy;
+    return owner === user ? round2(safeN(e.amount)) : 0;
+  }
+  return round2(safeN(expenseResolved(e)[user]));
+}
+
+export function scopeExpenses(exps: Expense[], scope: Scope, user: string | null): ScopedExpense[] {
+  if (scope !== 'mine' || !user) return exps;
+  const out: ScopedExpense[] = [];
+  for (const e of exps) {
+    const share = myShare(e, user);
+    if (share <= 0) continue; // solo los gastos donde tengo parte
+    out.push({
+      ...e,
+      amount: share,
+      // El reparto de la copia es coherente con su monto (100% mío). Así, si
+      // algún cálculo de reparto se aplicara sobre la copia, tampoco mezcla.
+      javiAmount: user === 'Javi' ? share : 0,
+      laliAmount: user === 'Lali' ? share : 0,
+      splitAmong: { strategy: 'iguales', entries: [{ participant: user }] },
+      _orig: e,
+      _fullAmount: safeN(e.amount),
+    });
+  }
+  return out;
+}
+
+// El gasto real detrás de una copia "solo tuyo" (o el mismo si no es copia).
+export function originalOf(e: Expense): Expense {
+  return (e as ScopedExpense)._orig ?? e;
+}
+
 export function calcBal(exps: Expense[]): number {
   return exps.reduce((b, e) => {
     if (e.visibilidad === 'privado') return b; // los privados no generan deuda entre los dos
