@@ -9,7 +9,7 @@ import {
   computeBalances, simplifyDebts, lastPayment, getPeriod,
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize, buildPlan,
   mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER, shortDate, periodRange, nextClosingDate,
-  cardKey, cardOptions,
+  cardKey, cardOptions, validatePersonName,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
@@ -850,5 +850,30 @@ describe('cardKey / cardOptions', () => {
       { paymentMethod: 'AMEX', bank: 'BBVA' },
     ]);
     expect(opts).toEqual(['AMEX · BBVA', 'Visa · Galicia']);
+  });
+});
+
+// ── Personas nuevas (división de gastos y Configuración) ─────────────────────
+describe('validatePersonName', () => {
+  const ex = ['Javi', 'Lali', 'Caro'];
+  it('acepta un nombre nuevo y normaliza espacios', () => {
+    expect(validatePersonName('  Martín   Pérez ', ex)).toEqual({ ok: true, name: 'Martín Pérez' });
+  });
+  it('rechaza vacío', () => {
+    expect(validatePersonName('   ', ex).ok).toBe(false);
+  });
+  it('rechaza duplicados sin distinguir mayúsculas ni tildes', () => {
+    expect(validatePersonName('caro', ex).ok).toBe(false);
+    expect(validatePersonName('Cáro', ex).ok).toBe(false);
+    expect(validatePersonName('LALI', ex).ok).toBe(false);
+  });
+  it('rechaza más de 30 caracteres', () => {
+    expect(validatePersonName('x'.repeat(31), ex).ok).toBe(false);
+  });
+});
+describe('validatePersonName · mensaje', () => {
+  it('nombra a la persona que ya existe, tal como está guardada', () => {
+    const r = validatePersonName('martin', ['Javi', 'Lali', 'Martín']);
+    expect(r).toEqual({ ok: false, error: 'Martín ya está en la lista.' });
   });
 });
