@@ -157,6 +157,11 @@ FASE 2     Tooling      ██████████ Sentry ✅, TanStack Quer
 
 ## Registro de cambios
 
+**05/11/2026 — Personas desde la división y vista "Compartidos / Solo tuyo" (Claude)**
+- **Personas desde la división** (PR #48): "Otro ▾" al lado de Javi y Lali en "¿Entre quiénes se divide?", con alta inline; las personas quedan guardadas en `settings/main.people` para los dos. Quién pagó: solo Javi o Lali. La deuda con terceros la sigue el saldo de Inicio. `validatePersonName` unifica la regla con Configuración.
+- **"Compartidos / Solo tuyo"**: un interruptor global (por persona, en `userPreferences/{usuario}.scope`) en Inicio, Stats e Historial. "Solo tuyo" = privados + tu parte de los compartidos, solo donde tenés parte. Todo pasa por `scopeExpenses` / `myShare` (helpers.ts, con tests): las pantallas no hacen su propia cuenta. Cada copia guarda el gasto original, que es lo único que se edita o borra. El saldo, "¿quién pagó más?", "Javi vs Lali" y la deuda por ciclo de Historial no se calculan en "Solo tuyo".
+- **Sale la pestaña "Personal"**: su contenido es la vista "Solo tuyo".
+
 **22/08/2026 — Dos variantes de interfaz conviviendo, elegibles por usuario (Claude)**
 - **Qué se hizo:** las dos direcciones del rediseño ("Estado de cuenta" y "Panel de trabajo") conviven en la app y cada uno elige la suya en Config › Apariencia. La preferencia va a `userPreferences/{usuario}.ui`, el mismo carril que `theme` y `font`: **no afecta a la otra persona**.
 - **Decisión de arquitectura — variante y tema son ejes ortogonales.** Los mockups de las dos direcciones usan *la misma paleta* (`#3D2F73` es el `navy` de Budget Flow): lo que cambia es el layout, no el color. Así que `UI_VARIANTS` en `constants.ts` contiene **solo tokens de estructura** (ancho del riel, tarjeta vs. filete, radios, densidad, estilo de pasos y de nav) y el color sigue saliendo de `C`. Resultado: 3 temas × 2 variantes = 6 combinaciones válidas, y el tema **Original de Lali se preserva** en las dos direcciones.

@@ -196,6 +196,8 @@ interface AppActions {
   setUserTheme:   (theme: string)     => void;
   setUserFont:    (font: string)      => void;
   setUserUI:      (ui: string)        => void;
+  setUserScope:   (scope: 'shared' | 'mine') => void;
+  saveUserScope:  (scope: 'shared' | 'mine') => void;
   saveUserPreferences: (theme: string, font: string, ui?: string) => void;
   setActivityLog: (entries: ActivityEntry[]) => void;
   setLastReadTs:  (ts: string) => void;
@@ -236,6 +238,7 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   userTheme:      'default',
   userFont:       'Nunito',
   userUI:         'cuenta',
+  userScope:      'shared',
   activityLog:    [] as ActivityEntry[],
   lastReadTs:     '',
   view:           'dashboard',
@@ -255,6 +258,16 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
   setUserTheme: theme => set({ userTheme: theme }),
   setUserFont:  font  => set({ userFont: font }),
   setUserUI:    ui    => set({ userUI: ui }),
+  setUserScope: scope => set({ userScope: scope }),
+  // Se guarda aparte (merge) para no pisar tema/tipografía/interfaz.
+  saveUserScope: scope => {
+    const state = get();
+    set({ userScope: scope });
+    if (state.currentUser) {
+      setDoc(userPrefDoc(state.currentUser), { scope }, { merge: true })
+        .catch(reportWriteError('saveUserScope'));
+    }
+  },
   // `ui` es opcional: quien solo cambia tema o tipografía conserva su variante.
   saveUserPreferences: (theme, font, ui) => {
     const state = get();

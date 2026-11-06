@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Pencil, Trash2, Clock, CreditCard, Lock } from 'lucide-react';
 import { C, F, MONO, PENDING_PER } from '../constants';
-import { fmt, safeN, catLb, expenseResolved, nextClosingDate, shortDate } from '../lib/helpers';
+import { fmt, safeN, catLb, expenseResolved, nextClosingDate, shortDate, originalOf } from '../lib/helpers';
 import { CatIcon } from './ui';
 import useAppStore from '../store/useAppStore';
 import { usePlans, useBankClosingDays } from '../lib/queries';
@@ -32,7 +32,13 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function ExpenseRow({ expense: e, open, onToggle, onDelete, onEdit }: ExpenseRowProps) {
+function ExpenseRow({ expense: shown, open, onToggle, onDelete, onEdit }: ExpenseRowProps) {
+  // En "Solo tuyo" llega una copia cuyo monto es tu parte. `e` es SIEMPRE el
+  // gasto original: lo usan el detalle, el reparto y —sobre todo— editar y
+  // borrar, que así nunca reciben el monto recortado. Solo la cifra grande usa
+  // la copia.
+  const e = originalOf(shown);
+  const scoped = shown !== e;
   const cur = e.currency || 'ARS';
   const r = expenseResolved(e);
   const plans           = usePlans();
@@ -73,8 +79,15 @@ function ExpenseRow({ expense: e, open, onToggle, onDelete, onEdit }: ExpenseRow
         {/* minWidth:0 + wrap: con montos de 7 cifras la columna J:/L: no cabía
             y empujaba la fila fuera de la pantalla en móvil. */}
         <div style={{ textAlign:'right', flexShrink:1, minWidth:0 }}>
-          <div style={{ fontWeight:800, color:C.navy, fontSize:'0.9rem', fontFamily:MONO, overflowWrap:'anywhere' }}>{fmt(safeN(e.amount), cur)}</div>
-          <div style={{ fontSize:'0.62rem', color:C.textMuted, fontFamily:MONO, overflowWrap:'anywhere' }}>J:{fmt(safeN(r['Javi']), cur)} / L:{fmt(safeN(r['Lali']), cur)}</div>
+          <div style={{ fontWeight:800, color:C.navy, fontSize:'0.9rem', fontFamily:MONO, overflowWrap:'anywhere' }}>{fmt(safeN(shown.amount), cur)}</div>
+          {scoped ? (
+            // "Solo tuyo": grande tu parte, chico el total real del gasto.
+            safeN(e.amount) !== safeN(shown.amount)
+              ? <div style={{ fontSize:'0.62rem', color:C.textMuted, fontFamily:MONO, overflowWrap:'anywhere' }}>de {fmt(safeN(e.amount), cur)}</div>
+              : <div style={{ fontSize:'0.62rem', color:C.textMuted, overflowWrap:'anywhere' }}>{e.visibilidad === 'privado' ? 'privado' : '100% tuyo'}</div>
+          ) : (
+            <div style={{ fontSize:'0.62rem', color:C.textMuted, fontFamily:MONO, overflowWrap:'anywhere' }}>J:{fmt(safeN(r['Javi']), cur)} / L:{fmt(safeN(r['Lali']), cur)}</div>
+          )}
         </div>
       </div>
       {open && (

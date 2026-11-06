@@ -2,9 +2,10 @@
 import React, { useState } from 'react';
 import { Search, ChevronRight, CircleCheck, X } from 'lucide-react';
 import { C, F, V, MONO, PENDING_PER, SP, FS, DEFAULT_CATS } from '../constants';
-import { fmt, safeN, calcBal, sortByDate, shortDate, cardKey, cardOptions } from '../lib/helpers';
+import { fmt, safeN, calcBal, sortByDate, shortDate, cardKey, cardOptions, originalOf } from '../lib/helpers';
+import { useScope, useScopedExpenses } from '../lib/useScope';
 import useAppStore from '../store/useAppStore';
-import { useExpenses, useSettings, useCustomCats, usePayments } from '../lib/queries';
+import { useSettings, useCustomCats, usePayments } from '../lib/queries';
 import { Card, ScrollFilter, ScreenHeader, AmountBand, SectionLabel, Row, BentoAuto } from './ui';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import ExpenseList from './ExpenseList';
@@ -21,11 +22,14 @@ interface PeriodBlockProps {
   onDelete: (id: string, e: Expense) => void;
   onEdit: (e: Expense) => void;
   range?: string;
+  // false en "Solo tuyo": la deuda entre los dos es compartida por definición, y
+  // calcularla sobre copias con "tu parte" daría un número inventado.
+  showBalance?: boolean;
 }
 
-function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection, onToggle, onDelete, onEdit, range }: PeriodBlockProps) {
+function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection, onToggle, onDelete, onEdit, range, showBalance = true }: PeriodBlockProps) {
   const total = exps.reduce((s, e) => s + safeN(e.amount), 0);
-  const bal = calcBal(exps.filter(e => (e.currency || 'ARS') === 'ARS'));
+  const bal = showBalance ? calcBal(exps.filter(e => (e.currency || 'ARS') === 'ARS')) : 0;
   const highlighted = isOpen || isSelected;
 
   // ── "Estado de cuenta": el ciclo es una FILA con filete, no una tarjeta ────
@@ -76,7 +80,7 @@ function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection
           <div style={{ fontSize:'0.7rem', color:subColor, marginTop:'0.1rem' }}>{exps.length} gastos · {fmt(total)}</div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
-          {!isPending && (
+          {!isPending && showBalance && (
             Math.abs(bal) >= 1 ? (
               <div style={{ textAlign:'right' }}>
                 <div style={{ fontSize:'0.7rem', fontWeight:800, color:balColor }}>{bal > 0 ? 'Lali debe' : 'Javi debe'}</div>
@@ -101,7 +105,10 @@ function PeriodBlock({ period, exps, isOpen, isPending, isSelected, hasSelection
 }
 
 export default function History() {
-  const expenses          = useExpenses();
+  // "Compartidos / Solo tuyo": en "Solo tuyo" cada gasto llega con tu parte
+  // como monto. Las filas igual editan/borran el ORIGINAL (ExpenseList).
+  const { isMine }        = useScope();
+  const expenses          = useScopedExpenses();
   const settings          = useSettings();
   const customCats        = useCustomCats();
   const payments          = usePayments();
@@ -157,7 +164,8 @@ export default function History() {
     baseExpenses.forEach(e => {
       const descMatch = (e.description || '').toLowerCase().indexOf(searchLower) >= 0;
       const dateMatch = (e.date || '').indexOf(searchLower) >= 0;
-      const amtMatch  = String(Math.round(safeN(e.amount))).indexOf(searchLower) >= 0;
+      // Por monto se busca también el total real (en "Solo tuyo" e.amount es tu parte).
+      const amtMatch  = [e.amount, originalOf(e).amount].some(a => String(Math.round(safeN(a))).indexOf(searchLower) >= 0);
       if (descMatch || dateMatch || amtMatch) expenseMatches.push(e);
     });
   }
@@ -191,7 +199,7 @@ export default function History() {
       <ScreenHeader crumb="Historial" current={nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')} />
       <AmountBand
         // Con una tarjeta elegida, el titular responde "¿cuánto gasté con esta?".
-        eyebrow={(cardFilter !== 'Todas' ? 'Total con ' + cardFilter : 'Total acumulado') + ' · ' + nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')}
+        eyebrow={(isMine ? (cardFilter !== 'Todas' ? 'Gastaste vos con ' + cardFilter : 'Gastaste vos') : (cardFilter !== 'Todas' ? 'Total con ' + cardFilter : 'Total acumulado')) + ' · ' + nCiclos + ' ciclo' + (nCiclos !== 1 ? 's' : '')}
         amount={fmt(totalAcum)}
         sub={baseExpenses.length === 1 ? '1 gasto registrado' : baseExpenses.length + ' gastos registrados'}
       />
@@ -283,6 +291,7 @@ export default function History() {
             onToggle={() => { if (hasSelection) toggleSelect(period); else toggleOpen(period); }}
             onDelete={requestDelete}
             onEdit={setEditingExpense}
+            showBalance={!isMine}
           />
         ))}
       </div>
