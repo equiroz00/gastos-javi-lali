@@ -10,6 +10,7 @@ import {
   generatePlanExpenses, reassignPlanExpenses, reassignExpensePeriods, sanitize, buildPlan,
   mergeOptions, buildItemsNote, ITEMS_NOTE_HEADER, shortDate, periodRange, nextClosingDate,
   cardKey, cardOptions, myShare, scopeExpenses, originalOf, validatePersonName,
+  proportionalSplit, planNeedsSplitReview,
 } from './helpers';
 import { PENDING_PER, DEFAULT_CATS, PAY_METHODS, LEGACY_PAY_METHOD_MAP } from '../constants';
 import type { Expense, Plan, Payment, Period } from '../types';
@@ -955,5 +956,113 @@ describe('validatePersonName · mensaje', () => {
   it('nombra a la persona que ya existe, tal como está guardada', () => {
     const r = validatePersonName('martin', ['Javi', 'Lali', 'Martín']);
     expect(r).toEqual({ ok: false, error: 'Martín ya está en la lista.' });
+  });
+});
+
+// ── División de los planes en cuotas (bug: todo se guardaba 50/50) ────────────
+// Hasta este arreglo, buildPlan ignoraba la división elegida en el modal y
+// repartía según el campo viejo "responsible" (siempre 'Ambos') → 50/50.
+describe('planes en cuotas · respetan la división elegida', () => {
+  const PER = [{ name: 'May 2026', start: '2026-04-24', end: '2026-05-23' }];
+  const form = (splitAmong: any, extra: any = {}) => exp({
+    amount: 900000, paidBy: 'Lali', responsible: 'Ambos', splitAmong, ...extra,
+  });
+  const cuotas = (f: any, n = 9) => generatePlanExpenses(buildPlan('p1', f, n, 0, 'May 2026'), PER);
+  const sumOf = (cs: any[], who: string) => cs.reduce((s, c) => s + (resolveSplit(c.amount, c.splitAmong)[who] || 0), 0);
+
+  it('caso Laura: pagó Lali, responsable solo Javi → cada cuota 100% Javi', () => {
+    const f = form({ strategy: 'iguales', entries: [{ participant: 'Javi' }] });
+    const plan = buildPlan('p1', f, 9, 0, 'May 2026');
+    expect(resolveSplit(plan.installmentAmount, plan.splitAmong!)).toEqual({ Javi: 100000 });
+    expect(plan.responsible).toBe('Javi');
+    expect(plan.javiAmount).toBe(100000);
+    expect(plan.laliAmount).toBe(0);
+    const cs = cuotas(f);
+    expect(cs.every(c => resolveSplit(c.amount, c.splitAmong!)['Javi'] === c.amount)).toBe(true);
+    expect(sumOf(cs, 'Javi')).toBe(900000);
+  });
+
+  it('porcentajes 70/30 se mantienen en todas las cuotas y suman el total exacto', () => {
+    const cs = cuotas(form({ strategy: 'porcentajes', entries: [{ participant: 'Javi', value: 70 }, { participant: 'Lali', value: 30 }] }));
+    expect(sumOf(cs, 'Javi')).toBe(630000);
+    expect(sumOf(cs, 'Lali')).toBe(270000);
+  });
+
+  it('montos exactos se cargan sobre el TOTAL y se reparten proporcional por cuota', () => {
+    // 600.000 / 300.000 sobre 900.000 → 2/3 y 1/3 en cada cuota
+    const cs = cuotas(form({ strategy: 'montos', entries: [{ participant: 'Javi', value: 600000 }, { participant: 'Lali', value: 300000 }] }));
+    expect(round2(sumOf(cs, 'Javi'))).toBe(600000);
+    expect(round2(sumOf(cs, 'Lali'))).toBe(300000);
+  });
+
+  it('con un tercero: el tercero no se pierde (antes quedaba Javi/Lali 50/50)', () => {
+    const cs = cuotas(form({ strategy: 'iguales', entries: [{ participant: 'Javi' }, { participant: 'Lali' }, { participant: 'Caro' }] }));
+    expect(round2(sumOf(cs, 'Caro'))).toBe(300000);
+    expect(round2(sumOf(cs, 'Javi'))).toBe(300000);
+  });
+
+  it('total que no divide exacto: la última cuota absorbe el redondeo y cada cuota cierra', () => {
+    const f = exp({ amount: 1000, paidBy: 'Javi', splitAmong: { strategy: 'porcentajes', entries: [{ participant: 'Javi', value: 70 }, { participant: 'Lali', value: 30 }] } });
+    const cs = generatePlanExpenses(buildPlan('p2', f, 3, 0, 'May 2026'), PER);
+    expect(cs.reduce((s, c) => s + c.amount, 0)).toBe(1000);
+    for (const c of cs) {
+      const r = resolveSplit(c.amount, c.splitAmong!);
+      expect(round2((r['Javi'] || 0) + (r['Lali'] || 0))).toBe(c.amount);
+    }
+  });
+
+  it('sin división cargada usa el respaldo "responsible" (formularios viejos)', () => {
+    const plan = buildPlan('p3', exp({ amount: 900, responsible: 'Lali', splitAmong: undefined }), 3, 0, 'May 2026');
+    expect(resolveSplit(plan.installmentAmount, plan.splitAmong!)).toEqual({ Lali: 300 });
+  });
+
+  it('un plan viejo guardado bien (sin splitAmong, montos legacy 100% Javi) no cambia al regenerar', () => {
+    const viejo = { id: 'pv', description: 'x', totalAmount: 300, installmentAmount: 100, numInstallments: 3, paidInstallments: 0,
+      startPeriod: 'May 2026', startDate: '2026-05-10', currency: 'ARS', paidBy: 'Lali', responsible: 'Javi',
+      paymentMethod: '', bank: '', category: '', javiAmount: 100, laliAmount: 0, createdAt: '2026-03-01' } as Plan;
+    const cs = generatePlanExpenses(viejo, PER);
+    expect(cs.every(c => resolveSplit(c.amount, c.splitAmong!)['Javi'] === c.amount)).toBe(true);
+  });
+
+  it('todo plan guardado con el código arreglado queda marcado como revisado', () => {
+    expect(buildPlan('p4', form({ strategy: 'iguales', entries: [{ participant: 'Javi' }, { participant: 'Lali' }] }), 9, 0, 'May 2026').splitReviewed).toBe(true);
+  });
+});
+
+describe('proportionalSplit', () => {
+  it('deja igual iguales / porcentajes / partes', () => {
+    const s = { strategy: 'shares' as const, entries: [{ participant: 'Javi', value: 2 }, { participant: 'Lali', value: 1 }] };
+    expect(proportionalSplit(s)).toBe(s);
+  });
+  it('convierte montos a partes y descarta a quien tiene 0', () => {
+    expect(proportionalSplit({ strategy: 'montos', entries: [{ participant: 'Javi', value: 100 }, { participant: 'Lali', value: 0 }] }))
+      .toEqual({ strategy: 'shares', entries: [{ participant: 'Javi', value: 1 }] });
+  });
+  it('simplifica la proporción exacta (600.000 / 300.000 → 2 / 1)', () => {
+    expect(proportionalSplit({ strategy: 'montos', entries: [{ participant: 'Javi', value: 600000 }, { participant: 'Lali', value: 300000 }] }))
+      .toEqual({ strategy: 'shares', entries: [{ participant: 'Javi', value: 2 }, { participant: 'Lali', value: 1 }] });
+  });
+  it('sin montos cargados cae a partes iguales', () => {
+    expect(proportionalSplit({ strategy: 'montos', entries: [{ participant: 'Javi', value: 0 }, { participant: 'Lali', value: 0 }] }).strategy)
+      .toBe('iguales');
+  });
+});
+
+describe('planNeedsSplitReview · planes guardados con el bug', () => {
+  const base = { id: 'p', description: 'x', totalAmount: 900, installmentAmount: 100, numInstallments: 9, paidInstallments: 0,
+    startPeriod: 'May 2026', startDate: '2026-06-01', currency: 'ARS', paidBy: 'Lali', responsible: 'Ambos',
+    paymentMethod: '', bank: '', category: '', javiAmount: 50, laliAmount: 50, visibilidad: 'compartido' } as Plan;
+  it('marca un plan compartido 50/50 creado desde el 24/05/2026', () => {
+    expect(planNeedsSplitReview({ ...base, createdAt: '2026-06-15T10:00:00.000Z' })).toBe(true);
+  });
+  it('no marca planes anteriores al bug', () => {
+    expect(planNeedsSplitReview({ ...base, createdAt: '2026-05-10T10:00:00.000Z' })).toBe(false);
+  });
+  it('no marca si ya fue revisado o guardado con el arreglo', () => {
+    expect(planNeedsSplitReview({ ...base, createdAt: '2026-06-15', splitReviewed: true })).toBe(false);
+  });
+  it('no marca privados ni repartos que no son 50/50', () => {
+    expect(planNeedsSplitReview({ ...base, createdAt: '2026-06-15', visibilidad: 'privado' })).toBe(false);
+    expect(planNeedsSplitReview({ ...base, createdAt: '2026-06-15', javiAmount: 100, laliAmount: 0 })).toBe(false);
   });
 });

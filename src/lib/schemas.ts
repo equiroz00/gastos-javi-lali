@@ -158,6 +158,9 @@ export const PlanSchema = z.object({
   visibilidad:       z.enum(['compartido', 'privado']).optional(),
   ownerId:           z.string().optional(),
   createdBy:         z.enum(['Javi', 'Lali']).optional(),
+  // Sin esto Zod descartaría el campo al leer y el aviso de "revisá la
+  // división" no se iría nunca.
+  splitReviewed:     z.boolean().optional(),
   createdAt:         z.string().catch(''),
 });
 

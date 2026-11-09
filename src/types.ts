@@ -60,6 +60,9 @@ export interface Plan {
   visibilidad?: Visibility;
   ownerId?: string;
   createdBy?: UserName;    // quién cargó el plan; las cuotas lo heredan
+  // true = su división se guardó con el código arreglado (o alguien confirmó
+  // que el 50/50 es correcto). Ver planNeedsSplitReview en helpers.ts.
+  splitReviewed?: boolean;
   createdAt: string;
 }
 

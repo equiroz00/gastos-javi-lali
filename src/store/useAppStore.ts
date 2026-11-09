@@ -218,7 +218,9 @@ interface AppActions {
   handleAddPlan:       (formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null, opts?: { stay?: boolean }) => void;
   handleEditPlan:      (planId: string, formData: Expense, numInstallments: number, paidInstallments: number, manualStartPeriod: string | null) => void;
   handleCancelPlan:    (planId: string) => void;
-  openPaymentModal:    (from: string, to: string, amount: number, currency: Currency, period?: string) => void;
+  // "50/50 está bien": apaga el aviso de revisar la división sin tocar cuotas.
+  markPlanSplitReviewed: (planId: string) => void;
+  openPaymentModal:   (from: string, to: string, amount: number, currency: Currency, period?: string) => void;
   confirmPayment:      (paymentData: Payment) => void;
   deletePayment:       (id: string) => void;
   saveCustomCats:      (cats: string[]) => void;
@@ -453,6 +455,17 @@ const useAppStore = create<AppState & AppActions>((set, get) => ({
         state.showMsg('⚠ No se pudo borrar el plan. Revisá tu conexión y probá de nuevo.');
         reportWriteError('handleCancelPlan')(err);
       });
+  },
+
+  markPlanSplitReviewed: (planId) => {
+    const prevPlans = getPlans();
+    setPlans(prevPlans.map(p => p.id === planId ? { ...p, splitReviewed: true } : p));
+    // merge: solo se escribe la marca; el resto del plan y sus cuotas no se tocan.
+    setDoc(planDoc(planId), { splitReviewed: true }, { merge: true }).catch(err => {
+      setPlans(prevPlans);
+      get().showMsg('⚠ No se pudo guardar. Revisá tu conexión y probá de nuevo.');
+      reportWriteError('markPlanSplitReviewed')(err);
+    });
   },
 
   // Payment actions
