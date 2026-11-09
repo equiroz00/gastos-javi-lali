@@ -1,8 +1,8 @@
 // ── components/Dashboard.tsx ──────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil, Users, Lock, Layers } from 'lucide-react';
+import { ChevronDown, ArrowRightLeft, Calendar, CreditCard, Check, Trash2, Pencil, Users, Lock, Layers, AlertTriangle } from 'lucide-react';
 import { C, F, V, MONO, PENDING_PER, SP, FS, PALETTE } from '../constants';
-import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment, periodRange, shortDate, myShare, originalOf, catLb } from '../lib/helpers';
+import { fmt, fmtS, safeN, computeBalances, simplifyDebts, expenseResolved, sortByDate, getWeekStart, pctChange, lastPayment, periodRange, shortDate, myShare, originalOf, catLb, planNeedsSplitReview } from '../lib/helpers';
 import { useScope, useScopedExpenses } from '../lib/useScope';
 import { useIsDesktop } from '../lib/useIsDesktop';
 import useAppStore from '../store/useAppStore';
@@ -37,10 +37,15 @@ function ActivePlans({ mineFor }: { mineFor?: string | null } = {}) {
   const expenses   = useExpenses();
   const cancelPlan = useAppStore(s => s.handleCancelPlan);
   const editPlan   = useAppStore(s => s.setEditingPlan);
+  const markReviewed = useAppStore(s => s.markPlanSplitReviewed);
   const [search, setSearch] = useState('');
   const fracOf = (plan: Plan) => planFrac(plan, mineFor);
-  const plans = mineFor ? allPlans.filter(p => fracOf(p) > 0) : allPlans;
+  // Los que hay que revisar van arriba: si quedan al fondo de la lista con
+  // scroll, nadie los ve.
+  const plans = (mineFor ? allPlans.filter(p => fracOf(p) > 0) : allPlans)
+    .slice().sort((a, b) => Number(planNeedsSplitReview(b)) - Number(planNeedsSplitReview(a)));
   if (!plans.length) return null;
+  const toReview = plans.filter(planNeedsSplitReview).length;
   const filtered = search.trim() === '' ? plans : plans.filter(p => p.description.toLowerCase().indexOf(search.toLowerCase()) >= 0);
   return (
     <div>
@@ -48,7 +53,10 @@ function ActivePlans({ mineFor }: { mineFor?: string | null } = {}) {
         <h2 style={{ display:'flex', alignItems:'center', gap:'0.4rem', fontWeight:800, color:C.navy, fontSize:'0.88rem', margin:0 }}>
           <CreditCard size={16} strokeWidth={2.2} color={C.accent} />Cuotas activas
         </h2>
-        <span style={{ fontSize:'0.68rem', color:C.textMuted }}>{plans.length} plan{plans.length !== 1 ? 'es' : ''}</span>
+        <span style={{ fontSize:'0.68rem', color:C.textMuted }}>
+          {toReview > 0 && <span style={{ color:C.warn, fontWeight:700 }}>{toReview} a revisar · </span>}
+          {plans.length} plan{plans.length !== 1 ? 'es' : ''}
+        </span>
       </div>
       {plans.length >= 3 && (
         <input
@@ -80,6 +88,25 @@ function ActivePlans({ mineFor }: { mineFor?: string | null } = {}) {
                   <div style={{ fontSize:'0.65rem', color:C.textMuted }}>cuotas</div>
                 </div>
               </div>
+              {planNeedsSplitReview(plan) && (
+                <div style={{ border:'1px solid '+C.warn, borderRadius:'0.6rem', padding:'0.5rem 0.6rem', marginBottom:'0.5rem' }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:'0.35rem', fontSize:'0.72rem', color:C.navy, lineHeight:1.35 }}>
+                    <AlertTriangle size={14} strokeWidth={2.2} color={C.warn} style={{ flexShrink:0, marginTop:'0.05rem' }} />
+                    <span>
+                      <b>Revisá la división.</b> Figura 50/50, pero puede haberse guardado así por un error ya corregido.
+                      Si no era 50/50, editalo y se corrigen todas las cuotas.
+                    </span>
+                  </div>
+                  <div style={{ display:'flex', gap:'0.35rem', marginTop:'0.45rem', justifyContent:'flex-end', flexWrap:'wrap' }}>
+                    <button onClick={() => editPlan(plan)} style={{ display:'flex', alignItems:'center', gap:'0.2rem', background:C.accent, border:'1px solid '+C.accent, borderRadius:'0.5rem', padding:'0.25rem 0.6rem', fontSize:'0.68rem', color:C.white, cursor:'pointer', fontFamily:F, fontWeight:700 }}>
+                      <Pencil size={11} strokeWidth={2.2} />Editar división
+                    </button>
+                    <button onClick={() => markReviewed(plan.id)} style={{ display:'flex', alignItems:'center', gap:'0.2rem', background:'transparent', border:'1px solid '+C.border, borderRadius:'0.5rem', padding:'0.25rem 0.6rem', fontSize:'0.68rem', color:C.navy, cursor:'pointer', fontFamily:F, fontWeight:700 }}>
+                      <Check size={11} strokeWidth={2.2} />50/50 está bien
+                    </button>
+                  </div>
+                </div>
+              )}
               <div style={{ background:C.beige, borderRadius:'999px', height:'6px', overflow:'hidden', marginBottom:'0.4rem' }}>
                 <div style={{ width:pct + '%', height:'100%', background:C.gradMain, borderRadius:'999px', transition:'width 0.4s' }} />
               </div>

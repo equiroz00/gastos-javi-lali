@@ -390,6 +390,48 @@ export function cardOptions(exps: Array<Pick<Expense, 'paymentMethod' | 'bank'>>
 
 // ── Plans ─────────────────────────────────────────────────────────────────────
 
+// Reparto de un plan, apto para CUALQUIER monto (cada cuota). Iguales,
+// porcentajes y partes ya son proporcionales; los "montos exactos" se cargan
+// sobre el TOTAL de la compra, así que se pasan a porcentajes — aplicar el monto
+// del total a cada cuota daría cualquier cosa. Los participantes con 0 se
+// descartan (no participan).
+export function proportionalSplit(split: SplitAmong): SplitAmong {
+  if (split.strategy !== 'montos') return split;
+  const entries = split.entries.filter(e => safeN(e.value) > 0);
+  if (!entries.length) return { strategy: 'iguales', entries: split.entries.map(e => ({ participant: e.participant })) };
+  // Se pasan a "partes" con la proporción EXACTA, simplificada (600.000 y
+  // 300.000 → 2 y 1). Un porcentaje redondeado (66,67 %) hacía que cada cuota
+  // se pasara unos pesos: en 9 cuotas, $30 de más para uno.
+  const cents = entries.map(e => Math.round(safeN(e.value) * 100));
+  const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+  const g = cents.reduce((acc, v) => gcd(acc, v), 0) || 1;
+  return { strategy: 'shares', entries: entries.map((e, i) => ({ participant: e.participant, value: cents[i] / g })) };
+}
+
+// Campo viejo "responsible", derivado del reparto real (lo siguen leyendo
+// partes antiguas; ya NO se usa para calcular nada).
+function responsibleOf(split: SplitAmong): Responsible {
+  const r = resolveSplit(100, split);
+  const who = Object.keys(r).filter(k => safeN(r[k]) > 0);
+  if (who.length === 1 && (who[0] === 'Javi' || who[0] === 'Lali')) return who[0];
+  return 'Ambos';
+}
+
+// El bug de la división en cuotas: entre el 24/05/2026 (división personalizada)
+// y el arreglo, todo plan compartido se guardaba 50/50 sin importar lo elegido.
+// Esos planes no se pueden reparar solos (lo elegido nunca se guardó): se
+// marcan para que alguien los revise. Cualquier plan guardado con el código
+// arreglado lleva splitReviewed: true y no se marca.
+export const SPLIT_BUG_SINCE = '2026-05-24';
+export function planNeedsSplitReview(p: Plan): boolean {
+  if (p.splitReviewed) return false;
+  if (p.visibilidad === 'privado') return false;          // los privados siempre fueron 100% del dueño
+  if (!p.createdAt || p.createdAt < SPLIT_BUG_SINCE) return false;
+  const r = resolveSplit(100, proportionalSplit(p.splitAmong ?? splitFromLegacy(p.javiAmount, p.laliAmount)));
+  const who = Object.keys(r).filter(k => safeN(r[k]) > 0);
+  return who.length === 2 && safeN(r['Javi']) === 50 && safeN(r['Lali']) === 50;
+}
+
 // Arma el documento de un plan a partir del formulario. Lo usan tanto el alta
 // como la edición (antes cada una construía el objeto por su cuenta).
 //
@@ -407,7 +449,15 @@ export function buildPlan(
   existing?: Pick<Plan, 'createdBy' | 'createdAt'>,
 ): Plan {
   const installmentAmount = Math.round(safeN(formData.amount) / numInstallments);
-  const amts = calcAmts(installmentAmount, formData.responsible);
+  // EL ARREGLO: el reparto sale de la división elegida (splitAmong). Antes salía
+  // del campo viejo "responsible", que el modal de división nunca actualizaba
+  // bien → todo plan compartido quedaba 50/50. "responsible" queda solo como
+  // respaldo para un formulario sin división cargada.
+  const split = proportionalSplit(formData.splitAmong ?? (() => {
+    const a = calcAmts(safeN(formData.amount), formData.responsible);
+    return splitFromLegacy(a.javiAmount, a.laliAmount);
+  })());
+  const inst = resolveSplit(installmentAmount, split);
   const isPrivate = formData.visibilidad === 'privado';
   // Al editar se conserva quién lo creó originalmente; si el plan es anterior a
   // que existiera el campo, se deja ausente (no undefined).
@@ -423,13 +473,16 @@ export function buildPlan(
     startDate: formData.date,
     currency: formData.currency as Currency,
     paidBy: formData.paidBy,
-    responsible: formData.responsible,
+    responsible: responsibleOf(split),
     paymentMethod: formData.paymentMethod || '',
     bank: formData.bank || '',
     category: formData.category || '',
-    javiAmount: amts.javiAmount,
-    laliAmount: amts.laliAmount,
-    splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
+    // javiAmount/laliAmount: campos viejos, por cuota, derivados del reparto real.
+    javiAmount: safeN(inst['Javi']),
+    laliAmount: safeN(inst['Lali']),
+    splitAmong: split,
+    // Guardado con el código arreglado: su división es la elegida.
+    splitReviewed: true,
     visibilidad: isPrivate ? 'privado' : 'compartido',
     ...(isPrivate && formData.ownerId ? { ownerId: formData.ownerId } : {}),
     ...(createdBy ? { createdBy } : {}),
@@ -441,6 +494,23 @@ export function generatePlanExpenses(plan: Plan, periods: Period[]): Expense[] {
   const paid = plan.paidInstallments || 0;
   const remaining = plan.numInstallments - paid;
   const startIdx = periods.findIndex(p => p.name === plan.startPeriod);
+  // Cada cuota se reparte con el MISMO reparto proporcional del plan, resuelto
+  // sobre el monto de esa cuota (sumas exactas, también en la última, que
+  // absorbe el redondeo). Antes la última cuota usaba "responsible" (50/50).
+  const split = proportionalSplit(plan.splitAmong ?? splitFromLegacy(plan.javiAmount, plan.laliAmount));
+  // Para la última cuota: lo que a cada uno le toca del TOTAL, menos lo que ya
+  // pagó en las anteriores. Así el total de cada persona cierra exacto — si
+  // cada cuota se redondeara por su lado, los centavos se acumulan (⅓ de cuota
+  // en 9 cuotas dejaba 6 centavos de diferencia).
+  const totalShare = resolveSplit(plan.totalAmount, split);
+  const perInst    = resolveSplit(plan.installmentAmount, split);
+  const lastSplit: SplitAmong = {
+    strategy: 'montos',
+    entries: Object.keys(totalShare).map(p => ({
+      participant: p,
+      value: round2(safeN(totalShare[p]) - safeN(perInst[p]) * (plan.numInstallments - 1)),
+    })),
+  };
   const result: Expense[] = [];
   for (let i = 0; i < remaining; i++) {
     const cuotaNum = paid + i + 1;
@@ -452,8 +522,9 @@ export function generatePlanExpenses(plan: Plan, periods: Period[]): Expense[] {
     const amount = isLast
       ? round2(plan.totalAmount - plan.installmentAmount * (plan.numInstallments - 1))
       : plan.installmentAmount;
-    const amts = isLast ? calcAmts(amount, plan.responsible)
-                        : { javiAmount: plan.javiAmount, laliAmount: plan.laliAmount };
+    const cuotaSplit = isLast ? lastSplit : split;
+    const r = resolveSplit(amount, cuotaSplit);
+    const amts = { javiAmount: safeN(r['Javi']), laliAmount: safeN(r['Lali']) };
     result.push({
       id: plan.id + '-' + cuotaNum,
       description: plan.description + ' (cuota ' + cuotaNum + '/' + plan.numInstallments + ')',
@@ -472,9 +543,9 @@ export function generatePlanExpenses(plan: Plan, periods: Period[]): Expense[] {
       installmentNum: cuotaNum,
       numInstallments: plan.numInstallments,
       fromPlan: true,
-      // Cada cuota hereda el reparto (montos de esa cuota), la visibilidad del
-      // plan y quién lo cargó (para poder mostrarlo en el detalle del gasto).
-      splitAmong: splitFromLegacy(amts.javiAmount, amts.laliAmount),
+      // Cada cuota hereda el reparto del plan (proporcional, incluye terceros);
+      // la última, el que cierra el total de cada persona.
+      splitAmong: cuotaSplit,
       visibilidad: plan.visibilidad ?? 'compartido',
       ...(plan.visibilidad === 'privado' && plan.ownerId ? { ownerId: plan.ownerId } : {}),
       ...(plan.createdBy ? { createdBy: plan.createdBy } : {}),

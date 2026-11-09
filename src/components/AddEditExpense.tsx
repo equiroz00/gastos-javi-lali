@@ -2,7 +2,7 @@
 import React, { useRef, useState } from 'react';
 import { Plus, X, Pencil, AlertTriangle, Camera, Loader2, MapPin, CreditCard, Check, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { C, F, MONO, FS, DEFAULT_CATS, PAY_METHODS, BANKS, BASE_CURS, CUOTA_OPTS } from '../constants';
-import { todayStr, fmt, safeN, calcAmts, getPeriod, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote, nextClosingDate, shortDate } from '../lib/helpers';
+import { todayStr, fmt, safeN, calcAmts, getPeriod, genId, splitFromLegacy, resolveSplit, allParticipants, mergeOptions, buildItemsNote, nextClosingDate, shortDate, proportionalSplit } from '../lib/helpers';
 import { CatIcon, SegBtn } from './ui';
 import useAppStore from '../store/useAppStore';
 import { useExpenses, useSettings, useCustomCats, usePeople, useCustomPayMethods, useCustomBanks, useBankClosingDays } from '../lib/queries';
@@ -94,6 +94,10 @@ export default function AddEditExpense({ isEditMode = false, initialData = null,
       category: p.category, paymentMethod: p.paymentMethod, bank: p.bank, paidBy: p.paidBy,
       responsible: p.responsible, currency: isBase ? p.currency : 'Otra',
       customCurrency: isBase ? '' : String(p.currency), javiAmount: 0, laliAmount: 0,
+      // La división REAL del plan. Antes no se cargaba: el editor mostraba el
+      // 50/50 por defecto aunque lo guardado fuera otra cosa, y al guardar sin
+      // tocar la división se pisaba con 50/50.
+      ...(p.splitAmong ? { splitAmong: proportionalSplit(p.splitAmong) } : {}),
       // Antes esto era 'compartido' FIJO: al editar un plan privado, el form lo
       // trataba como compartido y al guardar lo convertía en compartido — sus
       // cuotas pasaban a ser visibles para la otra persona. Se respeta el valor real.
